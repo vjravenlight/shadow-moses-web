@@ -7,6 +7,8 @@ import { barraMenu, disposicionHud } from "../hud.js";
 
 import { cargadorCompartido, texturaCompartida } from "../cargador.js";
 
+import { cargarVoz } from "../audio_ps1.js";
+
 export const MM = .001, FPS = 30, ANG = Math.PI * 2 / 4096;
 
 const ALT_SNAKE = [ 1100, 496, 136 ];
@@ -621,15 +623,7 @@ export class Flujo {
   async cargar(id) {
     if (this.op.voces?.cargar) return this.op.voces.cargar(id);
     try {
-      const [dj, ab] = await Promise.all([ fetch(`assets/codec/vox/${id}.json`).then(r => r.ok ? r.json() : null), fetch(`assets/codec/vox/${id}.m4a`).then(r => r.ok ? r.arrayBuffer() : null) ]);
-      if (!dj || !ab) return null;
-      const buf = await this.audio().ctx.decodeAudioData(ab);
-      const sobra = buf.length - dj.muestras * buf.sampleRate / dj.hz_m4a, priming = 1024 * buf.sampleRate / dj.hz_m4a;
-      return {
-        datos: dj,
-        buffer: buf,
-        offset: sobra >= priming * .9 ? 1024 / dj.hz_m4a : 0
-      };
+      return await cargarVoz("assets/codec/vox/", id, this.audio().ctx);
     } catch (e) {
       return null;
     }

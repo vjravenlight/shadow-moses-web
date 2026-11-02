@@ -76,24 +76,38 @@ def enganchar_llamadas(por_off):
             voces += n[0]
     return (cambiadas, voces)
 
+def hecha(i, formato):
+    pj = os.path.join(VOX, '%d.json' % (BASE + i))
+    if not os.path.exists(pj):
+        return False
+    try:
+        d = json.load(open(pj, encoding='utf-8'))
+    except ValueError:
+        return False
+    if (d.get('formato') == 'adpcm') != (formato == 'original') and (not d.get('respaldo_m4a')):
+        return False
+    return os.path.exists(os.path.join(VOX, d.get('archivo') or '%d.m4a' % (BASE + i)))
+
 def main():
     try:
         sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     except (AttributeError, ValueError):
         pass
     forzar = '--forzar' in sys.argv
+    formato = sys.argv[sys.argv.index('--formato') + 1] if '--formato' in sys.argv else 'original'
     vg = voces_guion()
     vc = voces_codec()
     ids = sorted(set(vg) | set(vc.values()))
-    falta = [i for i in ids if forzar or not (os.path.exists(os.path.join(VOX, '%d.m4a' % (BASE + i))) and os.path.exists(os.path.join(VOX, '%d.json' % (BASE + i))))]
+    falta = [i for i in ids if forzar or not hecha(i, formato)]
     print('voces del disco 2: %d de los scripts, %d del códec (%d voces de llamadas), %d en total, faltan %d' % (len(vg), len(set(vc.values())), len(vc), len(ids), len(falta)))
     if '--lista' in sys.argv:
         for i in sorted(vg):
             print('  %6d -> %d  %s' % (i, BASE + i, ', '.join(sorted(vg[i]))))
         return
-    for k in range(0, len(falta), 60):
-        lote = falta[k:k + 60]
-        cmd = [sys.executable, os.path.join(RAIZ, 'tools', 'codec_voces.py'), '--disco', '2', '--solo', ','.join(map(str, lote))]
+    paso = 300 if formato == 'original' else 60
+    for k in range(0, len(falta), paso):
+        lote = falta[k:k + paso]
+        cmd = [sys.executable, os.path.join(RAIZ, 'tools', 'codec_voces.py'), '--disco', '2', '--formato', formato, '--solo', ','.join(map(str, lote))]
         if forzar:
             cmd.append('--forzar')
         subprocess.run(cmd, cwd=RAIZ, check=True)

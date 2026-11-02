@@ -374,6 +374,24 @@ def exportar_wav(mm, s, salida):
             w.setframerate(hz)
             w.writeframes(struct.pack('<%dh' % len(inter), *inter))
     return {'archivo': salida, 'hz': hz, 'canales': cab['canales'], 'muestras': len(izq), 'segundos': len(izq) / float(hz)}
+BLOQUE_ESTEREO = 4096
+
+def adpcm_crudo(mm, bloques, canales):
+    partes, muestras_d, muestras_i = ([], 0, 0)
+    for k, (q, tam) in enumerate(bloques):
+        d = bytes(mm[q + 4:q + tam])
+        if len(d) % 16:
+            return (None, 'paquete PCM de %d bytes (no son bloques de 16)' % len(d))
+        if canales == 1:
+            muestras_i += len(d) // 16 * 28
+        else:
+            if len(d) != 2 * BLOQUE_ESTEREO and k < len(bloques) - 1:
+                return (None, 'paquete PCM estéreo de %d bytes (se esperaban 8192)' % len(d))
+            muestras_d += min(len(d), BLOQUE_ESTEREO) // 16 * 28
+            muestras_i += max(0, len(d) - BLOQUE_ESTEREO) // 16 * 28
+        partes.append(d)
+    n = muestras_i if canales == 1 else min(muestras_i, muestras_d)
+    return (b''.join(partes), n)
 
 def abrir(disco):
     p = ruta_demo(disco)

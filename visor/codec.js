@@ -3,6 +3,8 @@ import { Guion, valorGCL } from "./codec_gcl.js";
 
 import { B } from "./controles.js";
 
+import { cargarVoz } from "./audio_ps1.js";
+
 export const W = 320, H = 224;
 
 const FPS = 30, SNAKE = 8650;
@@ -379,28 +381,10 @@ class Voces {
   cargar(id) {
     if (!(id > 0) && id !== 0) return Promise.resolve(null);
     if (this.cache.has(id)) return this.cache.get(id);
-    const base = this.c.base + "vox/" + id;
-    const p = (async () => {
-      try {
-        const [dj, ab] = await Promise.all([ fetch(base + ".json").then(r => r.ok ? r.json() : null), fetch(base + ".m4a").then(r => r.ok ? r.arrayBuffer() : null) ]);
-        if (!dj || !ab) return null;
-        const ctx = this.ctx();
-        const buf = await new Promise((ok, mal) => {
-          const r = ctx.decodeAudioData(ab, ok, mal);
-          if (r && r.then) r.then(ok, mal);
-        });
-        const esperado = dj.muestras * buf.sampleRate / dj.hz_m4a, sobra = buf.length - esperado, priming = 1024 * buf.sampleRate / dj.hz_m4a;
-        const offset = sobra >= priming * .9 ? 1024 / dj.hz_m4a : 0;
-        return {
-          datos: dj,
-          buffer: buf,
-          offset: offset
-        };
-      } catch (e) {
-        console.warn("voz", id, e);
-        return null;
-      }
-    })();
+    const p = cargarVoz(this.c.base + "vox/", id, this.ctx()).catch(e => {
+      console.warn("voz", id, e);
+      return null;
+    });
     this.cache.set(id, p);
     this.orden.push(id);
     while (this.orden.length > 24) this.cache.delete(this.orden.shift());

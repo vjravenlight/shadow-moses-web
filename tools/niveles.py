@@ -474,22 +474,45 @@ def seguir_demo(dest, origen, prof=0):
             if r[:1] == 's' and (not r.startswith(familia)):
                 return r
     return dest
-if __name__ == '__main__':
-    CARGAS.update(cargas_externas())
-    stages = sys.argv[1:] or sorted((os.path.basename(d) for d in glob.glob(os.path.join(ST, '*'))))
-    hechos = []
-    for st in stages:
+
+def _iniciar(cargas, aristas):
+    CARGAS.update(cargas)
+    ARISTAS.update(aristas)
+
+def _nivel_resumen(st):
+    import io, contextlib
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
         try:
             d = nivel(st)
         except Exception as e:
             print('ERROR', st, e)
-            continue
-        if not d:
-            continue
-        n = {}
-        for a in d['actores']:
-            n[a['tipo']] = n.get(a['tipo'], 0) + 1
-        print(st, 'mapas', len(d['mapas']), 'actores', len(d['actores']), 'guardias', n.get('WATCHER', 0), 'items', n.get('ITEM', 0))
-        hechos.append(st)
+            d = None
+    if not d:
+        return (st, None, buf.getvalue())
+    n = {}
+    for a in d['actores']:
+        n[a['tipo']] = n.get(a['tipo'], 0) + 1
+    return (st, '%s mapas %d actores %d guardias %d items %d' % (st, len(d['mapas']), len(d['actores']), n.get('WATCHER', 0), n.get('ITEM', 0)), buf.getvalue())
+if __name__ == '__main__':
+    CARGAS.update(cargas_externas())
+    stages = sys.argv[1:] or sorted((os.path.basename(d) for d in glob.glob(os.path.join(ST, '*'))))
+    hechos = []
+    procesos = int(os.environ.get('MGS_PROCESOS') or max(1, min(3, (os.cpu_count() or 2) - 1)))
+    if procesos > 1 and len(stages) > 4:
+        from multiprocessing import Pool
+        pool = Pool(procesos, initializer=_iniciar, initargs=(CARGAS, ARISTAS))
+        resultados = pool.imap(_nivel_resumen, stages)
+    else:
+        pool, resultados = (None, map(_nivel_resumen, stages))
+    for st, linea, salida in resultados:
+        if salida:
+            print(salida, end='')
+        if linea:
+            print(linea)
+            hechos.append(st)
+    if pool:
+        pool.close()
+        pool.join()
     if len(sys.argv) == 1:
         json.dump(hechos, open(os.path.join(OUT, 'indice.json'), 'w'))

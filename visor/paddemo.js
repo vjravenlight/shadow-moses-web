@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as ctl from "./controles.js";
 
+import { urlVoz } from "./audio_ps1.js";
+
 export const BOTON = {
   L2: 1,
   R2: 2,
@@ -924,8 +926,19 @@ export class Movie {
         durMedio: voz ? info.seg : info.duracion
       };
       if (voz) {
-        const a = this.media = new Audio(`${this.base}codec/vox/${voz}.m4a`);
+        const a = this.media = new Audio;
         a.preload = "auto";
+        urlVoz(`${this.base}codec/vox/`, voz, info).then(({url: url, esBlob: esBlob}) => {
+          if (this.media !== a) {
+            if (esBlob) URL.revokeObjectURL(url);
+            return;
+          }
+          if (esBlob) a._blob = url;
+          a.src = url;
+          if (this.rod?.fase === "rueda") this._play(a);
+        }, () => {
+          if (this.media === a) this.rod.terminoMedio = true;
+        });
       } else {
         const v = this.media = document.createElement("video");
         v.playsInline = true;
@@ -1101,6 +1114,7 @@ export class Movie {
         this.media.pause();
         this.media.removeAttribute("src");
         this.media.load();
+        if (this.media._blob) URL.revokeObjectURL(this.media._blob);
       } catch {}
       this.media = null;
     }

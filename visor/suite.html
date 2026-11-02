@@ -1,0 +1,83 @@
+<!doctype html>
+
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#020604">
+<title>Shadow Moses · Suite</title>
+<link rel="icon" href="assets/icono_192.png">
+<link rel="stylesheet" href="suite.css">
+</head>
+<body>
+<canvas id="fondo" aria-hidden="true"></canvas>
+<div class="crt" aria-hidden="true"></div>
+
+<header class="barra">
+  <a class="volver" id="volver" href="/" hidden>◀ <span data-t="portada"></span></a>
+  <span class="barra-freq">◀ <b>140.85</b> ▶</span>
+  <span class="estado" id="estado" aria-live="polite"></span>
+  <nav class="idiomas" aria-label="Idioma / Language">
+    <button type="button" data-lang="es">ES</button><button type="button" data-lang="en">EN</button>
+  </nav>
+</header>
+
+<main>
+  <section class="cabeza">
+    <p class="clasif">[ <span data-t="clasif"></span> ]</p>
+    <h1><span class="t-1">SHADOW</span> <span class="t-2">MOSES</span> <span class="t-web">SUITE</span></h1>
+    <p class="bajada" data-t="bajada"></p>
+  </section>
+
+  
+  <ul class="misiones" id="misiones">
+    <li><a href="index.html" data-id="jugar">
+      <figure><img src="suite_img/jugar.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>01</i> <span data-t="jugar"></span></b><small data-t="jugar_d"></small></a></li>
+    <li><a href="index.html?modo=vr" data-id="vrmis">
+      <figure><img src="suite_img/vrmis.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>02</i> <span data-t="vrmis"></span></b><small data-t="vrmis_d"></small></a></li>
+    <li><a href="index.html?modo=escenarios" data-id="escenarios">
+      <figure><img src="suite_img/escenarios.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>03</i> <span data-t="escenarios"></span></b><small data-t="escenarios_d"></small></a></li>
+    <li><a href="index.html?modo=museo" data-id="museo">
+      <figure><img src="suite_img/museo.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>04</i> <span data-t="museo"></span></b><small data-t="museo_d"></small></a></li>
+    <li><a href="index.html?modo=catalogo" data-id="objetos">
+      <figure><img src="suite_img/objetos.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>05</i> <span data-t="objetos"></span></b><small data-t="objetos_d"></small></a></li>
+    <li><a href="#casco" data-id="casco">
+      <figure><img src="suite_img/casco.jpg" alt="" width="640" height="360"><span class="rec">● REC</span></figure>
+      <b><i>06</i> <span data-t="casco"></span></b><small data-t="casco_d"></small></a></li>
+  </ul>
+
+  
+  <section class="datos" aria-label="Contenido">
+    <div><b>77</b><span data-t="n_esc"></span></div>
+    <div><b>122</b><span data-t="n_cine"></span></div>
+    <div><b>832</b><span data-t="n_mod"></span></div>
+    <div><b>2</b><span data-t="n_disc"></span></div>
+  </section>
+
+  
+  <section class="casco" id="casco">
+    <h2><span class="tx">TX-VR</span> <span data-t="h_casco"></span></h2>
+    <ol>
+      <li data-t="casco_1"></li>
+      <li data-t="casco_2"></li>
+      <li data-t="casco_3"></li>
+    </ol>
+    <p class="centro"><a class="boton" href="index.html" data-t="casco_ir"></a></p>
+  </section>
+</main>
+
+<footer class="pie">
+  <p data-t="pie"></p>
+  <p class="firma">FeniXVOID · Project Ravenlight</p>
+</footer>
+
+<div id="alerta" class="alerta" aria-hidden="true">!</div>
+<script src="suite.js"></script>
+</body>
+</html>

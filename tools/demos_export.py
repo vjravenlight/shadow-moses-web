@@ -34,6 +34,8 @@ FPS = demo_dat.FPS_DEMO
 TICK_SUBT = demo_dat.TICK_SUBT_SEG
 COLS_CAMARA = 8
 COLS_MODELO = 7
+FORMATO = 'original'
+ENVOLVENTE = False
 PRIORIDAD = [5183, 6843, 7979, 8655, 0, 3209, 3920, 88829, 89151]
 EF = dict(FADEIN=3, FADEOUT=4, TEXT=5, SHADOW=14, MESSAGE=16, SEPIA=27, UNSHAPEVIEW=29, STOP=31, BLUR=34, MONOTONE=36, PADVIBRATION=54, PADVIBRATION2=64, GHOST=65, TEXT2=74)
 ST_DAT = struct.Struct('<Ii7hhhxxIhxxI')
@@ -249,6 +251,30 @@ def exportar_audio(mm, cab_pcm, bloques, salida_m4a, log):
         except OSError:
             pass
     return ({'archivo': 'audio.m4a', 'hz_original': hz, 'hz': 44100, 'canales': cab_pcm['canales'], 'segundos': round(segundos, 3), 'bytes_adpcm': cab_pcm['bytes'], 'muestras': int(len(I)), 'bytes': os.path.getsize(salida_m4a)}, env)
+
+def envolvente(mm, cab_pcm, bloques):
+    import numpy as np
+    est, izq = ([0.0, 0.0], [])
+    for q, tam in bloques:
+        d = bytes(mm[q + 4:q + tam])
+        izq.append(decodificar_adpcm_rapido(d if cab_pcm['canales'] == 1 else d[4096:], est))
+    mono = (np.concatenate(izq) if izq else np.zeros(0, np.int16)).astype(np.float32)
+    v = int(int(round(cab_pcm['hz'])) * 0.1)
+    return [round(float(np.sqrt(np.mean(mono[i:i + v] ** 2))) / 32768, 4) for i in range(0, len(mono) - v + 1, v)]
+
+def audio_original(mm, cab_pcm, bloques, carpeta, log):
+    datos, n = demo_dat.adpcm_crudo(mm, bloques, cab_pcm['canales'])
+    if datos is None:
+        log('  ! audio: %s; va en m4a' % n)
+        return None
+    hz = int(round(cab_pcm['hz']))
+    with open(os.path.join(carpeta, 'audio.adpcm'), 'wb') as f:
+        f.write(datos)
+    a = {'archivo': 'audio.adpcm', 'formato': 'adpcm', 'hz_original': hz, 'hz': hz, 'canales': cab_pcm['canales']}
+    if cab_pcm['canales'] == 2:
+        a['bloque'] = demo_dat.BLOQUE_ESTEREO
+    a.update({'segundos': round(n / float(hz), 3), 'bytes_adpcm': cab_pcm['bytes'], 'muestras': n, 'bytes': len(datos)})
+    return a
 
 def i32(p16, k):
     return p16[k] & 65535 | p16[k + 1] << 16
@@ -476,9 +502,13 @@ def exportar_demo(mm, sector, refs, salida_base, con_audio=True, forzar=False, l
             lineas.append({'t': round(l['inicio'] * TICK_SUBT, 3), 'd': round(l['duracion'] * TICK_SUBT, 3), 'texto': l['texto']})
     lineas.sort(key=lambda l: l['t'])
     audio, env = (None, None)
-    if pcm_cab and con_audio:
+    if pcm_cab and con_audio and (FORMATO == 'original'):
+        audio = audio_original(mm, pcm_cab, bloques_pcm, salida_abs, log)
+        if audio and ENVOLVENTE:
+            env = envolvente(mm, pcm_cab, bloques_pcm)
+    if pcm_cab and con_audio and (not audio):
         audio, env = exportar_audio(mm, pcm_cab, bloques_pcm, os.path.join(salida_abs, 'audio.m4a'), log)
-    elif pcm_cab:
+    elif pcm_cab and (not audio):
         audio = {'archivo': None, 'hz_original': int(round(pcm_cab['hz'])), 'canales': pcm_cab['canales'], 'segundos': round(pcm_cab['segundos'], 3)}
     eye = A[:, 0:3].astype(np.float64)
     clips = A[:, 7]
@@ -517,7 +547,11 @@ def main():
     ap.add_argument('--forzar', action='store_true')
     ap.add_argument('--salida', default=DEMOS)
     ap.add_argument('--scripts', default=os.path.join(DOCS, 'demo', 'demos_scripts.json'))
+    ap.add_argument('--formato', choices=('original', 'm4a'), default='original')
+    ap.add_argument('--envolvente', action='store_true')
     a = ap.parse_args()
+    global FORMATO, ENVOLVENTE
+    FORMATO, ENVOLVENTE = (a.formato, a.envolvente)
     try:
         sys.stdout.reconfigure(encoding='utf-8', line_buffering=True)
     except Exception:

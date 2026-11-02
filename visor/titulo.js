@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as ctl from "./controles.js";
 
+import { urlVoz } from "./audio_ps1.js";
+
 const W = 320, H = 224, HT = 240;
 
 const BASE = new URL("./assets/", import.meta.url).href;
@@ -910,6 +912,7 @@ export class Titulo {
       this._musicaLogos(true);
     }
     if ([ "start", "menu", "demo", "tocar" ].includes(estado)) this._musicaLogos(false);
+    if (estado === "tocar") this._prepVozLogos();
     if ([ "entrada", "start", "menu" ].includes(estado)) {
       if (!this.fondo) this.armarFondo();
       this.ponerMusica();
@@ -961,19 +964,31 @@ export class Titulo {
       this.sonido.se?.(id);
     } catch {}
   }
+  _prepVozLogos() {
+    if (this._vozLogos || this.opc?.sonido === false) return;
+    const a = this._vozLogos = new Audio;
+    a.preload = "auto";
+    this._vozLogosLista = urlVoz("assets/codec/vox/", 94672).then(({url: url}) => {
+      a.src = url;
+    }, () => {});
+  }
   _musicaLogos(si) {
     try {
       if (si) {
         if (this.opc?.sonido === false) return;
-        if (!this._vozLogos) {
-          this._vozLogos = new Audio("assets/codec/vox/94672.m4a");
-          this._vozLogos.preload = "auto";
-        }
-        const a = this._vozLogos;
-        a.currentTime = 0;
-        a.volume = .9;
-        a.play()?.catch?.(() => {});
-      } else if (this._vozLogos && !this._vozLogos.paused) this._vozLogos.pause();
+        this._prepVozLogos();
+        const a = this._vozLogos, sonar = () => {
+          if (!this._logosSi) return;
+          a.currentTime = 0;
+          a.volume = .9;
+          a.play()?.catch?.(() => {});
+        };
+        this._logosSi = true;
+        if (a.src) sonar(); else this._vozLogosLista.then(sonar);
+      } else {
+        this._logosSi = false;
+        if (this._vozLogos && !this._vozLogos.paused) this._vozLogos.pause();
+      }
     } catch {}
   }
   cuadro() {

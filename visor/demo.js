@@ -9,6 +9,8 @@ import { MiraScope, FILTRO_ANTIPARRAS, histogramaProfundidad } from "./mira_scop
 
 import * as ctl from "./controles.js";
 
+import { urlAudio } from "./audio_ps1.js";
+
 export const FPS = 30;
 
 const ANG = Math.PI * 2 / 4096, MM = .001;
@@ -65,6 +67,15 @@ function elementoAudio() {
     audioEl.setAttribute("playsinline", "");
   }
   return audioEl;
+}
+
+function soltarBlob(a) {
+  if (a._blob) {
+    try {
+      URL.revokeObjectURL(a._blob);
+    } catch {}
+    a._blob = null;
+  }
 }
 
 function alGesto() {
@@ -504,7 +515,26 @@ export class Demo {
     a._dueño = this;
     this._audio = a;
     a.pause();
-    a.src = dir + au.archivo;
+    if (au.formato === "adpcm") {
+      return urlAudio(dir, au).then(({url: url}) => {
+        if (a._dueño !== this) {
+          URL.revokeObjectURL(url);
+          listo();
+          return;
+        }
+        soltarBlob(a);
+        a._blob = url;
+        return this._cargarAudio(a, url, listo);
+      }, e => {
+        console.warn(`demo ${this.sector}: el audio no carga`, e);
+        listo();
+      });
+    }
+    soltarBlob(a);
+    return this._cargarAudio(a, dir + au.archivo, listo);
+  }
+  _cargarAudio(a, src, listo) {
+    a.src = src;
     a.volume = Math.max(0, Math.min(1, this.volumen));
     a.load();
     return new Promise(res => {
@@ -589,6 +619,7 @@ export class Demo {
         a.pause();
       } catch {}
       a._dueño = null;
+      soltarBlob(a);
     }
     this._audio = null;
     this._audioOk = false;

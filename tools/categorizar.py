@@ -3,6 +3,7 @@ import json, hashlib, os, shutil, collections, re
 import sys as _sys_rutas, os as _os_rutas
 _sys_rutas.path.insert(0, _os_rutas.path.dirname(_os_rutas.path.abspath(__file__)))
 from rutas import EXTRAIDO, ASSETS, DOCS, PRUEBAS
+from concurrent.futures import ThreadPoolExecutor
 
 def _abs(fn):
     return fn if os.path.isabs(fn) else os.path.join(os.path.dirname(EXTRAIDO), fn)
@@ -14,26 +15,32 @@ OUT = os.path.join(EXTRAIDO, sys.argv[sys.argv.index('--salida') + 1] if '--sali
 seen = {}
 donde = collections.defaultdict(list)
 discos = collections.defaultdict(set)
-for stage, reg, fn, sz, dk in inv:
-    fn = _abs(fn)
+
+def _leer(fn):
     b = open(fn, 'rb').read()
-    h = hashlib.md5(b).hexdigest()
-    base = os.path.basename(fn)
-    ext = base.rsplit('.', 1)[1]
-    donde[h].append(stage)
-    discos[h].add(dk)
-    if h in seen:
-        continue
-    cat = CAT.get(ext, '09_otros/' + ext)
-    name = base if not re.fullmatch('[0-9a-f]{4}\\.\\w+', base) else f'{stage}_{base}'
-    dst = f'{OUT}/{cat}/{name}'
-    if os.path.exists(dst):
-        dst = f'{OUT}/{cat}/{stage}_{base}'
-    if os.path.exists(dst):
-        dst = dst.replace('.' + ext, f'_{dk}.' + ext)
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    shutil.copyfile(fn, dst)
-    seen[h] = (dst, sz)
+    return (b, hashlib.md5(b).hexdigest())
+with ThreadPoolExecutor(4) as ex:
+    for k in range(0, len(inv), 1024):
+        tanda = inv[k:k + 1024]
+        for (stage, reg, fn, sz, dk), (b, h) in zip(tanda, ex.map(_leer, [_abs(x[2]) for x in tanda])):
+            fn = _abs(fn)
+            base = os.path.basename(fn)
+            ext = base.rsplit('.', 1)[1]
+            donde[h].append(stage)
+            discos[h].add(dk)
+            if h in seen:
+                continue
+            cat = CAT.get(ext, '09_otros/' + ext)
+            name = base if not re.fullmatch('[0-9a-f]{4}\\.\\w+', base) else f'{stage}_{base}'
+            dst = f'{OUT}/{cat}/{name}'
+            if os.path.exists(dst):
+                dst = f'{OUT}/{cat}/{stage}_{base}'
+            if os.path.exists(dst):
+                dst = dst.replace('.' + ext, f'_{dk}.' + ext)
+            os.makedirs(os.path.dirname(dst), exist_ok=True)
+            with open(dst, 'wb') as o:
+                o.write(b)
+            seen[h] = (dst, sz)
 rows = [{'archivo': v[0].replace(OUT + '/', ''), 'bytes': v[1], 'escenarios': sorted(set(donde[h])), 'discos': sorted(discos[h])} for h, v in seen.items()]
 json.dump(rows, open(f'{OUT}/_indice.json', 'w'), indent=1)
 c = collections.Counter((r['archivo'].split('/')[0] for r in rows))

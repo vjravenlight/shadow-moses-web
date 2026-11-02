@@ -20,6 +20,7 @@ DISCO = 1
 BASE = 0
 REFS = os.path.join(DOCS, 'codec', 'vox_refs.json')
 TICK = V.TICK_SUBT_SEG
+FORMATO = 'original'
 _mm = None
 
 def ids_necesarios():
@@ -83,19 +84,65 @@ def subtitulos_y_lip(info):
     return (sub, lip)
 TMP = None
 
+def ya_hecha(js):
+    if not os.path.exists(js):
+        return None
+    try:
+        d = json.load(open(js, encoding='utf-8'))
+    except ValueError:
+        return None
+    es_original = d.get('formato') == 'adpcm'
+    if es_original != (FORMATO == 'original') and (not d.get('respaldo_m4a')):
+        return None
+    return d if os.path.exists(os.path.join(SALIDA, d.get('archivo') or '%d.m4a' % d['id'])) else None
+
+def original(mm, s, vid, nombre, info):
+    cab, bloques = (None, [])
+    for q, t, tam in D.paquetes(mm, s['offset'], s.get('fin')):
+        if t == 2:
+            cab = D.leer_pcm_cab(mm, q)
+        elif t == 1:
+            bloques.append((q, tam))
+        elif t == 240:
+            break
+    if not cab:
+        return None
+    datos, n = D.adpcm_crudo(mm, bloques, cab['canales'])
+    if datos is None:
+        print('  %d: %s; va en m4a' % (vid, n))
+        return None
+    hz, ch = (int(round(cab['hz'])), cab['canales'])
+    archivo = '%d.adpcm' % (vid + BASE)
+    with open(os.path.join(SALIDA, archivo), 'wb') as f:
+        f.write(datos)
+    sub, lip = subtitulos_y_lip(info)
+    d = {'id': vid + BASE, 'nombre': nombre, 'formato': 'adpcm', 'archivo': archivo, 'hz': hz, 'canales': ch}
+    if ch == 2:
+        d['bloque'] = D.BLOQUE_ESTEREO
+    d.update({'seg': round(n / hz, 4), 'muestras': n, 'sub': sub, 'lip': lip})
+    if BASE:
+        d['disco'] = DISCO
+        d['sector'] = vid
+    json.dump(d, open(os.path.join(SALIDA, '%d.json' % (vid + BASE)), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    return d
+
 def decodificar(args):
-    vid, nombre, forzar, tmp, disco = args
-    global DISCO, BASE
-    DISCO, BASE = (disco, 200000 if disco == 2 else 0)
-    m4a = os.path.join(SALIDA, '%d.m4a' % (vid + BASE))
+    vid, nombre, forzar, tmp, disco, formato = args
+    global DISCO, BASE, FORMATO
+    DISCO, BASE, FORMATO = (disco, 200000 if disco == 2 else 0, formato)
     js = os.path.join(SALIDA, '%d.json' % (vid + BASE))
-    if not forzar and os.path.exists(m4a) and os.path.exists(js):
-        return (vid, json.load(open(js, encoding='utf-8')), None, None)
+    hecha = None if forzar else ya_hecha(js)
+    if hecha:
+        return (vid, hecha, None, None)
     mm = _abrir()
     s = V.stream_en(mm, vid)
     if not s:
         return (vid, None, None, 'no arranca un stream')
     info = V.analizar(mm, s)
+    if FORMATO == 'original':
+        d = original(mm, s, vid, nombre, info)
+        if d:
+            return (vid, d, None, None)
     cab, muestras = pcm(mm, s)
     if not cab:
         return (vid, None, None, 'sin PCM')
@@ -112,6 +159,8 @@ def decodificar(args):
     n = len(muestras) // ch
     sub, lip = subtitulos_y_lip(info)
     d = {'id': vid + BASE, 'nombre': nombre, 'hz': hz, 'canales': ch, 'seg': round(n / hz, 4), 'muestras': int(round(n * hz_out / hz)), 'hz_m4a': hz_out, 'sub': sub, 'lip': lip}
+    if FORMATO == 'original':
+        d['respaldo_m4a'] = True
     if BASE:
         d['disco'] = DISCO
         d['sector'] = vid
@@ -140,9 +189,10 @@ def main():
     ap.add_argument('--procesos', type=int, default=max(1, os.cpu_count() or 2))
     ap.add_argument('--forzar', action='store_true')
     ap.add_argument('--disco', type=int, default=1)
+    ap.add_argument('--formato', choices=('original', 'm4a'), default='original')
     a = ap.parse_args()
-    global DISCO, BASE
-    DISCO, BASE = (a.disco, 200000 if a.disco == 2 else 0)
+    global DISCO, BASE, FORMATO
+    DISCO, BASE, FORMATO = (a.disco, 200000 if a.disco == 2 else 0, a.formato)
     if DISCO != 1 and (not a.solo):
         sys.exit('con --disco 2 hay que decir qué voces (--solo); las pide tools/voces_disco2.py')
     os.makedirs(SALIDA, exist_ok=True)
@@ -154,10 +204,13 @@ def main():
     import tempfile
     from concurrent.futures import ThreadPoolExecutor
     tmp = tempfile.mkdtemp(prefix='codec_voces_')
-    trabajos = [(i, nombres.get(i), a.forzar, tmp, DISCO) for i in ids]
+    trabajos = [(i, nombres.get(i), a.forzar, tmp, DISCO, FORMATO) for i in ids]
     datos, pendientes = ({}, [])
-    with Pool(a.procesos) as pool:
-        for k, (vid, d, wav, err) in enumerate(pool.imap_unordered(decodificar, trabajos, chunksize=4)):
+    procesos = a.procesos if FORMATO == 'm4a' else 1
+    pool = Pool(procesos) if procesos > 1 else None
+    try:
+        resultados = pool.imap_unordered(decodificar, trabajos, chunksize=4) if pool else map(decodificar, trabajos)
+        for k, (vid, d, wav, err) in enumerate(resultados):
             if err:
                 errores.append((vid, err))
                 print('  ! %d: %s' % (vid, err))
@@ -166,9 +219,14 @@ def main():
             if wav:
                 pendientes.append((vid, d, wav))
             if (k + 1) % 100 == 0:
-                print('  decodificadas %d/%d (%.0f s)' % (k + 1, len(ids), time.time() - t0), flush=True)
+                print('  leídas %d/%d (%.0f s)' % (k + 1, len(ids), time.time() - t0), flush=True)
+    finally:
+        if pool:
+            pool.close()
+            pool.join()
     lotes = [pendientes[i:i + 40] for i in range(0, len(pendientes), 40)]
-    print('  codificando %d archivos en %d lotes...' % (len(pendientes), len(lotes)), flush=True)
+    if lotes:
+        print('  codificando %d archivos en %d lotes...' % (len(pendientes), len(lotes)), flush=True)
     with ThreadPoolExecutor(max(1, a.procesos)) as ex:
         for res in ex.map(codificar, lotes):
             for vid, rc, err in res:
@@ -185,10 +243,10 @@ def main():
     except OSError:
         pass
     for vid, d in datos.items():
-        m4a = os.path.join(SALIDA, '%d.m4a' % (vid + BASE))
-        if not os.path.exists(m4a):
+        audio = os.path.join(SALIDA, d.get('archivo') or '%d.m4a' % (vid + BASE))
+        if not os.path.exists(audio):
             continue
-        b = os.path.getsize(m4a)
+        b = os.path.getsize(audio)
         indice[str(vid + BASE)] = [d['seg'], d['canales'], b, sorted(usos.get(vid, []))]
         total_b += b
         total_s += d['seg']
@@ -196,9 +254,9 @@ def main():
         pi = os.path.join(SALIDA, 'indice_disco2.json')
         viejo = json.load(open(pi, encoding='utf-8')).get('ids', {}) if os.path.exists(pi) else {}
         viejo.update(indice)
-        json.dump({'voces': len(viejo), 'segundos': round(sum((v[0] for v in viejo.values())), 1), 'bytes_m4a': sum((v[2] for v in viejo.values())), 'tipos': 'voces del VOX.DAT del disco 2: archivo <200000 + sector> (tools/voces_disco2.py)', 'ids': dict(sorted(viejo.items(), key=lambda x: int(x[0])))}, open(pi, 'w', encoding='utf-8'), separators=(',', ':'))
+        json.dump({'voces': len(viejo), 'segundos': round(sum((v[0] for v in viejo.values())), 1), 'bytes_audio': sum((v[2] for v in viejo.values())), 'tipos': 'voces del VOX.DAT del disco 2: archivo <200000 + sector> (tools/voces_disco2.py)', 'ids': dict(sorted(viejo.items(), key=lambda x: int(x[0])))}, open(pi, 'w', encoding='utf-8'), separators=(',', ':'))
     if not a.solo:
-        json.dump({'voces': len(indice), 'segundos': round(total_s, 1), 'bytes_m4a': total_b, 'tipos': 'radio VOZ / sound -g / sound -v (disco 1)', 'ids': dict(sorted(indice.items(), key=lambda x: int(x[0])))}, open(os.path.join(SALIDA, 'indice.json'), 'w', encoding='utf-8'), separators=(',', ':'))
-    print('listo: %d voces, %.1f s (%.2f h), %.2f MB en m4a, %d errores, %.0f s' % (len(indice), total_s, total_s / 3600, total_b / 1000000.0, len(errores), time.time() - t0))
+        json.dump({'voces': len(indice), 'segundos': round(total_s, 1), 'bytes_audio': total_b, 'formato': FORMATO, 'tipos': 'radio VOZ / sound -g / sound -v (disco 1)', 'ids': dict(sorted(indice.items(), key=lambda x: int(x[0])))}, open(os.path.join(SALIDA, 'indice.json'), 'w', encoding='utf-8'), separators=(',', ':'))
+    print('listo: %d voces, %.1f s (%.2f h), %.2f MB (%s), %d errores, %.0f s' % (len(indice), total_s, total_s / 3600, total_b / 1000000.0, FORMATO, len(errores), time.time() - t0))
 if __name__ == '__main__':
     main()

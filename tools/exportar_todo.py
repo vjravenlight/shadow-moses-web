@@ -27,10 +27,47 @@ def categoria(nombre, i):
         return 'grande'
     return 'objeto'
 
+def _modelo(t):
+    nombre, src, escenarios = t
+    try:
+        i = info(src)
+        if not i:
+            return (None, None)
+        res = exportar(src, f'{OUT}/modelos/{nombre}.glb', estatico=not i['esqueleto'])
+    except Exception as e:
+        return (None, 'ERROR %s %s' % (nombre, e))
+    return (dict(nombre=nombre, archivo=f'modelos/{nombre}.glb', con_nombre=not HEX.search(nombre), categoria=categoria(nombre, i), escenarios=escenarios[:8], texturas=res['texturas'], **i), None)
+
+def _parte(t):
+    st, f = t
+    try:
+        i = info(f)
+    except Exception:
+        return (None, None)
+    if not i or (i['esqueleto'] and i['piezas'] < 30):
+        return (None, None)
+    if max(i['ancho'], i['alto']) < 3:
+        return (None, None)
+    n = os.path.basename(f)[:-4]
+    os.makedirs(f'{OUT}/escenarios/{st}', exist_ok=True)
+    try:
+        exportar(f, f'{OUT}/escenarios/{st}/{n}.glb', estatico=True)
+    except Exception as e:
+        return (None, 'ERROR %s %s %s' % (st, n, e))
+    return (dict(nombre=n, archivo=f'escenarios/{st}/{n}.glb', **i), None)
+
+def repartir(funcion, tareas):
+    n = int(os.environ.get('MGS_PROCESOS') or max(1, min(3, (os.cpu_count() or 2) - 1)))
+    if n <= 1 or len(tareas) < 8:
+        return [funcion(t) for t in tareas]
+    from multiprocessing import Pool
+    with Pool(n) as p:
+        return p.map(funcion, tareas, chunksize=8)
+
 def main():
     os.makedirs(f'{OUT}/modelos', exist_ok=True)
     idx = json.load(open(os.path.join(EXTRAIDO, '02_por_tipo', '_indice.json')))
-    catalogo = []
+    tareas = []
     for r in idx:
         if not r['archivo'].endswith('.kmd'):
             continue
@@ -48,38 +85,26 @@ def main():
                 break
         if not src:
             continue
-        try:
-            i = info(src)
-            if not i:
-                continue
-            res = exportar(src, f'{OUT}/modelos/{nombre}.glb', estatico=not i['esqueleto'])
-        except Exception as e:
-            print('ERROR', nombre, e)
-            continue
-        catalogo.append(dict(nombre=nombre, archivo=f'modelos/{nombre}.glb', con_nombre=not HEX.search(nombre), categoria=categoria(nombre, i), escenarios=r['escenarios'][:8], texturas=res['texturas'], **i))
+        tareas.append((nombre, src, r['escenarios']))
+    catalogo = []
+    for fila, err in repartir(_modelo, tareas):
+        if err:
+            print(err)
+        if fila:
+            catalogo.append(fila)
     json.dump(catalogo, open(f'{OUT}/catalogo.json', 'w'), indent=0)
     print('modelos', len(catalogo))
+    stages = [os.path.basename(sd) for sd in sorted(glob.glob(os.path.join(ST, '*')))]
+    tareas = [(st, f) for st in stages for f in glob.glob(os.path.join(ST, st, '*', '*.kmd'))]
+    por_st = {}
+    for (st, f), (parte, err) in zip(tareas, repartir(_parte, tareas)):
+        if err:
+            print(err)
+        if parte:
+            por_st.setdefault(st, []).append(parte)
     escenarios = []
-    for sd in sorted(glob.glob(os.path.join(ST, '*'))):
-        st = os.path.basename(sd)
-        partes = []
-        for f in glob.glob(os.path.join(sd, '*', '*.kmd')):
-            try:
-                i = info(f)
-            except Exception:
-                continue
-            if not i or (i['esqueleto'] and i['piezas'] < 30):
-                continue
-            if max(i['ancho'], i['alto']) < 3:
-                continue
-            n = os.path.basename(f)[:-4]
-            os.makedirs(f'{OUT}/escenarios/{st}', exist_ok=True)
-            try:
-                exportar(f, f'{OUT}/escenarios/{st}/{n}.glb', estatico=True)
-            except Exception as e:
-                print('ERROR', st, n, e)
-                continue
-            partes.append(dict(nombre=n, archivo=f'escenarios/{st}/{n}.glb', **i))
+    for st in stages:
+        partes = por_st.get(st)
         if partes:
             partes.sort(key=lambda p: -p['caras'])
             escenarios.append(dict(id=st, partes=partes, caras=sum((p['caras'] for p in partes))))
