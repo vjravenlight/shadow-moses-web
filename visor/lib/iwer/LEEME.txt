@@ -1,0 +1,3 @@
+IWER (Immersive Web Emulation Runtime) 2.5.0 de Meta, licencia MIT (ver LICENSE).
+npm: https://www.npmjs.com/package/iwer  -  build/iwer.module.min.js y build/iwer.min.js sin cambios.
+Lo usan sólo visor/prueba_vr_paneles.html?xr=iwer (el módulo) y tools/probar_vr_paneles.mjs --modo app (el min.js, inyectado) para probar la sesión WebXR sin casco (navigator.xr de mentira con controles).

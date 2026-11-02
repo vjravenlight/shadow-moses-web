@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#000000">
+<link rel="apple-touch-icon" href="assets/icono_192.png">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<title>Shadow Moses VR</title>
+<style>
+@font-face{font-family:MGS;src:url(assets/hud/mgs.woff) format("woff");font-display:block}@font-face{font-family:MGS8;src:url(assets/hud/mgs8.woff) format("woff");font-display:block}:root{--txt:#7fb08c;--claro:#b4f4ac;--marco:#2f4a39;--marco2:#5f8c6c;--caja:rgba(4,14,8,.8);--fondo:rgba(0,6,2,.92);--rojo:#d8342a;--tenue:#4f7a5c;--hud-k:3px;--menu-top:56px;--menu-left:12px}*{box-sizing:border-box}html,body{margin:0;height:100%;background:#000;color:var(--txt);font:16px/1.5 MGS,Consolas,monospace;overflow:hidden;text-transform:uppercase}canvas{display:block;touch-action:none}button,input,select{font:inherit;text-transform:inherit;color:inherit}#panel{position:fixed;top:var(--menu-top);left:var(--menu-left);width:380px;max-width:calc(100% - 24px);max-height:calc(100% - var(--menu-top) - 12px);display:flex;flex-direction:column;background:var(--fondo);border:1px solid var(--marco2);outline:1px solid #000;z-index:5}#panel.oculto{display:none}#panel header{padding:10px 12px 8px;border-bottom:1px solid var(--marco);flex:none}#panel header h1{margin:0;font:400 22px/1.1 MGS8,Consolas,monospace;color:var(--claro);letter-spacing:1px}#panel header small{display:block;margin-top:4px;color:var(--tenue);font-size:12px}#cerrar{display:none}#panel-cuerpo{overflow:auto;min-height:0;flex:1 1 auto;overscroll-behavior:contain}details.grupo{border-bottom:1px solid var(--marco)}details.grupo>summary{list-style:none;cursor:pointer;padding:9px 12px 7px;font:400 14px/1.2 MGS8,Consolas,monospace;color:var(--claro);letter-spacing:1px;display:flex;align-items:center;gap:10px;user-select:none;-webkit-user-select:none;background:#78f87008}details.grupo>summary::-webkit-details-marker{display:none}details.grupo>summary:before{content:"+";width:14px;text-align:center;color:var(--marco2)}details.grupo[open]>summary:before{content:"-"}details.grupo>summary:hover{background:#78f87014}details.grupo>summary small{margin-left:auto;color:var(--tenue);font:12px MGS,monospace;letter-spacing:0}.cuerpo-grupo{display:flex;flex-direction:column;gap:8px;padding:4px 12px 12px}nav{display:flex;gap:6px;flex-wrap:wrap}nav button,.btn{flex:1 1 0;min-width:0;background:var(--caja);border:1px solid var(--marco);padding:8px 6px;cursor:pointer;color:var(--txt);line-height:1.25}nav button:hover,.btn:hover{color:var(--claro);border-color:var(--marco2)}nav button.activo,.btn.activo,#botones button.on{color:var(--claro);border-color:var(--claro);box-shadow:0 0 0 1px #000,0 0 8px #78f87059}.btn.grande{padding:10px 8px;font-size:17px}.rejilla{display:grid;grid-template-columns:1fr 1fr;gap:6px}.rejilla .btn{text-align:left;padding:8px}.rejilla .ancha{grid-column:1 / -1}section{display:none;flex-direction:column;gap:8px;min-height:0}section.activo{display:flex}input[type=search],select{width:100%;background:#000;border:1px solid var(--marco);padding:8px;border-radius:0;appearance:none}.lista{overflow:auto;max-height:44vh;border:1px solid var(--marco);flex:none}.lista div{padding:6px 10px;cursor:pointer;border-bottom:1px solid #12201a;display:flex;justify-content:space-between;gap:8px}.lista div:hover{color:var(--claro);background:#78f8700f}.lista div.sel{color:#000;background:var(--claro)}.lista span.k{color:var(--tenue);white-space:nowrap}.lista .grupo{color:var(--tenue);background:#030a05;cursor:default}.fila{display:flex;gap:6px;flex-wrap:wrap}.fila .btn{flex:1 1 auto}.info{color:var(--tenue);white-space:pre-line;font-size:13px}.titulito{color:var(--tenue);font-size:12px;margin-top:4px;border-top:1px dashed var(--marco);padding-top:6px}label.chk{display:flex;gap:10px;align-items:center;cursor:pointer;padding:2px 0}label.chk:hover{color:var(--claro)}label.chk input{appearance:none;flex:none;width:30px;height:14px;border:1px solid var(--marco2);background:#000;margin:0;position:relative}label.chk input:after{content:"";position:absolute;top:2px;left:2px;width:10px;height:8px;background:#2f4a39}label.chk input:checked{border-color:var(--claro)}label.chk input:checked:after{left:16px;background:var(--claro);box-shadow:0 0 6px #78f87099}#partes{max-height:20vh;overflow:auto}#esc-lista{height:34vh}#ayuda{color:var(--tenue);white-space:pre-line;font-size:13px;text-transform:none}#ayuda:empty:before{content:"Tab o M = menú"}#mostrar{position:fixed;top:calc(56px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));z-index:7;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 12px;flex:none;font-size:13px;letter-spacing:1px;white-space:nowrap;color:var(--claro);background:#0000009e;border:1px solid var(--marco2);cursor:pointer;touch-action:manipulation}#mostrar[hidden]{display:inline-flex}#mostrar .ic{font-family:Consolas,monospace;font-size:15px;line-height:1}#mostrar .tecla{color:var(--tenue);font-size:11px}#mostrar:hover{border-color:var(--claro)}body.menu-abierto #mostrar{border-color:var(--claro);box-shadow:0 0 8px #78f87059}body.menu-abierto .codec-boton,body.menu-abierto:not(.modo-camara) #btn-cam{display:none!important}body.ui-bloqueada #panel,body.ui-bloqueada #mostrar,body.ui-bloqueada .codec-boton{display:none!important}body .codec-boton{left:var(--codec-x, calc(16px + env(safe-area-inset-left)) );top:var(--codec-y, calc(84px + env(safe-area-inset-top)) );height:34px}#mira{position:fixed;left:50%;top:50%;width:4px;height:4px;margin:-2px;background:#e8f0f0;box-shadow:0 0 0 1px #000;z-index:3;display:none}#pantalla-carga{position:fixed;inset:0;z-index:30;background:#000;display:none;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-family:MGS8,monospace;color:var(--claro);opacity:1;transition:opacity .3s}#pantalla-carga .pc-t{font-size:22px;letter-spacing:4px}#pantalla-carga .pc-b{width:min(62vw,360px);height:10px;border:1px solid var(--marco2);padding:2px}#pantalla-carga .pc-b i{display:block;height:100%;width:0;background:var(--claro);transition:width .15s}#pantalla-carga .pc-p{font-size:14px;opacity:.8}#cargando{position:fixed;left:50%;top:54px;transform:translate(-50%);background:var(--fondo);border:1px solid var(--marco2);padding:6px 16px;color:var(--claro);z-index:6;display:none}#cam-aviso{display:none;position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translate(-50%);z-index:45;padding:4px 10px;font:12px Consolas,monospace;color:var(--claro);background:#0000008c;border:1px solid var(--marco2);pointer-events:none;white-space:nowrap;max-width:96vw;overflow:hidden;text-overflow:ellipsis}body.modo-camara #cam-aviso{display:block}#cam-botones{display:none;position:fixed;left:50%;bottom:calc(16px + env(safe-area-inset-bottom));transform:translate(-50%);z-index:45;gap:8px}body.modo-camara #cam-botones{display:flex}#cam-botones button{height:44px;padding:0 14px;border:1px solid var(--marco2);background:#0009;color:var(--txt);font:13px Consolas,monospace;touch-action:none;cursor:pointer}#cam-botones button:hover{color:var(--claro);border-color:var(--claro)}#btn-cam{position:fixed;right:calc(12px + env(safe-area-inset-right));top:calc(42% - 22px);z-index:45;width:56px;height:44px;border:1px solid var(--marco2);background:#00000080;color:var(--txt);touch-action:none}#btn-cam[hidden]{display:none}body.modo-camara #btn-cam{color:var(--claro);border-color:var(--claro)}body.modo-camara #hud,body.modo-camara #mira,body.modo-camara #pausa,body.modo-camara #mostrar,body.modo-camara #botones{display:none!important}body.modo-camara.cam-tactil #tactil[hidden]{display:block}body.modo-camara.cam-tactil #tactil{z-index:41}#pausa{position:fixed;left:50%;top:42%;transform:translate(-50%,-50%);font:400 54px MGS8,monospace;color:var(--claro);text-shadow:0 0 12px rgba(255,255,255,.35);z-index:4;pointer-events:none}#pausa[hidden]{display:none}body.menu-abierto #pausa{left:calc((var(--menu-left) + 380px + 100vw) / 2)}#hudcv{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;image-rendering:pixelated}#aviso{position:fixed;left:50%;bottom:calc(var(--hud-k) * 66 + env(safe-area-inset-bottom));transform:translate(-50%);z-index:4;font:400 calc(var(--hud-k) * 8)/1 "MGS",monospace;color:#b8b8b8;text-shadow:var(--hud-k) var(--hud-k) 0 #000;opacity:0;transition:opacity .4s;white-space:nowrap;pointer-events:none}#daño{position:fixed;inset:0;background:#c00;opacity:0;pointer-events:none;z-index:3;transition:opacity .15s}#fundido{position:fixed;inset:0;background:#000;opacity:0;pointer-events:none;transition:opacity .4s;z-index:30}#gameover{position:fixed;inset:0;z-index:8;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#280000bf;color:var(--rojo);font:400 72px MGS8,monospace}#gameover[hidden]{display:none}#gameover small{font:16px MGS,monospace;color:#e9b6b0;margin-top:16px}:root{--tk:1;--tb:min(calc(58px * var(--tk)), calc((100vw - 56px) / 5.25));--tj:calc(var(--tb) * 2.345);--tm:16px;--tr:calc(var(--tb) * 2.9);--tg: calc(48px*min(var(--tk), 1.2)) }@media (orientation:landscape){:root{--tb:min(calc(54px * var(--tk)), 20vh);--tj:calc(var(--tb) * 2.37);--tm:18px}}#tactil{position:fixed;inset:0;pointer-events:none;z-index:6;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;opacity:var(--top, 1)}#tactil.zurdo #joy{left:auto;right:calc(var(--tm) + env(safe-area-inset-right))}#tactil.zurdo #rombo,#tactil.zurdo #extras{right:auto;left:calc(var(--tm) + env(safe-area-inset-left))}body.tactil.tac-zurdo.modo-camara #cam-botones{right:auto!important;left:calc(var(--tm) + env(safe-area-inset-left))!important}#tactil[hidden]{display:none}#joy{position:absolute;left:calc(var(--tm) + env(safe-area-inset-left));bottom:calc(var(--tm) + (var(--tr) - var(--tj)) / 2 + env(safe-area-inset-bottom));width:var(--tj);height:var(--tj);border-radius:50%;border:2px solid rgba(180,244,172,.28);background:radial-gradient(circle,#0000001f 0 45%,#00000057 72%);pointer-events:auto;touch-action:none;transition:border-color .1s}#joy:before{content:"";position:absolute;inset:14%;border-radius:50%;border:1px dashed rgba(180,244,172,.2);pointer-events:none}#joy i{position:absolute;left:50%;top:50%;width:44%;height:44%;transform:translate(-50%,-50%);border-radius:50%;background:#e6f0f024;border:2px solid rgba(180,244,172,.6);pointer-events:none}#joy.on{border-color:#b4f4ac99}#joy.on i{background:#b4f4ac38}#joy.corre i{background:#b4f4ac66;box-shadow:0 0 12px #78f8708c}#rombo{position:absolute;right:calc(var(--tm) + env(safe-area-inset-right));bottom:calc(var(--tm) + env(safe-area-inset-bottom));width:var(--tr);height:var(--tr);pointer-events:none}#tactil .tb{position:absolute;width:var(--tb);height:var(--tb);padding:0;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:1.5px solid rgba(255,255,255,.2);background:#0000005c;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer;transition:background .08s,box-shadow .08s,border-color .08s}#tactil .tb svg{width:44%;height:44%;fill:none;stroke:var(--c);stroke-width:2.6;stroke-linejoin:round;stroke-linecap:round;opacity:.9}#tactil small{font:9px/1 MGS,monospace;letter-spacing:.5px;color:#e6f0f099;pointer-events:none}#tactil .tb.on,#tactil .gatillo.on,#tactil .extra.on{background:var(--cf);border-color:var(--c);box-shadow:0 0 14px var(--cf)}#tactil .tb.fijo{border-color:var(--c)}#rombo [data-b=triangulo]{--c:#46dcb0;--cf:rgba(70,220,176,.38);left:calc(50% - var(--tb) / 2);top:0}#rombo [data-b=circulo]{--c:#ff6060;--cf:rgba(255,96,96,.38);right:0;top:calc(50% - var(--tb) / 2)}#rombo [data-b=cruz]{--c:#86aaff;--cf:rgba(134,170,255,.38);left:calc(50% - var(--tb) / 2);bottom:0}#rombo [data-b=cuadrado]{--c:#ff8ad6;--cf:rgba(255,138,214,.38);left:0;top:calc(50% - var(--tb) / 2)}#tactil .gatillo{--c:#b4f4ac;--cf:rgba(120,248,112,.3);position:absolute;width:min(calc(112px * var(--tk)),32vw);height:var(--tg);padding:0 10px;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px solid rgba(255,255,255,.2);border-radius:14px 14px 6px 6px;background:#0000005c;color:#e6f0f0d9;font:12px/1 MGS,monospace;letter-spacing:1px;pointer-events:auto;touch-action:none;-webkit-tap-highlight-color:transparent;cursor:pointer;bottom:calc(var(--tm) + var(--tr) + 14px + env(safe-area-inset-bottom))}#tactil .gatillo i{font-style:normal;font-size:10px;color:#b4f4ac8c}#tactil [data-b=l2]{left:calc(var(--tm) + env(safe-area-inset-left))}#tactil [data-b=r2]{right:calc(var(--tm) + env(safe-area-inset-right))}#extras{position:absolute;right:calc(var(--tm) + env(safe-area-inset-right));bottom:calc(var(--tm) + var(--tr) + 14px + env(safe-area-inset-bottom));display:none;gap:8px;pointer-events:none}#tactil .extra{--c:#b4f4ac;--cf:rgba(120,248,112,.3);min-width:64px;height:var(--tg);padding:0 10px;border:1.5px solid rgba(255,255,255,.2);border-radius:8px;background:#0000005c;color:#e6f0f0d9;font:12px MGS,monospace;pointer-events:auto;touch-action:none}#tactil .extra.fijo{border-color:var(--c);color:var(--c)}#tactil:not([data-modo=juego]) .gatillo,#tactil:not([data-modo=juego]) #rombo .tb:not([data-b=cruz]){display:none}#tactil[data-modo=museo] #rombo,#tactil[data-modo=camara] #rombo{display:none}#tactil[data-modo=explorar] #extras,#tactil[data-modo=museo] #extras{display:flex}body.tactil #btn-cam{min-width:56px;height:48px;font:13px MGS,monospace;letter-spacing:1px;border-radius:8px;touch-action:none}body.tactil #btn-cam.on{color:var(--claro);border-color:var(--claro);box-shadow:0 0 12px #78f87073;background:#285a2873}body.tactil.tac-juego:not(.modo-camara) #btn-cam{top:auto;right:auto;left:50%;transform:translate(-50%);bottom:calc(var(--tm) + var(--tr) + 14px + env(safe-area-inset-bottom))}@media (orientation:landscape){body.tactil.tac-juego:not(.modo-camara) #btn-cam{bottom:calc(var(--tm) + env(safe-area-inset-bottom))}}body.tactil.ui-bloqueada:not(.modo-camara) #btn-cam,body.tactil.tac-juego.ui-bloqueada:not(.modo-camara) #btn-cam{top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));right:auto;bottom:auto;transform:none}body.tactil.modo-camara #cam-botones{left:auto;right:calc(var(--tm) + env(safe-area-inset-right));bottom:calc(var(--tm) + env(safe-area-inset-bottom));transform:none;flex-direction:column}body.tactil.modo-camara #cam-botones button{height:48px;min-width:104px}body.tactil.modo-camara .codec-boton{display:none!important}@media (pointer:coarse) and (orientation:portrait){#esc-lista{height:30vh}}@media (pointer:coarse){#panel{width:auto;max-width:none;max-height:none;inset:0;border:0;outline:0;padding-top:var(--menu-top);font-size:14px;background:#000000f2}#panel header{padding:6px 14px}#panel header h1{font-size:18px}details.grupo>summary{padding:12px 14px 10px;font-size:15px}.cuerpo-grupo{padding:4px 14px 14px}nav button,.btn{min-height:42px}#mostrar{min-height:0}#esc-lista{height:38vh}#aviso{bottom:auto;top:38%}#gameover{font-size:44px}}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<button id="mostrar" class="btn" hidden title="Mostrar u ocultar el menú (Tab o M)"><span class="ic">&#9776;</span><span class="tx">MENÚ</span></button>
+<div id="panel" class="oculto" role="dialog" aria-label="Menú">
+  <header><h1>SHADOW MOSES</h1><small>MGS PS1 · VR · demo personal</small>
+    <button id="cerrar" class="btn" title="Volver al juego">X</button></header>
+  <div id="panel-cuerpo">
+
+    <details class="grupo" id="g-juego" open>
+      <summary>JUEGO</summary>
+      <div class="cuerpo-grupo">
+        <nav><button data-modo="jugar" class="grande">Jugar (desde el muelle)</button></nav>
+        <div class="rejilla">
+          <button class="btn" id="opt-vista">Vista: 1ra persona</button>
+          <button class="btn" id="opt-dif">Dificultad: normal</button>
+          <button class="btn" id="esc-camara">Modo cámara (O)</button>
+          <button class="btn" id="opt-todo">Todas las armas e ítems: no</button>
+          <button class="btn" id="opt-titulo">Volver al título</button>
+          <button class="btn ancha" id="opt-partidas">Partidas: cargar, exportar e importar</button>
+          <button class="btn ancha" id="opt-offline">Jugar sin señal: descargar</button>
+        </div>
+      </div>
+    </details>
+
+    <details class="grupo" id="g-opciones">
+      <summary>IMAGEN Y SONIDO</summary>
+      <div class="cuerpo-grupo">
+        <div class="rejilla">
+          <button class="btn ancha" id="opt-hud">HUD: original</button>
+          <button class="btn" id="opt-pantalla">Pantalla completa</button>
+          <button class="btn" id="opt-sombras">Sombras: sí</button>
+          <button class="btn" id="opt-luz">Luz: original (L)</button>
+          <button class="btn" id="opt-pixel" title="Pixeladas = como la PS1 (se ven los cuadraditos); suavizadas = filtro lineal">Texturas: pixeladas (P)</button>
+          <button class="btn" id="opt-filtro" title="Filtro de pantalla encima del juego">Filtro: ninguno</button>
+          <button class="btn" id="opt-vrcine" title="En el casco: adentro de la cinemática (donde está la cámara) o en una pantalla de cine">Cinemáticas VR: adentro</button>
+          <button class="btn" id="opt-sonido">Sonido: si</button>
+          <button class="btn" id="opt-3d">Sonido 3D: no</button>
+        </div>
+        <div class="info" id="hud-info"></div>
+      </div>
+    </details>
+
+    
+    <details class="grupo" id="g-controles">
+      <summary>CONTROLES <small id="g-ctl-k"></small></summary>
+      <div class="cuerpo-grupo">
+        <div class="rejilla">
+          <button class="btn ancha" id="ctl-config">Configurar: teclado, joystick, celular y Quest</button>
+          <button class="btn" id="ctl-vibra">Vibración: sí</button>
+          <button class="btn" id="ctl-probar">Probar vibración</button>
+        </div>
+        <div class="info" id="ctl-info"></div>
+      </div>
+    </details>
+
+    <details class="grupo" id="g-escenarios">
+      <summary>ESCENARIOS <small id="g-esc-k"></small></summary>
+      <div class="cuerpo-grupo">
+        <nav><button data-modo="escenarios">Explorar escenarios</button></nav>
+        <section id="s-escenarios">
+          <select id="esc-sel" hidden></select>
+          <div class="lista" id="esc-lista"></div>
+          <div class="fila">
+            <button class="btn" id="esc-caminar">Caminar (clic)</button>
+            <button class="btn" id="esc-vuelo">Vuelo: no (F)</button>
+            <button class="btn" id="opt-debug" title="En el juego: vuelo libre (F) para depurar. En el original Snake no salta ni vuela">Modo debug: no</button>
+          </div>
+          <div class="info" id="nivel-info"></div>
+          <label class="chk"><input type="checkbox" id="guardias-mover" checked> Guardias en movimiento</label>
+          <label class="chk"><input type="checkbox" id="modo-sigilo" checked> Modo sigilo (te ven, alerta, disparos)</label>
+          <div id="capas"></div>
+          <div class="titulito">Piezas del escenario</div>
+          <div id="partes"></div>
+          <div class="titulito">Poner un personaje delante tuyo</div>
+          <div class="fila"><select id="esc-pj" style="flex:3"></select><button class="btn" id="esc-poner" style="flex:1">Poner</button></div>
+        </section>
+      </div>
+    </details>
+
+    <details class="grupo" id="g-museo">
+      <summary>MUSEO Y CATÁLOGO</summary>
+      <div class="cuerpo-grupo">
+        <nav>
+          <button data-modo="museo" class="activo">Museo</button>
+          <button data-modo="catalogo">Objetos</button>
+        </nav>
+        <section id="s-museo" class="activo">
+          <div class="info">Sala con los personajes en pedestales, a tamaño real. Hacé clic en la escena para caminar.</div>
+          <div class="fila"><button class="btn" id="museo-entrar">Caminar (clic)</button></div>
+          <label class="chk"><input type="checkbox" id="museo-girar" checked> Personajes girando</label>
+          <label class="chk"><input type="checkbox" id="museo-todos"> Incluir también los que no tienen nombre</label>
+        </section>
+        <section id="s-catalogo">
+          <input type="search" id="cat-buscar" placeholder="Buscar (snake, meryl, hind…)">
+          <div class="fila" id="cat-filtros">
+            <button class="btn activo" data-f="personaje">Personajes</button>
+            <button class="btn" data-f="nombre">Con nombre</button>
+            <button class="btn" data-f="grande">Grandes</button>
+            <button class="btn" data-f="todo">Todo</button>
+          </div>
+          <div class="lista" id="cat-lista"></div>
+          <select id="cat-anim" hidden></select>
+          <div class="info" id="cat-info"></div>
+        </section>
+      </div>
+    </details>
+
+    <details class="grupo" id="g-vr">
+      <summary>VR</summary>
+      <div class="cuerpo-grupo">
+        <nav><button data-modo="vr">VR Missions</button></nav>
+        <div class="fila"><button class="btn" id="opt-vr" hidden>Entrar a VR</button></div>
+        <div class="info">Con un casco (Quest, Pico…): Entrar a VR. El menú del casco se abre con START (clic de la palanca izquierda).</div>
+      </div>
+    </details>
+
+    <details class="grupo" id="g-ayuda">
+      <summary>AYUDA</summary>
+      <div class="cuerpo-grupo"><div id="ayuda"></div></div>
+    </details>
+
+  </div>
+</div>
+<div id="mira"></div>
+<div id="pausa" hidden>PAUSE</div>
+<div id="cam-aviso"></div>
+<button id="btn-cam" hidden>CÁM</button>
+<div id="cam-botones"><button data-c="plana">FOTO 4K</button><button data-c="360">FOTO 360</button><button data-c="salir">SALIR</button></div>
+<div id="tactil" hidden>
+  
+  <div id="joy" title="Palanca: poca = caminar, a fondo = correr"><i></i></div>
+  <div id="rombo">
+    <button class="tb" data-b="triangulo" aria-label="Triángulo: primera persona"><svg viewBox="0 0 24 24"><path d="M12 3.5 21.5 20H2.5Z"/></svg><small>VISTA</small></button>
+    <button class="tb" data-b="circulo" aria-label="Círculo: golpe / acción"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/></svg><small>GOLPE</small></button>
+    <button class="tb" data-b="cruz" aria-label="Cruz: agacharse / cuerpo a tierra"><svg viewBox="0 0 24 24"><path d="M4.5 4.5 19.5 19.5M19.5 4.5 4.5 19.5"/></svg><small>AGACHAR</small></button>
+    <button class="tb" data-b="cuadrado" aria-label="Cuadrado: usar el arma"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/></svg><small>ARMA</small></button>
+  </div>
+  <button class="gatillo" data-b="l2" aria-label="L2: menú de ítems (mantener)"><i>L2</i>ÍTEMS</button>
+  <button class="gatillo" data-b="r2" aria-label="R2: menú de armas (mantener)">ARMAS<i>R2</i></button>
+  <div id="extras"><button class="extra" data-b="saltar">SALTAR</button><button class="extra" data-b="vuelo">VUELO</button></div>
+</div>
+<div id="hud" hidden>
+  <canvas id="hudcv"></canvas>
+  <div id="aviso"></div>
+  <div id="daño"></div>
+  <div id="fundido"></div>
+  <div id="gameover" hidden>GAME OVER<small>Enter para reintentar</small></div>
+</div>
+<div id="cargando">Cargando…</div>
+<div id="pantalla-carga"><div class="pc-t">LOADING</div><div class="pc-b"><i></i></div><div class="pc-p">0 %</div></div>
+
+<script type="module" src="./offline.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

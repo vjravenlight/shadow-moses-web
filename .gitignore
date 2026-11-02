@@ -1,0 +1,9 @@
+datos/
+trabajo/
+config/
+_release/
+*.bin
+*.cue
+*.iso
+*.img
+__pycache__/
