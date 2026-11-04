@@ -19,7 +19,7 @@ virtual. Se juega con **tus propios discos** (versión USA): el instalador los c
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v1.3.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v1.4.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
@@ -45,8 +45,9 @@ servidor: dejala abierta mientras jugás. Solo atiende a tu PC.
 ### Celular u otra PC, por wifi
 
 Abrí `JUGAR_EN_RED.cmd` en la PC y entrá desde el otro aparato a la dirección que muestra. La PC tiene que quedar prendida
-y en la misma red. Mientras esa ventana esté abierta, **cualquiera en esa red puede entrar**: usalo en tu casa, no en un wifi
-público. Por esta vía no anda la realidad virtual, porque no hay HTTPS.
+y en la misma red. La primera vez el navegador avisa que la conexión no es privada, porque el certificado lo crea tu propia
+PC: tocá "Avanzado" y "Continuar". Mientras esa ventana esté abierta, **cualquiera en esa red puede entrar**: usalo en tu
+casa, no en un wifi público.
 
 ## `TX-04` CÓDEC: PROBLEMAS COMUNES
 

@@ -19,7 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v1.3.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v1.4.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and
@@ -44,8 +44,8 @@ it open while playing. It only serves your PC.
 ### Phone or another PC, over wifi
 
 Open `JUGAR_EN_RED.cmd` on the PC and go to the address it shows from the other device. The PC has to stay on and on the same
-network. While that window is open, **anyone on that network can get in**: use it at home, not on public wifi. Virtual reality
-does not work this way, because there is no HTTPS.
+network. The first time, the browser warns that the connection is not private, because your own PC makes the certificate: tap
+"Advanced" and "Proceed". While that window is open, **anyone on that network can get in**: use it at home, not on public wifi.
 
 ## `TX-04` CODEC: COMMON PROBLEMS
 
