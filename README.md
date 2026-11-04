@@ -19,7 +19,7 @@ virtual. Se juega con **tus propios discos** (versión USA): el instalador los c
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v1.2.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v1.3.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
@@ -41,6 +41,12 @@ servidor: dejala abierta mientras jugás. Solo atiende a tu PC.
 - **Desde la PC:** Quest Link, Air Link o Virtual Desktop, con `http://127.0.0.1:8123` en Chrome o Edge.
 - **Con el navegador del casco y cable USB:** `CASCO_USB.cmd` (necesita `adb`, de las Android Platform Tools de Google;
   ahí te dice cómo).
+
+### Celular u otra PC, por wifi
+
+Abrí `JUGAR_EN_RED.cmd` en la PC y entrá desde el otro aparato a la dirección que muestra. La PC tiene que quedar prendida
+y en la misma red. Mientras esa ventana esté abierta, **cualquiera en esa red puede entrar**: usalo en tu casa, no en un wifi
+público. Por esta vía no anda la realidad virtual, porque no hay HTTPS.
 
 ## `TX-04` CÓDEC: PROBLEMAS COMUNES
 
