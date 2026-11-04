@@ -1,0 +1,62 @@
+<!doctype html>
+<!-- Primera pantalla de la app: pide el archivo con los datos del juego. FeniXVOID · Project Ravenlight -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shadow Moses</title>
+<style>
+  :root { --verde: #5ef08a; --claro: #b9ffd0; --fondo: #020604; --apagado: #8fbb9c; --amarillo: #ffd23c; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; padding: 20px 16px 28px; background: var(--fondo); color: #dff5e5;
+    font: 16px/1.5 Consolas, "Roboto Mono", "Droid Sans Mono", monospace;
+    background-image: repeating-linear-gradient(0deg, rgba(0,0,0,.22) 0 1px, transparent 1px 3px), radial-gradient(ellipse at 50% 20%, #0b2416 0%, var(--fondo) 70%);
+  }
+  main { max-width: 620px; margin: 0 auto; }
+  .freq { margin: 0; text-align: center; color: var(--apagado); letter-spacing: .14em; font-size: 14px; }
+  .freq b { color: var(--verde); font-weight: normal; }
+  h1 { margin: 12px 0 18px; text-align: center; font: 700 clamp(34px, 11vw, 56px)/1 "Roboto Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .06em; color: #eef5f0; }
+  h1 span { color: var(--claro); }
+  ol { margin: 0 0 8px; padding-left: 24px; }
+  li { margin: 0 0 10px; }
+  code { color: var(--claro); word-break: break-all; }
+  .en { color: var(--apagado); font-size: 14px; }
+  #error { margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--amarillo); color: var(--amarillo); }
+  #error[hidden] { display: none; }
+  button {
+    display: block; width: 100%; margin: 20px 0 14px; padding: 16px; background: var(--verde); color: #021a0c; border: 2px solid var(--claro);
+    font: 700 22px/1 "Roboto Condensed", "Arial Narrow", Arial, sans-serif; letter-spacing: .14em; cursor: pointer;
+  }
+  button:focus-visible { outline: 3px solid var(--claro); outline-offset: 3px; }
+  .aviso { margin: 18px 0 0; font-size: 12px; color: #6f9a7d; }
+</style>
+</head>
+<body>
+<main>
+  <p class="freq">◀ <b>140.85</b> ▶</p>
+  <h1>SHADOW MOSES <span>web</span></h1>
+  <p id="error" role="alert" hidden></p>
+  <ol>
+    <li>En tu PC, instalá el juego con tus discos y hacé doble clic en <code>ARMAR_ARCHIVO_CELULAR.cmd</code>.
+      <br><span class="en">On your PC, install the game with your discs and double-click <code>ARMAR_ARCHIVO_CELULAR.cmd</code>.</span></li>
+    <li>Pasá <code>MGSweb_datos.mgs</code> a este celular. Ocupa cerca de 1 GB.
+      <br><span class="en">Copy <code>MGSweb_datos.mgs</code> to this phone. It takes about 1 GB.</span></li>
+    <li>Tocá el botón y elegí ese archivo.
+      <br><span class="en">Tap the button and choose that file.</span></li>
+  </ol>
+  <button id="elegir" type="button">ELEGIR ARCHIVO / CHOOSE FILE</button>
+  <p class="aviso">Esta app no trae ningún archivo del juego y no se conecta a internet. Proyecto de fans, sin fines de lucro. Metal Gear Solid es marca de Konami; sin relación con Konami. FeniXVOID · Project Ravenlight</p>
+</main>
+<script>
+  const ERRORES = {
+    formato: 'Ese no es el archivo correcto: tiene que ser MGSweb_datos.mgs. / That is not the right file: it must be MGSweb_datos.mgs.',
+    abrir: 'No se pudo abrir. Copialo a la memoria del celular (por ejemplo, Descargas), no en la nube. / Could not open it. Copy it to the phone storage (for example, Downloads), not the cloud.',
+    mover: 'No encuentro el archivo: quizás se movió o se borró. Elegilo de nuevo. / File not found: it may have been moved or deleted. Choose it again.',
+  };
+  const e = new URLSearchParams(location.search).get('error');
+  if (ERRORES[e]) { const p = document.getElementById('error'); p.textContent = ERRORES[e]; p.hidden = false; }
+  document.getElementById('elegir').addEventListener('click', () => window.MGSApp?.elegirArchivo());
+</script>
+</body>
+</html>

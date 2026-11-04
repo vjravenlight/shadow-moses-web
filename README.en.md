@@ -19,7 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v1.4.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v1.5.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and
@@ -46,6 +46,16 @@ it open while playing. It only serves your PC.
 Open `JUGAR_EN_RED.cmd` on the PC and go to the address it shows from the other device. The PC has to stay on and on the same
 network. The first time, the browser warns that the connection is not private, because your own PC makes the certificate: tap
 "Advanced" and "Proceed". While that window is open, **anyone on that network can get in**: use it at home, not on public wifi.
+
+### Phone app (Android)
+
+1. Install the game on the PC and double-click `ARMAR_ARCHIVO_CELULAR.cmd`: it makes `MGSweb_datos.mgs`, about 1 GB.
+2. Download `ShadowMoses_celular.apk` from [Releases](../../releases/latest) and install it. Android will ask for permission
+   to install apps from outside the store.
+3. Copy `MGSweb_datos.mgs` to the phone, open the app and choose it. After that it needs neither the PC nor the internet: the
+   app has no internet permission.
+
+The app has no game files. The `.mgs` file is your own data: please do not upload or share it.
 
 ## `TX-04` CODEC: COMMON PROBLEMS
 

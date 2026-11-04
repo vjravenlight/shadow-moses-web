@@ -19,7 +19,7 @@ virtual. Se juega con **tus propios discos** (versión USA): el instalador los c
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v1.4.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v1.5.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
@@ -48,6 +48,16 @@ Abrí `JUGAR_EN_RED.cmd` en la PC y entrá desde el otro aparato a la dirección
 y en la misma red. La primera vez el navegador avisa que la conexión no es privada, porque el certificado lo crea tu propia
 PC: tocá "Avanzado" y "Continuar". Mientras esa ventana esté abierta, **cualquiera en esa red puede entrar**: usalo en tu
 casa, no en un wifi público.
+
+### App de celular (Android)
+
+1. Instalá el juego en la PC y hacé doble clic en `ARMAR_ARCHIVO_CELULAR.cmd`: arma `MGSweb_datos.mgs`, cerca de 1 GB.
+2. Bajá `ShadowMoses_celular.apk` de [Releases](../../releases/latest) e instalala. Android te va a pedir permiso para
+   instalar apps de fuera de la tienda.
+3. Copiá `MGSweb_datos.mgs` al celular, abrí la app y elegilo. Después no hace falta la PC ni internet: la app no tiene
+   permiso de internet.
+
+La app no trae ningún archivo del juego. El archivo `.mgs` son tus datos: no lo subas ni lo compartas.
 
 ## `TX-04` CÓDEC: PROBLEMAS COMUNES
 
