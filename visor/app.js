@@ -101,6 +101,8 @@ import { iniciarMotion, cuadroMotion, moverMotion, finMotion, ALTO_CONTROL } fro
 
 import { PadDemo, BOTON, DemoCancel, LifeUp, Movie, EscenaPendiente } from "./paddemo.js";
 
+import { ManosSnake } from "./manos_snake.js";
+
 import { MiraArma } from "./mira_armas.js";
 
 import { antiparrasVR } from "./antiparras_vr.js";
@@ -1657,6 +1659,27 @@ $("#opt-dif").onclick = () => {
 };
 
 $("#opt-dif").textContent = "Dificultad: " + DIFICULTADES[dificultad];
+
+{
+  const b = document.getElementById("opt-puerto2");
+  const lee = () => {
+    try {
+      return localStorage.getItem("sm_puerto2") === "1";
+    } catch {
+      return false;
+    }
+  };
+  if (b) {
+    b.textContent = "Mando: puerto " + (lee() ? 2 : 1);
+    b.onclick = () => {
+      const si = !lee();
+      try {
+        localStorage.setItem("sm_puerto2", si ? "1" : "0");
+      } catch {}
+      b.textContent = "Mando: puerto " + (si ? 2 : 1);
+    };
+  }
+}
 
 $("#opt-vista").textContent = "Vista: " + NOMBRE_VISTA[vista];
 
@@ -4136,7 +4159,7 @@ function actualizarCuerpoYSombras(dt) {
       forzado: snakeScript.motion?.clip || null,
       atras: reptando && (giroSnake.atras || (vista !== "arriba" || R.xr.isPresenting) && (teclas.KeyS || teclas.ArrowDown || tac.y < -.3)),
       dt: dt,
-      visible: tercera && !ojosJ,
+      visible: tercera && !ojosJ || R.xr.isPresenting && vrCuerpoVisible,
       detras: tercera ? 0 : .08,
       apunta: tercera && (tApunta > 0 || apuntaHombro()),
       disparo: tercera && tDisparo > 0,
@@ -4148,6 +4171,7 @@ function actualizarCuerpoYSombras(dt) {
       armaAnim: armas ? armas.estadoAnim() || {} : null
     });
   }
+  ajustarCuerpoVR();
   dibujarSombras(dt);
   actualizarBrillos(brillos, cam);
 }
@@ -4935,6 +4959,11 @@ function mover(dt) {
   }
   if (armas?.misil && !armas.misil.perdido) {
     armas.mandoMisil = (teclas.KeyD || teclas.ArrowRight ? 1 : 0) - (teclas.KeyA || teclas.ArrowLeft ? 1 : 0) + Math.sign(tac.x);
+    if (R.xr.isPresenting) {
+      for (const f of R.xr.getSession()?.inputSources || []) {
+        if (f.handedness === manoMov() && f.gamepad && Math.abs(f.gamepad.axes[2] || 0) > ctl.quest.zonaMuerta) armas.mandoMisil = Math.sign(f.gamepad.axes[2]);
+      }
+    }
     return;
   }
   if (armas) armas.mandoMisil = 0;
@@ -6100,6 +6129,126 @@ addEventListener("mgs:opcion", e => {
   if (clave === "pixel") texturasPixel.poner(valor); else if (clave === "vrcine") ponerVrCine(valor); else if (clave === "filtro") filtroPantalla.poner(valor);
 });
 
+let vrManosSnake = leerLS("sm_vrmanos", "0") === "1", vrCuerpoVisible = leerLS("sm_vrcuerpo", "0") === "1", vrGolpeMano = leerLS("sm_vrgolpe", "0") === "1";
+
+const guardarExtraVR = (k, v) => {
+  try {
+    localStorage.setItem(k, v ? "1" : "0");
+  } catch {}
+};
+
+const manosSnake = new ManosSnake(() => cargar("modelos/snake.glb"));
+
+function actualizarManosVR() {
+  const on = R.xr.isPresenting && vrManosSnake;
+  if (on && !manosSnake.mallas) {
+    manosSnake.preparar();
+    return;
+  }
+  const M = manosSnake.mallas;
+  if (!M) return;
+  if (!R.xr.isPresenting) {
+    M.right.visible = M.left.visible = false;
+    return;
+  }
+  for (let i = 0; i < 2; i++) {
+    const g = R.xr.getControllerGrip(i), lado = g.userData.lado;
+    if (lado !== "left" && lado !== "right") continue;
+    const m = M[lado], enMontura = lado === manoArma() && armaVista?.parent === monturaVR;
+    const padre = enMontura ? monturaVR : g;
+    if (m.parent !== padre) padre.add(m);
+    if (enMontura) m.position.copy(armaVista.userData.base?.p || armaVista.position); else m.position.set(0, 0, 0);
+    m.visible = on && g.visible;
+  }
+}
+
+const HUESOS_SIN_VER = [ "hueso_2", "hueso_5", "hueso_7" ];
+
+function ajustarCuerpoVR() {
+  if (!cuerpo?.obj) return;
+  const on = R.xr.isPresenting && vrCuerpoVisible && !terceraPersona();
+  if (on || cuerpo.sinBrazos) {
+    for (const n of HUESOS_SIN_VER) {
+      const h = (cuerpo.hVR ||= {})[n] ||= cuerpo.obj.getObjectByName(n);
+      if (h) h.scale.setScalar(on ? .001 : 1);
+    }
+    cuerpo.sinBrazos = on;
+  }
+  if (!on) return;
+  const p = new THREE.Vector3, d = new THREE.Vector3;
+  cam.updateWorldMatrix(true, false);
+  cam.getWorldPosition(p);
+  cam.getWorldDirection(d);
+  const y = Math.atan2(-d.x, -d.z);
+  cuerpo.obj.position.x = p.x + Math.sin(y) * .24;
+  cuerpo.obj.position.z = p.z + Math.cos(y) * .24;
+  cuerpo.obj.rotation.y = y + Math.PI;
+}
+
+const _manoAnt = [ new THREE.Vector3, new THREE.Vector3 ];
+
+let _manoLista = [ false, false ], cdGolpeMano = 0;
+
+const VEL_GOLPE = 2.4;
+
+function golpeManoVR(dt) {
+  cdGolpeMano = Math.max(0, cdGolpeMano - dt);
+  if (!R.xr.isPresenting || !vrGolpeMano || !juego || modo !== "escenarios" || dt <= 0) {
+    _manoLista = [ false, false ];
+    return;
+  }
+  if (enPausa() || codec.abierto || inventario.abierto || paneles.menuAbierto || muerteSnake || enDemo || demo.ocupada || ducto.activo) {
+    _manoLista = [ false, false ];
+    return;
+  }
+  rig.updateMatrixWorld();
+  for (let i = 0; i < 2; i++) {
+    const c = R.xr.getController(i);
+    if (!c.visible) {
+      _manoLista[i] = false;
+      continue;
+    }
+    const w = c.getWorldPosition(new THREE.Vector3), l = rig.worldToLocal(w.clone()), v = l.clone().sub(_manoAnt[i]).divideScalar(dt);
+    const lista = _manoLista[i];
+    _manoAnt[i].copy(l);
+    _manoLista[i] = true;
+    if (!lista || v.length() < VEL_GOLPE || cdGolpeMano > 0) continue;
+    const dir = v.clone().normalize().transformDirection(rig.matrixWorld);
+    const h = primerGolpe(w, dir, .3, colParedes ? colParedes.concat(colisiones) : colisiones);
+    if (h?.point) {
+      cdGolpeMano = .35;
+      sonido("toc");
+      juego.ruidoPared(h.point);
+      ctl.vibrar("leve");
+      continue;
+    }
+    if ((armas?.guardias?.() || []).some(g => g.o.position.clone().setY(w.y).distanceTo(w) < 1.3)) {
+      cdGolpeMano = .6;
+      ctl.vibrar("leve");
+      golpearPared();
+    }
+  }
+}
+
+const peleaMantis = () => (juego?.__jefes?.lista || []).some(j => j.actor?.tipo === "PSYCHOMANTIS" && j.vivo !== false);
+
+const puerto2Activo = () => leerLS("sm_puerto2", "0") === "1";
+
+function ponerPuerto2(si) {
+  try {
+    localStorage.setItem("sm_puerto2", si ? "1" : "0");
+  } catch {}
+  const b = document.getElementById("opt-puerto2");
+  if (b) b.textContent = "Mando: puerto " + (si ? 2 : 1);
+}
+
+function retrucoMantis() {
+  if (!peleaMantis()) return;
+  const si = !puerto2Activo();
+  ponerPuerto2(si);
+  aviso("MANDO EN EL PUERTO " + (si ? 2 : 1));
+}
+
 let vrRadarGira = leerLS("sm_vrradar", "1") === "1";
 
 const manoMov = () => ctl.quest.zurdo ? "right" : "left", manoArma = () => ctl.quest.zurdo ? "left" : "right";
@@ -6109,7 +6258,10 @@ let zurdoAplicado = null;
 function aplicarZurdo() {
   paneles.mapa = ctl.mapaQuest();
   paneles.intensidadVibra = ctl.vibraQuest();
-  if (zurdoAplicado !== null && zurdoAplicado !== ctl.quest.zurdo && R.xr.isPresenting) ponerArmaEnMano();
+  if (zurdoAplicado !== null && zurdoAplicado !== ctl.quest.zurdo && R.xr.isPresenting) {
+    ponerArmaEnMano();
+    retrucoMantis();
+  }
   zurdoAplicado = ctl.quest.zurdo;
 }
 
@@ -6692,9 +6844,11 @@ R.setAnimationLoop(() => {
   {}
   animarArma(dt);
   actualizarLaser();
+  actualizarManosVR();
+  golpeManoVR(dt);
   if (R.xr.isPresenting) for (let i = 0; i < 2; i++) {
     const g = R.xr.getControllerGrip(i);
-    if (g.userData.modelo) g.userData.modelo.visible = !(armaVista?.visible && armaVista.userData.equipada && armaVista.parent === monturaVR && monturaVR.parent === g);
+    if (g.userData.modelo) g.userData.modelo.visible = !vrManosSnake && !(armaVista?.visible && armaVista.userData.equipada && armaVista.parent === monturaVR && monturaVR.parent === g);
   }
   if (R.xr.isPresenting) alinearArmaVR();
   for (const mx of mezcladores) mx.update(dt);
@@ -6913,7 +7067,16 @@ paneles.on("boton", (b, abajo) => {
       texto: "BOTONES DEL TOUCH",
       accion: () => paneles.submenu(menuBotonesVR()),
       cierra: false
-    }, opcion(() => "GIRO: " + (Q.giro === "suave" ? "SUAVE" : "POR SALTOS"), () => ctl.ponerQuest("giro", Q.giro === "suave" ? "saltos" : "suave")), opcion(() => Q.giro === "suave" ? `VELOCIDAD DEL GIRO: ${Q.velGiro} GRADOS/S` : `ANGULO DEL GIRO: ${Q.angulo} GRADOS`, d => Q.giro === "suave" ? ctl.ponerQuest("velGiro", ctl.pasoLista(ctl.VELOCIDADES_GIRO, Q.velGiro, d)) : ctl.ponerQuest("angulo", ctl.pasoLista(ctl.ANGULOS_GIRO, Q.angulo, d))), opcion(() => "ZONA MUERTA: " + pct(Q.zonaMuerta), d => ctl.ponerQuest("zonaMuerta", ctl.pasoLista(ctl.ZONAS_MUERTAS, Q.zonaMuerta, d))), opcion(() => "MANO HABIL: " + (Q.zurdo ? "ZURDO" : "DIESTRO"), () => ctl.ponerQuest("zurdo", !Q.zurdo)), opcion(() => "MOVERSE HACIA: " + (Q.dir === "control" ? "EL CONTROL" : "LA MIRADA"), () => ctl.ponerQuest("dir", Q.dir === "control" ? "mirada" : "control")), opcion(() => "VIBRACION: " + (Q.vibra > 0 ? pct(Q.vibra) : "NO"), d => {
+    }, opcion(() => "GIRO: " + (Q.giro === "suave" ? "SUAVE" : "POR SALTOS"), () => ctl.ponerQuest("giro", Q.giro === "suave" ? "saltos" : "suave")), opcion(() => Q.giro === "suave" ? `VELOCIDAD DEL GIRO: ${Q.velGiro} GRADOS/S` : `ANGULO DEL GIRO: ${Q.angulo} GRADOS`, d => Q.giro === "suave" ? ctl.ponerQuest("velGiro", ctl.pasoLista(ctl.VELOCIDADES_GIRO, Q.velGiro, d)) : ctl.ponerQuest("angulo", ctl.pasoLista(ctl.ANGULOS_GIRO, Q.angulo, d))), opcion(() => "ZONA MUERTA: " + pct(Q.zonaMuerta), d => ctl.ponerQuest("zonaMuerta", ctl.pasoLista(ctl.ZONAS_MUERTAS, Q.zonaMuerta, d))), opcion(() => "MANO HABIL: " + (Q.zurdo ? "ZURDO" : "DIESTRO"), () => ctl.ponerQuest("zurdo", !Q.zurdo)), opcion(() => "MANOS: " + (vrManosSnake ? "DE SNAKE" : "CONTROL"), () => {
+      vrManosSnake = !vrManosSnake;
+      guardarExtraVR("sm_vrmanos", vrManosSnake);
+    }), opcion(() => "CUERPO VISIBLE: " + (vrCuerpoVisible ? "SI" : "NO"), () => {
+      vrCuerpoVisible = !vrCuerpoVisible;
+      guardarExtraVR("sm_vrcuerpo", vrCuerpoVisible);
+    }), opcion(() => "GOLPE CON LA MANO: " + (vrGolpeMano ? "SI" : "NO"), () => {
+      vrGolpeMano = !vrGolpeMano;
+      guardarExtraVR("sm_vrgolpe", vrGolpeMano);
+    }), opcion(() => "MANDO: PUERTO " + (puerto2Activo() ? 2 : 1), () => ponerPuerto2(!puerto2Activo())), opcion(() => "MOVERSE HACIA: " + (Q.dir === "control" ? "EL CONTROL" : "LA MIRADA"), () => ctl.ponerQuest("dir", Q.dir === "control" ? "mirada" : "control")), opcion(() => "VIBRACION: " + (Q.vibra > 0 ? pct(Q.vibra) : "NO"), d => {
       ctl.ponerQuest("vibra", ctl.pasoLista(ctl.VIBRAS_QUEST, Q.vibra, d));
       ctl.vibrar("leve");
     }), {
@@ -7249,6 +7412,14 @@ Object.defineProperty(window.__mgs, "enVR", {
 });
 
 window.__mgs.paneles = paneles;
+
+window.__mgs.extrasVR = {
+  retrucoMantis: retrucoMantis,
+  peleaMantis: peleaMantis,
+  puerto2Activo: puerto2Activo,
+  golpeManoVR: () => cdGolpeMano,
+  manosSnake: manosSnake
+};
 
 Object.assign(window.__mgs, {
   terceraVR: terceraVR,
