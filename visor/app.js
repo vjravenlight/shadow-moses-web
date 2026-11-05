@@ -105,6 +105,8 @@ import { PadDemo, BOTON, DemoCancel, LifeUp, Movie, EscenaPendiente } from "./pa
 
 import { ManosSnake } from "./manos_snake.js";
 
+import { VentanaMiraVR } from "./ventana_mira_vr.js";
+
 import { MiraArma } from "./mira_armas.js";
 
 import { antiparrasVR } from "./antiparras_vr.js";
@@ -1136,6 +1138,8 @@ const hud = new Hud;
 hud.cargar();
 
 const miraArma = new MiraArma;
+
+const ventanaMira = new VentanaMiraVR;
 
 const miraScope = new MiraScope({
   se: id => audioMGS.se(id)
@@ -6662,13 +6666,46 @@ R.setAnimationLoop(() => {
   }
   {
     const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && !misionesVR.activo && !muerteSnake;
-    const tipo = !ok ? null : camaraEnMisil() ? "nikita" : inventario.arma === WP.STINGER && (!terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE || apuntaHombro()) ? "stinger" : null;
+    const xrPrimera = R.xr.isPresenting && vrModo() === "primera";
+    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (!terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE || apuntaHombro()) ? "stinger" : null;
     miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       tipo: tipo,
-      camara: R.xr.isPresenting ? R.xr.getCamera() : cam,
+      camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : R.xr.isPresenting ? R.xr.getCamera() : cam,
       armas: armas,
       vr: R.xr.isPresenting
     });
+    let vm = null;
+    if (ok && xrPrimera && armas && !inventario.abierto && !codec.abierto && !enPausa()) {
+      if (armas.misil) {
+        const v = armas.vistaMisil();
+        vm = {
+          tipo: "nikita",
+          pos: v.pos,
+          dir: v.dir,
+          zoom: 320
+        };
+      } else if (inventario.arma === WP.PSG1 && armas.zoom > 330) {
+        const m = miraSnake();
+        vm = {
+          tipo: "psg1",
+          pos: m.o,
+          dir: m.d,
+          zoom: armas.zoom
+        };
+      } else if (inventario.item === IT.SCOPE || inventario.item === IT.CAMERA) {
+        const p = new THREE.Vector3, d = new THREE.Vector3;
+        cam.updateWorldMatrix(true, false);
+        cam.getWorldPosition(p);
+        cam.getWorldDirection(d);
+        vm = {
+          tipo: "scope",
+          pos: p,
+          dir: d,
+          zoom: armas.zoomItem
+        };
+      }
+    }
+    ventanaMira.poner(vm);
     miraArma.dibujar();
     antiparrasVR(R, ok ? inventario.filtro : null);
   }
@@ -6864,6 +6901,7 @@ R.setAnimationLoop(() => {
       if (z) audioMGS.se(178); else audioMGS.codigo(4278190334);
     }
     zonaAguaAnt = z;
+    if (R.xr.isPresenting) ventanaMira.dibujar(R, scene, [ soporteVR, armaVista, armas?.misil?.obj, cuerpo?.obj ]);
     const pantallaVR = vrModo() === "pantalla";
     aguaEnVR(R.xr.isPresenting && !pantallaVR ? z : null);
     if (z && !R.xr.isPresenting) {
@@ -6970,6 +7008,8 @@ paneles.conectarFinal({
   codec: codec
 });
 
+ventanaMira.conectar(paneles);
+
 miraArma.conectarVR(paneles);
 
 miraScope.conectarVR(paneles);
@@ -7002,6 +7042,10 @@ function soltarVR() {
 
 paneles.on("boton", (b, abajo) => {
   botonMandoVR(b, abajo);
+  if (R.xr.isPresenting && armas && (inventario.item === IT.SCOPE || inventario.item === IT.CAMERA) && (b === "circulo" || b === "cruz")) {
+    armas.zoomPedido = abajo ? b === "circulo" ? 3200 : 320 : armas.zoomItem;
+    return;
+  }
   if (b === "cuadrado") {
     cuadradoVR = abajo;
     if (abajo) dispararVR(); else soltarVR();

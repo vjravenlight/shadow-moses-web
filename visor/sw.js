@@ -1,5 +1,5 @@
 // MGS web — FeniXVOID · Project Ravenlight
-const VERSION = "96b7798b622f";
+const VERSION = "7f9c56c0d9d6";
 
 const C_CODIGO = "mgs-codigo-" + VERSION, C_ASSETS = "mgs-assets", C_META = "mgs-meta";
 
