@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as debug from "./debug.js";
 
+import { RetrucoMantis } from "./retruco_mantis.js";
+
 import * as ctl from "./controles.js";
 
 import { pantallaControles, NavMando, FlancosMando, textoAyuda } from "./controles_ui.js";
@@ -1941,12 +1943,12 @@ function animador(obj, datos) {
   };
 }
 
-function aviso(t) {
+function aviso(t, ms = 1800) {
   const a = $("#aviso");
   a.textContent = t;
   a.style.opacity = 1;
   clearTimeout(aviso.t);
-  aviso.t = setTimeout(() => a.style.opacity = 0, 1800);
+  aviso.t = setTimeout(() => a.style.opacity = 0, ms);
 }
 
 let armaVista = null, fogonazo = null;
@@ -6272,6 +6274,34 @@ function retrucoMantis() {
   aviso("MANDO EN EL PUERTO " + (si ? 2 : 1));
 }
 
+const ES_RETRUCO = /^es/i.test(navigator.language || "");
+
+const PISTAS_RETRUCO = {
+  casco: [ "CAMPBELL: ¡Cruzá los controles, Snake!", "CAMPBELL: Cross your controllers, Snake!" ],
+  celular: [ "CAMPBELL: ¡Dá vuelta el celular, Snake!", "CAMPBELL: Turn your phone upside down, Snake!" ],
+  teclado: [ "CAMPBELL: ¡Cambiá de mando: WASD o flechas!", "CAMPBELL: Switch controls: WASD or arrows!" ],
+  joystick: [ "CAMPBELL: ¡Cambiá de mando, Snake!", "CAMPBELL: Switch controllers, Snake!" ]
+};
+
+const retruco = new RetrucoMantis({
+  jefe: () => (juego?.__jefes?.lista || []).find(j => j.actor?.tipo === "PSYCHOMANTIS" && j.vivo !== false) || null,
+  puerto2: puerto2Activo,
+  pista: modo => aviso(PISTAS_RETRUCO[modo][ES_RETRUCO ? 0 : 1], 4e3),
+  lograr: (j, mando) => {
+    ponerPuerto2(true);
+    if (mando > 0) ctl.preferirMando(mando);
+    aviso(ES_RETRUCO ? "MANTIS: ¡No puedo leerte!" : "MANTIS: I can't read you!", 3e3);
+    ctl.vibrar("leve");
+    try {
+      j.quejido?.();
+    } catch {}
+  },
+  fin: () => {
+    ponerPuerto2(false);
+    ctl.preferirMando(null);
+  }
+});
+
 let vrRadarGira = leerLS("sm_vrradar", "1") === "1";
 
 const manoMov = () => ctl.quest.zurdo ? "right" : "left", manoArma = () => ctl.quest.zurdo ? "left" : "right";
@@ -6308,23 +6338,24 @@ function calibrarAltura() {
   if (!R.xr.isPresenting) return;
   const base = espacioBase || (espacioBase = R.xr.getReferenceSpace());
   if (!base) return;
-  let dy = 0;
-  if (vrSentado) {
-    const o = new THREE.Vector3;
-    R.xr.getCamera().getWorldPosition(o);
-    const ojos = o.y - rig.position.y - (terceraVR.aplicado?.y || 0) + (R.xr._dySentado || 0);
-    dy = ALTURA_OJOS - ojos;
-  }
-  try {
-    R.xr.setReferenceSpace(dy ? base.getOffsetReferenceSpace(new XRRigidTransform({
-      x: 0,
-      y: -dy,
-      z: 0
-    })) : base);
-    R.xr._dySentado = dy;
-  } catch (e) {
-    debug.log("aviso", "altura VR: " + e.message);
-  }
+  R.xr.getSession().requestAnimationFrame((t, cuadro) => {
+    let dy = 0;
+    if (vrSentado) {
+      const p = cuadro.getViewerPose(base);
+      if (!p) return;
+      dy = ALTURA_OJOS - p.transform.position.y;
+    }
+    try {
+      R.xr.setReferenceSpace(dy ? base.getOffsetReferenceSpace(new XRRigidTransform({
+        x: 0,
+        y: -dy,
+        z: 0
+      })) : base);
+      R.xr._dySentado = dy;
+    } catch (e) {
+      debug.log("aviso", "altura VR: " + e.message);
+    }
+  });
   aviso(vrSentado ? "Modo sentado: altura ajustada" : "Modo parado");
 }
 
@@ -6674,7 +6705,7 @@ R.setAnimationLoop(() => {
     miraScope.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       activo: ok,
       zoom: armas?.zoomItem ?? 320,
-      camara: R.xr.isPresenting ? R.xr.getCamera() : cam,
+      camara: camApuntar(),
       escena: scene,
       vr: R.xr.isPresenting
     });
@@ -6853,6 +6884,17 @@ R.setAnimationLoop(() => {
       armas.update(dt);
       armas.actualizarFijado(camApuntar());
       actualizarStealth();
+      if (!enPausa() && !codec.abierto) retruco.cuadro(dtReal, {
+        xr: R.xr.isPresenting ? {
+          cuadro: R.xr.getFrame?.(),
+          ref: R.xr.getReferenceSpace?.(),
+          fuentes: R.xr.getSession()?.inputSources
+        } : null,
+        teclas: teclas,
+        mandos: ctl.mandosCrudos(),
+        angulo: screen.orientation?.angle ?? null,
+        tactil: TACTIL
+      });
       if (armas.misil?.obj) armas.misil.obj.visible = !camaraEnMisil();
       if (!R.xr.isPresenting) inventario.aplicarFiltro(R.domElement); else if (R.domElement.style.filter) R.domElement.style.filter = "";
     }
@@ -7355,6 +7397,7 @@ if (q.get("modo")) {
 }
 
 window.__mgs = {
+  calibrarAltura: () => calibrarAltura(),
   get trabas() {
     return {
       misiones: !!misionesVR.bloqueaControl,

@@ -689,6 +689,12 @@ export function mandosCrudos() {
 
 let mandoBloqueado = false, esperarSuelto = false;
 
+let primero = null;
+
+export function preferirMando(i) {
+  primero = i;
+}
+
 export function bloquearMando(si) {
   mandoBloqueado = si;
   if (!si) esperarSuelto = true;
@@ -724,7 +730,11 @@ if (nav?.getGamepads) {
       configurable: true,
       writable: true,
       value: function getGamepads() {
-        const l = getOriginal();
+        let l = getOriginal();
+        if (primero != null && l?.[primero]?.connected) {
+          const t = [ ...l ];
+          l = [ t[primero], ...t.filter((g, i) => i !== primero) ];
+        }
         if (esperarSuelto) {
           if (!(l || []).some(g => g && g.buttons.some(b => b.pressed))) esperarSuelto = false;
         }
