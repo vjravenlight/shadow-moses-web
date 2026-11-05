@@ -53,7 +53,8 @@ self.addEventListener('install', (e) => {
   e.waitUntil((async () => {
     const lista = await (await fetch('lista.json', { cache: 'no-cache' })).json();
     const c = await caches.open(C_CODIGO);
-    for (let i = 0; i < lista.length; i += 24) await c.addAll(lista.slice(i, i + 24).map((r) => new Request(r, { cache: 'no-cache' })));
+    // de a pocos y sin addAll: un archivo que falle no tiene que tirar la instalación entera (lo pide de nuevo al usarlo)
+    for (let i = 0; i < lista.length; i += 6) await Promise.allSettled(lista.slice(i, i + 6).map((r) => c.add(new Request(r, { cache: 'no-cache' }))));
   })());
 });
 self.addEventListener('activate', (e) => e.waitUntil((async () => {
