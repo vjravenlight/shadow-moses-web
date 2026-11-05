@@ -45,6 +45,7 @@ export class VentanaMiraVR {
         w: 320,
         h: 240
       },
+      escala: () => this.escala || 1,
       visible: () => !!this.e
     });
     this.mat.toneMapped = true;

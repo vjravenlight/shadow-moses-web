@@ -6181,6 +6181,66 @@ const guardarExtraVR = (k, v) => {
   } catch {}
 };
 
+const AJUSTES_FABRICA = {
+  stinger: 3,
+  cruce: 2,
+  campbell: 1,
+  golpe: 2.4,
+  cuerpo: .12,
+  mira: 1
+};
+
+const AJ = Object.fromEntries(Object.entries(AJUSTES_FABRICA).map(([k, d]) => {
+  const v = parseFloat(leerLS("sm_aj_" + k, ""));
+  return [ k, Number.isFinite(v) ? v : d ];
+}));
+
+function ponerAjuste(k, v) {
+  AJ[k] = v;
+  try {
+    localStorage.setItem("sm_aj_" + k, String(v));
+  } catch {}
+  rotularAjustes();
+}
+
+function rotularAjustes() {
+  const a = document.getElementById("opt-retruco"), b = document.getElementById("opt-campbell");
+  if (a) a.textContent = "Gesto contra Mantis: " + (AJ.cruce ? "sí" : "no");
+  if (b) b.textContent = "Ayuda de Campbell: " + (AJ.campbell ? "sí" : "no");
+}
+
+{
+  const a = document.getElementById("opt-retruco"), b = document.getElementById("opt-campbell");
+  if (a) a.onclick = () => ponerAjuste("cruce", AJ.cruce ? 0 : AJUSTES_FABRICA.cruce);
+  if (b) b.onclick = () => ponerAjuste("campbell", AJ.campbell ? 0 : 1);
+  rotularAjustes();
+}
+
+function menuAjustesVR(volver) {
+  const paso = (lista, v, d) => {
+    const i = lista.indexOf(v), n = lista.length;
+    return lista[((i < 0 ? 0 : i) + d + n) % n];
+  };
+  const op = (texto, cambiar) => ({
+    texto: texto,
+    izq: () => cambiar(-1),
+    der: () => cambiar(1),
+    accion: () => cambiar(1),
+    cierra: false
+  });
+  return [ op(() => `MARGEN DE LA STINGER: ${AJ.stinger === 1 ? "COMO EL ORIGINAL" : "X" + AJ.stinger}`, d => ponerAjuste("stinger", paso([ 1, 2, 3, 5 ], AJ.stinger, d))), op(() => `CRUZAR LOS CONTROLES (MANTIS): ${AJ.cruce ? AJ.cruce + " S" : "NO"}`, d => ponerAjuste("cruce", paso([ 0, 1, 2, 3 ], AJ.cruce, d))), op(() => `AYUDA DE CAMPBELL: ${AJ.campbell ? "SI" : "NO"}`, () => ponerAjuste("campbell", AJ.campbell ? 0 : 1)), op(() => `GOLPE CON LA MANO: ${{
+    1.6: "SUAVE",
+    2.4: "NORMAL",
+    3.2: "FUERTE"
+  }[AJ.golpe] ?? AJ.golpe}`, d => ponerAjuste("golpe", paso([ 1.6, 2.4, 3.2 ], AJ.golpe, d))), op(() => `CUERPO VISIBLE, HACIA ATRAS: ${Math.round(AJ.cuerpo * 100)} CM`, d => ponerAjuste("cuerpo", paso([ 0, .06, .12, .2, .3 ], AJ.cuerpo, d))), op(() => `TAMANO DE LA VENTANA DE MIRA: ${Math.round(AJ.mira * 100)}%`, d => ponerAjuste("mira", paso([ .75, 1, 1.25, 1.5 ], AJ.mira, d))), {
+    texto: "RESTAURAR AJUSTES",
+    accion: () => {
+      for (const [k, v] of Object.entries(AJUSTES_FABRICA)) ponerAjuste(k, v);
+    },
+    cierra: false
+  }, volver ];
+}
+
 const manosSnake = new ManosSnake(() => cargar("modelos/snake.glb"));
 
 function actualizarManosVR() {
@@ -6215,7 +6275,7 @@ function torsoVR(C, visible) {
   C.obj.updateMatrixWorld(true);
 }
 
-const CADERA_DETRAS = .12, CADERA_DETRAS_TIERRA = .5, CADERA_DEBAJO = .3;
+const CADERA_DETRAS_TIERRA = .5, CADERA_DEBAJO = .3;
 
 const dif = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
@@ -6225,7 +6285,7 @@ let rumboCuerpoVR = null, velVR = {
   x: 0,
   z: 0,
   v: 0
-}, cuerpoVRAtras = false, caderaVR = null, detrasVR = CADERA_DETRAS;
+}, cuerpoVRAtras = false, caderaVR = null, detrasVR = AJ.cuerpo;
 
 const cuerpoVRActivo = () => R.xr.isPresenting && vrCuerpoVisible && !terceraPersona() && !vrCamara && !camLibre.activa;
 
@@ -6270,7 +6330,7 @@ function ajustarCuerpoVR(dt) {
   caderaVR.x += (_vCu.x - caderaVR.x) * f;
   caderaVR.y += (_vCu.y - caderaVR.y) * f;
   caderaVR.z += (_vCu.z - caderaVR.z) * f;
-  detrasVR += ((reptando ? CADERA_DETRAS_TIERRA : CADERA_DETRAS) - detrasVR) * Math.min(1, dt * 4);
+  detrasVR += ((reptando ? CADERA_DETRAS_TIERRA : AJ.cuerpo) - detrasVR) * Math.min(1, dt * 4);
   const giro = rumboCuerpoVR + Math.PI, c = Math.cos(giro), s = Math.sin(giro);
   const piso = o.position.y;
   o.rotation.y = giro;
@@ -6282,8 +6342,6 @@ function ajustarCuerpoVR(dt) {
 const _manoAnt = [ new THREE.Vector3, new THREE.Vector3 ];
 
 let _manoLista = [ false, false ], cdGolpeMano = 0;
-
-const VEL_GOLPE = 2.4;
 
 function golpeManoVR(dt) {
   cdGolpeMano = Math.max(0, cdGolpeMano - dt);
@@ -6306,7 +6364,7 @@ function golpeManoVR(dt) {
     const lista = _manoLista[i];
     _manoAnt[i].copy(l);
     _manoLista[i] = true;
-    if (!lista || v.length() < VEL_GOLPE || cdGolpeMano > 0) continue;
+    if (!lista || v.length() < AJ.golpe || cdGolpeMano > 0) continue;
     const dir = v.clone().normalize().transformDirection(rig.matrixWorld);
     const h = primerGolpe(w, dir, .3, colParedes ? colParedes.concat(colisiones) : colisiones);
     if (h?.point) {
@@ -6347,7 +6405,9 @@ const ES_RETRUCO = /^es/i.test(navigator.language || "");
 
 const pistaMeryl = new PistaMeryl({
   progreso: () => guion.vars.get("$w:G000a"),
-  mostrar: () => aviso(ES_RETRUCO ? "CAMPBELL: La frecuencia de Meryl es 140.15." : "CAMPBELL: Meryl's frequency is 140.15.", 6e3)
+  mostrar: () => {
+    if (AJ.campbell) aviso(ES_RETRUCO ? "CAMPBELL: La frecuencia de Meryl es 140.15." : "CAMPBELL: Meryl's frequency is 140.15.", 6e3);
+  }
 });
 
 const PISTAS_RETRUCO = {
@@ -6360,7 +6420,10 @@ const PISTAS_RETRUCO = {
 const retruco = new RetrucoMantis({
   jefe: () => (juego?.__jefes?.lista || []).find(j => j.actor?.tipo === "PSYCHOMANTIS" && j.vivo !== false) || null,
   puerto2: puerto2Activo,
-  pista: modo => aviso(PISTAS_RETRUCO[modo][ES_RETRUCO ? 0 : 1], 4e3),
+  tCruce: () => AJ.cruce,
+  pista: modo => {
+    if (AJ.campbell) aviso(PISTAS_RETRUCO[modo][ES_RETRUCO ? 0 : 1], 4e3);
+  },
   lograr: (j, mando) => {
     ponerPuerto2(true);
     if (mando > 0) ctl.preferirMando(mando);
@@ -6826,6 +6889,7 @@ R.setAnimationLoop(() => {
         };
       }
     }
+    ventanaMira.escala = AJ.mira;
     ventanaMira.poner(vm);
     miraArma.dibujar();
     antiparrasVR(R, ok ? inventario.filtro : null);
@@ -6954,7 +7018,7 @@ R.setAnimationLoop(() => {
   if ($("#guardias-mover")?.checked !== false) {
     if (juego && modo === "escenarios") juego.update(dt); else for (const p of patrullas) patrullar(p, dt);
     if (armas && modo === "escenarios") {
-      armas.holguraFijado = R.xr.isPresenting ? 3 : 1;
+      armas.holguraFijado = R.xr.isPresenting ? AJ.stinger : 1;
       armas.update(dt);
       armas.actualizarFijado(camApuntar());
       actualizarStealth();
@@ -7255,6 +7319,13 @@ paneles.on("boton", (b, abajo) => {
     }, {
       texto: "BOTONES DEL TOUCH",
       accion: () => paneles.submenu(menuBotonesVR()),
+      cierra: false
+    }, {
+      texto: "AJUSTES FINOS",
+      accion: () => {
+        tituloVR = "AJUSTES FINOS";
+        paneles.submenu(menuAjustesVR(volverControles));
+      },
       cierra: false
     }, opcion(() => "GIRO: " + (Q.giro === "suave" ? "SUAVE" : "POR SALTOS"), () => ctl.ponerQuest("giro", Q.giro === "suave" ? "saltos" : "suave")), opcion(() => Q.giro === "suave" ? `VELOCIDAD DEL GIRO: ${Q.velGiro} GRADOS/S` : `ANGULO DEL GIRO: ${Q.angulo} GRADOS`, d => Q.giro === "suave" ? ctl.ponerQuest("velGiro", ctl.pasoLista(ctl.VELOCIDADES_GIRO, Q.velGiro, d)) : ctl.ponerQuest("angulo", ctl.pasoLista(ctl.ANGULOS_GIRO, Q.angulo, d))), opcion(() => "ZONA MUERTA: " + pct(Q.zonaMuerta), d => ctl.ponerQuest("zonaMuerta", ctl.pasoLista(ctl.ZONAS_MUERTAS, Q.zonaMuerta, d))), opcion(() => "MANO HABIL: " + (Q.zurdo ? "ZURDO" : "DIESTRO"), () => ctl.ponerQuest("zurdo", !Q.zurdo)), opcion(() => "MANOS: " + (vrManosSnake ? "DE SNAKE" : "CONTROL"), () => {
       vrManosSnake = !vrManosSnake;
@@ -7604,6 +7675,11 @@ Object.defineProperty(window.__mgs, "enVR", {
 window.__mgs.paneles = paneles;
 
 window.__mgs.extrasVR = {
+  ajustes: AJ,
+  menuAjustes: () => menuAjustesVR({
+    texto: "< VOLVER",
+    cierra: false
+  }),
   ventanaMira: ventanaMira,
   pistaMeryl: pistaMeryl,
   retrucoMantis: retrucoMantis,

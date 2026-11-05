@@ -58,11 +58,12 @@ export class RetrucoMantis {
       return;
     }
     this.enPelea = true;
-    if (this.o.puerto2()) return;
+    const tCruce = this.o.tCruce?.() ?? T_CRUCE;
+    if (!tCruce || this.o.puerto2()) return;
     this._pista(dt, e, j);
     if (e.xr) {
       this.t = controlesCruzados(e.xr.cuadro, e.xr.ref, e.xr.fuentes) ? this.t + dt : 0;
-      if (this.t >= T_CRUCE) this._lograr(j);
+      if (this.t >= tCruce) this._lograr(j);
       return;
     }
     if (e.angulo != null) {

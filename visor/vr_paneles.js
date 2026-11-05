@@ -1317,7 +1317,7 @@ export class VRPaneles {
     const D = this.disp[p.tipo] || this.disp.centro, mpp = metrosPorPixel(D.dist);
     let w, h;
     if (p.malla) {
-      const g = p.mesh.geometry.parameters || {}, s = 320 * mpp / (g.width || 1);
+      const g = p.mesh.geometry.parameters || {}, s = 320 * mpp / (g.width || 1) * (p.escala?.() ?? 1);
       p.mesh.scale.setScalar(s);
       w = (g.width || 1) * s;
       h = (g.height || 1) * s;
