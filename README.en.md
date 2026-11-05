@@ -2,7 +2,7 @@
 
 # Shadow Moses web
 
-The 1998 PlayStation stealth classic, rebuilt for the browser: on PC, with a gamepad or with a VR headset.
+The 1998 PlayStation stealth classic, rebuilt for the browser: on PC, with a gamepad or with a VR headset. There's an Android app too.
 You play it with **your own discs** (USA version): the installer converts them on your PC.
 
 <p align="center"><b>◀ 140.85 ▶</b> · <a href="https://mgs.ravenlight.net/">mgs.ravenlight.net</a> · <a href="README.md">Versión en castellano</a></p>
@@ -16,6 +16,13 @@ You play it with **your own discs** (USA version): the installer converts them o
 <td width="50%"><img src="img/cap_codec_vr.png" alt="The codec in VR"><br><sub>The codec, in a VR headset</sub></td>
 </tr>
 </table>
+
+## What's new
+
+- **v1.6:** the phone app now exports saves and photos: it asks where to store them.
+- **v1.5:** the Android app arrives: play with no browser, no PC and no internet.
+- **v1.3 and v1.4:** play over wifi from another device at home, on a secure connection with music and sound effects.
+- **v1.2:** installer fix: with a double-click, the disc 2 window did not open.
 
 ## `TX-01` OPERATION: INSTALL
 
@@ -46,6 +53,7 @@ it open while playing. It only serves your PC.
 Open `JUGAR_EN_RED.cmd` on the PC and go to the address it shows from the other device. The PC has to stay on and on the same
 network. The first time, the browser warns that the connection is not private, because your own PC makes the certificate: tap
 "Advanced" and "Proceed". While that window is open, **anyone on that network can get in**: use it at home, not on public wifi.
+It also works from the headset browser, though it has not been tested on a real headset yet.
 
 ### Phone app (Android)
 
@@ -55,7 +63,9 @@ network. The first time, the browser warns that the connection is not private, b
 3. Copy `MGSweb_datos.mgs` to the phone, open the app and choose it. After that it needs neither the PC nor the internet: the
    app has no internet permission.
 
-The app has no game files. The `.mgs` file is your own data: please do not upload or share it.
+The app has no game files. The `.mgs` file is your own data: please do not upload or share it. To export a save or a photo, the
+app asks where to store it. It has no VR. It was tested on a virtual phone with Android 14, not on a real one yet: if you try it,
+please tell us in an issue which phone you used and how it went.
 
 ## `TX-04` CODEC: COMMON PROBLEMS
 

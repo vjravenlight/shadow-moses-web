@@ -3,7 +3,7 @@
 # Shadow Moses web
 
 El clásico de sigilo de 1998 de PlayStation, rehecho para el navegador: en la PC, con joystick o con casco de realidad
-virtual. Se juega con **tus propios discos** (versión USA): el instalador los convierte en tu PC.
+virtual. También hay app para Android. Se juega con **tus propios discos** (versión USA): el instalador los convierte en tu PC.
 
 <p align="center"><b>◀ 140.85 ▶</b> · <a href="https://mgs.ravenlight.net/">mgs.ravenlight.net</a> · <a href="README.en.md">English version</a></p>
 
@@ -16,6 +16,13 @@ virtual. Se juega con **tus propios discos** (versión USA): el instalador los c
 <td width="50%"><img src="img/cap_codec_vr.png" alt="El códec en el casco"><br><sub>El códec, en el casco de realidad virtual</sub></td>
 </tr>
 </table>
+
+## Novedades
+
+- **v1.6:** la app de celular ya exporta partidas y fotos: pregunta dónde guardarlas.
+- **v1.5:** llega la app para Android: se juega sin navegador, sin PC y sin internet.
+- **v1.3 y v1.4:** se puede jugar por wifi desde otro aparato de tu casa, por conexión segura y con música y efectos.
+- **v1.2:** arreglo del instalador: con doble clic no se abría la ventana del disco 2.
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
@@ -47,7 +54,7 @@ servidor: dejala abierta mientras jugás. Solo atiende a tu PC.
 Abrí `JUGAR_EN_RED.cmd` en la PC y entrá desde el otro aparato a la dirección que muestra. La PC tiene que quedar prendida
 y en la misma red. La primera vez el navegador avisa que la conexión no es privada, porque el certificado lo crea tu propia
 PC: tocá "Avanzado" y "Continuar". Mientras esa ventana esté abierta, **cualquiera en esa red puede entrar**: usalo en tu
-casa, no en un wifi público.
+casa, no en un wifi público. También sirve desde el navegador del casco, aunque todavía no se probó en uno real.
 
 ### App de celular (Android)
 
@@ -57,7 +64,9 @@ casa, no en un wifi público.
 3. Copiá `MGSweb_datos.mgs` al celular, abrí la app y elegilo. Después no hace falta la PC ni internet: la app no tiene
    permiso de internet.
 
-La app no trae ningún archivo del juego. El archivo `.mgs` son tus datos: no lo subas ni lo compartas.
+La app no trae ningún archivo del juego. El archivo `.mgs` son tus datos: no lo subas ni lo compartas. Para exportar una
+partida o una foto, la app pregunta dónde guardarla. No trae realidad virtual. Se probó en un celular virtual con Android 14,
+todavía no en uno real: si la probás, contanos en un issue qué celular usaste y cómo te fue.
 
 ## `TX-04` CÓDEC: PROBLEMAS COMUNES
 
