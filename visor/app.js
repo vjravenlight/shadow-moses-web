@@ -59,6 +59,8 @@ import { crearJefe, forzarJefes, esJefe, crearJefesEntrada } from "./jefes/jefes
 
 import { crearZako, esZako, zakosAlEntrar, mensajeZako, deLaEntrada } from "./zako.js";
 
+import { botonMandoVR } from "./personajes/mando.js";
+
 import { crearMeryl, esMeryl, destruirMeryl } from "./personajes/meryl.js";
 
 import { VRMisiones } from "./vrmisiones.js";
@@ -4124,8 +4126,9 @@ function actualizarCuerpoYSombras(dt) {
     let pos = rig.position, ry = yaw;
     if (R.xr.isPresenting && !terceraPersona()) {
       const d = new THREE.Vector3;
-      R.xr.getCamera().getWorldPosition(_pc);
-      R.xr.getCamera().getWorldDirection(d);
+      cam.updateWorldMatrix(true, false);
+      cam.getWorldPosition(_pc);
+      cam.getWorldDirection(d);
       pos = _pc.set(_pc.x, rig.position.y, _pc.z);
       ry = Math.atan2(-d.x, -d.z);
     }
@@ -6162,11 +6165,11 @@ function actualizarManosVR() {
   }
 }
 
-const HUESOS_SIN_VER = [ "hueso_2", "hueso_5", "hueso_7" ];
+const HUESOS_SIN_VER = [ "hueso_1" ];
 
 function ajustarCuerpoVR() {
   if (!cuerpo?.obj) return;
-  const on = R.xr.isPresenting && vrCuerpoVisible && !terceraPersona();
+  const on = R.xr.isPresenting && vrCuerpoVisible && !terceraPersona() && !vrCamara && !camLibre.activa;
   if (on || cuerpo.sinBrazos) {
     for (const n of HUESOS_SIN_VER) {
       const h = (cuerpo.hVR ||= {})[n] ||= cuerpo.obj.getObjectByName(n);
@@ -6180,8 +6183,8 @@ function ajustarCuerpoVR() {
   cam.getWorldPosition(p);
   cam.getWorldDirection(d);
   const y = Math.atan2(-d.x, -d.z);
-  cuerpo.obj.position.x = p.x + Math.sin(y) * .24;
-  cuerpo.obj.position.z = p.z + Math.cos(y) * .24;
+  cuerpo.obj.position.x = p.x + Math.sin(y) * .12;
+  cuerpo.obj.position.z = p.z + Math.cos(y) * .12;
   cuerpo.obj.rotation.y = y + Math.PI;
 }
 
@@ -6998,6 +7001,7 @@ function soltarVR() {
 }
 
 paneles.on("boton", (b, abajo) => {
+  botonMandoVR(b, abajo);
   if (b === "cuadrado") {
     cuadradoVR = abajo;
     if (abajo) dispararVR(); else soltarVR();

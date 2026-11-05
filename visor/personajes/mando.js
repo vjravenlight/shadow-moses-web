@@ -22,6 +22,33 @@ export const PAD = {
 
 export const PAD_UDLR = 61440;
 
+const BOTON_VR = {
+  circulo: PAD.CIRCLE,
+  cruz: PAD.CROSS,
+  cuadrado: PAD.SQUARE,
+  triangulo: PAD.TRIANGLE,
+  select: PAD.SELECT,
+  start: PAD.START,
+  L1: PAD.L1,
+  R1: PAD.R1,
+  L2: PAD.L2,
+  R2: PAD.R2
+};
+
+const padVR = {
+  abajo: 0,
+  pulsos: 0
+};
+
+export function botonMandoVR(nombre, abajo) {
+  const b = BOTON_VR[nombre];
+  if (!b) return;
+  if (abajo) {
+    padVR.abajo |= b;
+    padVR.pulsos |= b;
+  } else padVR.abajo &= ~b;
+}
+
 const TECLAS = {
   KeyG: PAD.CIRCLE,
   Space: PAD.CIRCLE,
@@ -109,7 +136,8 @@ export class Mando {
     }
   }
   crudo() {
-    let st = this.pulsos;
+    let st = this.pulsos | padVR.abajo | padVR.pulsos;
+    padVR.pulsos = 0;
     for (const c of this.abajo) st |= TECLAS[c] || 0;
     try {
       for (const g of [ ctl.mando() ]) {
