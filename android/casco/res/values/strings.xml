@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="appName">Shadow Moses</string>
+    <string name="launchUrl">https://mgs.ravenlight.net/casco/</string>
+    <string name="assetStatements" translatable="false">[{ \"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": { \"namespace\": \"web\", \"site\": \"https://mgs.ravenlight.net\" } }]</string>
+</resources>

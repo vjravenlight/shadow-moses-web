@@ -19,6 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## What's new
 
+- **v2.5:** the Quest app is here: play with no PC and offline, with your data saved on the headset. Not yet tested on a real Quest.
 - **v2.4:** Meryl has a findable frequency now: it is on the back of the case, on [the website](https://mgs.ravenlight.net/#estuche), and Campbell tells you if you stay stuck. On the headset, the sight window shows the goggles and the PSG1 sway, and the visible body follows your walking direction.
 - **v2.3:** a new way to outsmart Psycho Mantis without a second controller: cross the controllers on the headset, turn the phone upside down, or switch controls on PC. The headset's seated mode and binoculars are fixed too.
 - **v2.2:** the Linux and Mac package is here, not yet tested on a real Linux box or Mac. Installing with one disc and adding the second later no longer cuts the model catalog. On the headset, punches, walking and the radar follow your head even when the world is rotated.
@@ -34,7 +35,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v2.4.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v2.5.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and

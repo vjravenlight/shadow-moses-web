@@ -5,7 +5,7 @@ const abs = p => new URL(p, BASE).href;
 
 const C_ASSETS = "mgs-assets";
 
-const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || !!window.MGSApp;
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname) || !!window.MGSApp || !!window.MGSCasco;
 
 const TACTIL = matchMedia?.("(pointer: coarse)").matches;
 
@@ -45,7 +45,7 @@ if (q.get("sw") === "1" || q.get("sw") === "0") escribirLS("mgs_sw", q.get("sw")
 
 const preferido = leerLS("mgs_sw");
 
-const swPedido = haySW && (preferido === "1" || preferido !== "0" && !LOCAL);
+const swPedido = haySW && !window.MGSCasco && (preferido === "1" || preferido !== "0" && !LOCAL);
 
 let versionSW = null, controlado = haySW && !!navigator.serviceWorker.controller;
 
@@ -74,7 +74,7 @@ if (haySW) {
       tipo: "mgs-version"
     })).catch(() => {});
   } else {
-    navigator.serviceWorker.getRegistrations().then(rs => rs.filter(r => r.scope === BASE).forEach(r => r.unregister())).catch(() => {});
+    if (!window.MGSCasco) navigator.serviceWorker.getRegistrations().then(rs => rs.filter(r => r.scope === BASE).forEach(r => r.unregister())).catch(() => {});
   }
 }
 

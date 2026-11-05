@@ -1,0 +1,124 @@
+<!doctype html>
+<!-- Primera pantalla en el casco: guarda el .mgs en este navegador y abre el juego. Nada sale del aparato. FeniXVOID · Project Ravenlight -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Shadow Moses</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root { --verde: #5ef08a; --claro: #b9ffd0; --fondo: #020604; --apagado: #8fbb9c; --amarillo: #ffd23c; --rojo: #ff6b6b; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; padding: 24px 16px; background: var(--fondo); color: #dff5e5; font: 18px/1.5 Consolas, "DejaVu Sans Mono", monospace; display: grid; place-items: center; }
+  main { width: 100%; max-width: 640px; }
+  h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: 0.08em; color: var(--claro); }
+  h2 { margin: 0 0 18px; font-size: 15px; font-weight: normal; letter-spacing: 0.24em; color: var(--verde); }
+  p { margin: 10px 0; } ol { padding-left: 24px; } li { margin: 8px 0; }
+  code { color: var(--claro); }
+  button, label.boton { display: block; width: 100%; margin: 14px 0 0; padding: 18px; font: inherit; font-size: 20px; letter-spacing: 0.1em; text-align: center; color: #021006; background: var(--verde); border: 0; border-radius: 4px; cursor: pointer; }
+  button:hover, label.boton:hover, button:focus-visible, label.boton:focus-within { background: var(--claro); outline: 2px solid var(--claro); outline-offset: 2px; }
+  button.chico { background: none; color: var(--apagado); font-size: 15px; padding: 10px; border: 1px solid #1c4a2c; }
+  input[type=file] { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  progress { width: 100%; height: 20px; margin-top: 14px; accent-color: var(--verde); }
+  .nota { color: var(--apagado); font-size: 15px; }
+  .aviso { color: var(--amarillo); } .error { color: var(--rojo); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>SHADOW MOSES</h1>
+  <h2 id="sub"></h2>
+  <p id="prep" class="aviso"></p>
+  <section id="elegir" hidden>
+    <ol id="pasos"></ol>
+    <label class="boton" for="archivo"><span id="t-elegir"></span><input id="archivo" type="file" accept=".mgs"></label>
+    <p class="nota" id="t-privado"></p>
+  </section>
+  <section id="copiando" hidden>
+    <p id="t-copiando"></p>
+    <progress id="barra" max="1" value="0"></progress>
+    <p class="nota" id="t-porc"></p>
+  </section>
+  <section id="listo" hidden>
+    <p id="t-listo"></p>
+    <button id="jugar"></button>
+    <button id="cambiar" class="chico"></button>
+  </section>
+  <p id="msg" class="error" role="alert"></p>
+</main>
+<script src="mgs_zip.js"></script>
+<script>
+const ES = /^es/i.test(navigator.language || '');
+const T = ES ? {
+  sub: 'CASCO DE REALIDAD VIRTUAL', prep: 'Preparando el juego. La primera vez tarda un poco y necesita internet.',
+  pasos: ['En la PC, instalá el juego y corré <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: arma <code>MGSweb_datos.mgs</code>, de cerca de 1 GB.', 'Copiá ese archivo al casco por USB, por ejemplo a <code>Download</code>.', 'Elegilo acá abajo. Se guarda una sola vez, en este navegador.'],
+  elegir: 'ELEGIR MGSweb_datos.mgs', privado: 'Son tus datos, salen de tus discos: no se suben a ningún lado. Después se juega sin señal.',
+  copiando: 'Guardando tus datos en el casco. No cierres esta ventana.', listo: 'Tus datos ya están en este casco. Ya podés borrar el archivo que copiaste a Download: no hace falta para jugar.', jugar: 'JUGAR', cambiar: 'Cambiar el archivo',
+  noSoporta: 'Este navegador no puede guardar el archivo. Probá con otro navegador o actualizá el casco.', noSW: 'Este navegador no deja correr el juego acá: hace falta una conexión segura.',
+  invalido: 'Ese no es un archivo .mgs válido. Armalo con ARMAR_ARCHIVO_CELULAR.cmd.', espacio: (n) => `No hay espacio: hacen falta ${n} GB libres en el casco.`, fallo: 'No se pudo guardar. Probá de nuevo.', confirmar: '¿Borrar los datos guardados en este casco? Tu archivo original no se toca.',
+} : {
+  sub: 'VIRTUAL REALITY HEADSET', prep: 'Getting the game ready. The first time takes a while and needs internet.',
+  pasos: ['On the PC, install the game and run <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: it builds <code>MGSweb_datos.mgs</code>, about 1 GB.', 'Copy that file to the headset over USB, for example to <code>Download</code>.', 'Choose it below. It is saved once, in this browser.'],
+  elegir: 'CHOOSE MGSweb_datos.mgs', privado: 'This is your own data, made from your discs: it is not uploaded anywhere. After this you can play offline.',
+  copiando: 'Saving your data to the headset. Do not close this window.', listo: 'Your data is on this headset. You can now delete the file you copied to Download: it is not needed to play.', jugar: 'PLAY', cambiar: 'Change the file',
+  noSoporta: 'This browser cannot save the file. Try another browser or update the headset.', noSW: 'This browser cannot run the game here: it needs a secure connection.',
+  invalido: 'That is not a valid .mgs file. Build it with ARMAR_ARCHIVO_CELULAR.cmd.', espacio: (n) => `Not enough space: ${n} GB free needed on the headset.`, fallo: 'It could not be saved. Please try again.', confirmar: 'Delete the data saved on this headset? Your original file is not touched.',
+};
+const $ = (i) => document.getElementById(i), ARCHIVO = 'MGSweb_datos.mgs', TROZO = 16 * 1048576;
+document.documentElement.lang = ES ? 'es' : 'en';
+$('sub').textContent = T.sub; $('prep').textContent = T.prep; $('pasos').innerHTML = T.pasos.map((p) => `<li>${p}</li>`).join('');
+$('t-elegir').textContent = T.elegir; $('t-privado').textContent = T.privado; $('t-copiando').textContent = T.copiando; $('t-listo').textContent = T.listo; $('jugar').textContent = T.jugar; $('cambiar').textContent = T.cambiar;
+const ver = (id) => { $('prep').hidden = true; for (const s of ['elegir', 'copiando', 'listo']) $(s).hidden = s !== id; };
+const avisar = (m) => { $('msg').textContent = m || ''; };
+
+async function guardado() {
+  try {
+    const raiz = await navigator.storage.getDirectory();
+    const f = await (await raiz.getFileHandle(ARCHIVO)).getFile();
+    return (await self.mgsIndice(f))?.has('discos.json') ? f : null;
+  } catch { return null; }
+}
+async function copiar(f) {
+  avisar('');
+  const ind = await self.mgsIndice(f).catch(() => null);
+  if (!ind?.has('discos.json')) { avisar(T.invalido); return; }
+  const est = await navigator.storage.estimate?.().catch(() => null);
+  if (est && est.quota - est.usage < f.size) { avisar(T.espacio((f.size / 1e9).toFixed(1))); return; }
+  await navigator.storage.persist?.().catch(() => {});
+  ver('copiando');
+  const raiz = await navigator.storage.getDirectory();
+  try {
+    const temporal = await raiz.getFileHandle(ARCHIVO, { create: true });
+    const w = await temporal.createWritable();
+    for (let a = 0; a < f.size; a += TROZO) {
+      await w.write(f.slice(a, a + TROZO));
+      const k = Math.min(1, (a + TROZO) / f.size); $('barra').value = k; $('t-porc').textContent = Math.round(k * 100) + ' %';
+    }
+    await w.close();
+    if (!(await guardado())) throw new Error('verificación');
+    navigator.serviceWorker?.controller?.postMessage('casco-datos-cambiaron');
+    ver('listo');
+  } catch (e) {
+    console.error(e); await raiz.removeEntry(ARCHIVO).catch(() => {});
+    ver('elegir'); avisar(e?.name === 'QuotaExceededError' ? T.espacio((f.size / 1e9).toFixed(1)) : T.fallo);
+  }
+}
+$('archivo').addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) copiar(f).catch((x) => { console.error(x); ver('elegir'); avisar(T.fallo); }); });
+$('jugar').addEventListener('click', () => { location.href = 'juego.html'; });
+$('cambiar').addEventListener('click', async () => {
+  if (!confirm(T.confirmar)) return;
+  await (await navigator.storage.getDirectory()).removeEntry(ARCHIVO).catch(() => {});
+  navigator.serviceWorker?.controller?.postMessage('casco-datos-cambiaron');
+  ver('elegir');
+});
+(async () => {
+  if (!navigator.storage?.getDirectory || !self.FileSystemFileHandle?.prototype.createWritable) { $('prep').hidden = true; avisar(T.noSoporta); return; }
+  if (!('serviceWorker' in navigator)) { $('prep').hidden = true; avisar(T.noSW); return; }
+  try { await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }); await navigator.serviceWorker.ready; } catch (e) { console.error(e); $('prep').hidden = true; avisar(T.noSW); return; }
+  ver((await guardado()) ? 'listo' : 'elegir');
+})();
+</script>
+</body>
+</html>
