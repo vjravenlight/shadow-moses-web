@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
+import android.util.Base64;
 import android.util.Log;
 import android.view.View;
 import android.view.WindowManager;
@@ -26,11 +27,13 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Toast;
 
 import java.io.ByteArrayInputStream;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -46,13 +49,14 @@ public class MainActivity extends Activity {
     private static final String BASE = "https://" + HOST + "/";
     private static final String INICIO = BASE + "_app/inicio.html";
     private static final String JUEGO = BASE + "index.html?tactil";   // siempre con los controles táctiles
-    private static final int PEDIDO_ARCHIVO = 1, PEDIDO_PARTIDA = 2;
+    private static final int PEDIDO_ARCHIVO = 1, PEDIDO_PARTIDA = 2, PEDIDO_GUARDAR = 3;
 
     private WebView web;
     private ParcelFileDescriptor descriptor;
     private volatile FileChannel canal;
     private volatile Map<String, long[]> indice;   // nombre -> { offset del encabezado local, tamaño }
     private ValueCallback<Uri[]> esperaPartida;
+    private byte[] porGuardar;   // lo que exporta el juego, hasta que el jugador elige dónde dejarlo
 
     private static final Map<String, String> TIPOS = new HashMap<>();
     static {
@@ -123,6 +127,10 @@ public class MainActivity extends Activity {
         if (pedido == PEDIDO_PARTIDA) {
             if (esperaPartida != null) esperaPartida.onReceiveValue(uri != null ? new Uri[] { uri } : null);
             esperaPartida = null;
+        } else if (pedido == PEDIDO_GUARDAR) {
+            byte[] datosGuardar = porGuardar;
+            porGuardar = null;
+            if (uri != null && datosGuardar != null) escribir(uri, datosGuardar);
         } else if (pedido == PEDIDO_ARCHIVO && uri != null) {
             String error = abrir(uri);
             if (error != null) { web.loadUrl(INICIO + "?error=" + error); return; }
@@ -131,6 +139,20 @@ public class MainActivity extends Activity {
             prefs().edit().putString("archivo", uri.toString()).apply();
             web.loadUrl(JUEGO);
         }
+    }
+
+    /** Escribe lo exportado donde eligió el jugador, fuera del hilo de la pantalla (una foto 360 pesa varios MB). */
+    private void escribir(Uri uri, byte[] datos) {
+        new Thread(() -> {
+            boolean bien = false;
+            try (OutputStream o = getContentResolver().openOutputStream(uri, "wt")) {
+                if (o != null) { o.write(datos); bien = true; }
+            } catch (IOException | SecurityException e) {
+                Log.w(TAG, "no se pudo guardar", e);
+            }
+            String aviso = bien ? "Guardado / Saved" : "No se pudo guardar / Could not save";
+            runOnUiThread(() -> Toast.makeText(this, aviso, Toast.LENGTH_SHORT).show());
+        }).start();
     }
 
     /** Abre el archivo y arma el índice. Devuelve null si está bien, o el código del error para la pantalla de inicio. */
@@ -299,6 +321,18 @@ public class MainActivity extends Activity {
                 startActivityForResult(i, PEDIDO_ARCHIVO);
             });
         }
-        @JavascriptInterface public String version() { return "1.0"; }
+        /** Exportar una partida o una foto: en una WebView no funciona la descarga de un blob, así que pregunta dónde guardarlo. */
+        @JavascriptInterface public void guardarArchivo(String nombre, String tipo, String base64) {
+            byte[] datos;
+            try { datos = Base64.decode(base64, Base64.DEFAULT); }
+            catch (IllegalArgumentException e) { Log.w(TAG, "datos inválidos al guardar", e); return; }
+            runOnUiThread(() -> {
+                porGuardar = datos;
+                Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType(tipo == null || tipo.isEmpty() ? "application/octet-stream" : tipo).putExtra(Intent.EXTRA_TITLE, nombre);
+                startActivityForResult(i, PEDIDO_GUARDAR);
+            });
+        }
+        @JavascriptInterface public String version() { return "1.1"; }
     }
 }

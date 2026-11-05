@@ -1124,6 +1124,13 @@ export class Partida {
     return n;
   }
   static _bajarArchivo(texto, n) {
+    if (window.MGSApp?.guardarArchivo) {
+      const bytes = (new TextEncoder).encode(texto);
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 32768) bin += String.fromCharCode(...bytes.subarray(i, i + 32768));
+      window.MGSApp.guardarArchivo(n, "application/json", btoa(bin));
+      return n;
+    }
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([ texto ], {
       type: "application/json"

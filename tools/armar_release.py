@@ -4,7 +4,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def arg(k, d=None):
     return sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
-VERSION = arg('--version', '1.5')
+VERSION = arg('--version', '1.6')
 NODE = arg('--node', 'C:\\Program Files\\nodejs\\node.exe')
 PYTHON = arg('--python', 'C:\\Python313')
 SITE = arg('--site', os.path.join(os.environ.get('APPDATA', ''), 'Python', 'Python313', 'site-packages'))

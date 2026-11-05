@@ -200,6 +200,12 @@ function conXMP360(jpeg, w, h) {
 }
 
 export function descargar(blob, nombre) {
+  if (window.MGSApp?.guardarArchivo) {
+    const r = new FileReader;
+    r.onload = () => window.MGSApp.guardarArchivo(nombre, blob.type, String(r.result).split(",")[1]);
+    r.readAsDataURL(blob);
+    return;
+  }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = nombre;
