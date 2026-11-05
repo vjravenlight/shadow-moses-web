@@ -1139,6 +1139,12 @@ hud.cargar();
 
 const miraArma = new MiraArma;
 
+const camCasco = new THREE.PerspectiveCamera;
+
+camCasco.matrixAutoUpdate = false;
+
+const camApuntar = () => R.xr.isPresenting && vrModo() !== "pantalla" ? camCasco : cam;
+
 const ventanaMira = new VentanaMiraVR;
 
 const miraScope = new MiraScope({
@@ -1204,7 +1210,10 @@ async function cambiarModeloArma(a) {
 
 function miraSnake() {
   const o = new THREE.Vector3, d = new THREE.Vector3;
-  if (camaraJuegoActiva()) {
+  if (camaraJuegoActiva() && inventario?.arma === WP.STINGER && teclas.KeyE && camJuego?.primeraPersona) {
+    cam.getWorldPosition(o);
+    cam.getWorldDirection(d);
+  } else if (camaraJuegoActiva()) {
     o.copy(rig.position);
     o.y += agachado ? .7 : 1.25;
     d.set(-Math.sin(rumbo), 0, -Math.cos(rumbo));
@@ -4821,10 +4830,17 @@ function alfaCuerpo(d) {
   cuerpo.obj.traverse(m => {
     if (!m.userData.cuerpo || !m.material) return;
     for (const mt of Array.isArray(m.material) ? m.material : [ m.material ]) {
-      mt.opacity = a;
+      mt.opacity = 1;
+      mt.blendAlpha = a;
       if (cambia) {
         mt.transparent = trans;
         if (!cuerpo.oculto) mt.depthWrite = !trans;
+        if (trans) {
+          mt.blending = THREE.CustomBlending;
+          mt.blendEquation = THREE.AddEquation;
+          mt.blendSrc = THREE.ConstantAlphaFactor;
+          mt.blendDst = THREE.OneMinusConstantAlphaFactor;
+        } else mt.blending = THREE.NormalBlending;
         mt.needsUpdate = true;
       }
     }
@@ -4878,15 +4894,15 @@ function actualizarStealth() {
           mt.color.copy(mt.userData.colorStealth);
           delete mt.userData.colorStealth;
         }
-        mt.blending = THREE.NormalBlending;
         if (mt.userData.alphaTestStealth != null) {
           mt.alphaTest = mt.userData.alphaTestStealth;
           delete mt.userData.alphaTestStealth;
         }
         const trans = alfaCuerpoAct < 1;
-        mt.opacity = alfaCuerpoAct;
+        mt.opacity = 1;
         mt.transparent = trans;
         if (!cuerpo.oculto) mt.depthWrite = !trans;
+        if (trans) mt.blendAlpha = alfaCuerpoAct; else mt.blending = THREE.NormalBlending;
         mt.needsUpdate = true;
       }
     }
@@ -6230,7 +6246,7 @@ function golpeManoVR(dt) {
       continue;
     }
     if ((armas?.guardias?.() || []).some(g => g.o.position.clone().setY(w.y).distanceTo(w) < 1.3)) {
-      cdGolpeMano = .6;
+      cdGolpeMano = .16;
       ctl.vibrar("leve");
       golpearPared();
     }
@@ -6670,7 +6686,7 @@ R.setAnimationLoop(() => {
     const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (!terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE || apuntaHombro()) ? "stinger" : null;
     miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       tipo: tipo,
-      camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : R.xr.isPresenting ? R.xr.getCamera() : cam,
+      camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : camApuntar(),
       armas: armas,
       vr: R.xr.isPresenting
     });
@@ -6828,8 +6844,9 @@ R.setAnimationLoop(() => {
   if ($("#guardias-mover")?.checked !== false) {
     if (juego && modo === "escenarios") juego.update(dt); else for (const p of patrullas) patrullar(p, dt);
     if (armas && modo === "escenarios") {
+      armas.holguraFijado = R.xr.isPresenting ? 3 : 1;
       armas.update(dt);
-      armas.actualizarFijado(cam);
+      armas.actualizarFijado(camApuntar());
       actualizarStealth();
       if (armas.misil?.obj) armas.misil.obj.visible = !camaraEnMisil();
       if (!R.xr.isPresenting) inventario.aplicarFiltro(R.domElement); else if (R.domElement.style.filter) R.domElement.style.filter = "";
@@ -6911,6 +6928,11 @@ R.setAnimationLoop(() => {
     } else if (!(pantallaVR && paneles.dibujarPantalla(R, cam, scene, {
       radar: juego && !misionesVR.ocultaHud ? radarTex : null
     }))) R.render(scene, cam);
+    if (R.xr.isPresenting && !pantallaVR) {
+      camCasco.matrixWorld.copy(cam.matrixWorld);
+      camCasco.matrixWorldInverse.copy(cam.matrixWorldInverse);
+      camCasco.projectionMatrix.copy(cam.projectionMatrix);
+    }
   }
   paneles.dibujar(R, cam);
 });

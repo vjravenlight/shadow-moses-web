@@ -91,6 +91,15 @@ export class MiraArma {
         if (_v.z > 1 || _v.z < -1 || Math.abs(_v.x) > 1 || Math.abs(_v.y) > 1) continue;
         out.push([ +_v.x.toFixed(3), +_v.y.toFixed(3), +Math.abs(_w.y - _v.y).toFixed(3), armas.fijado === g ? 1 : 0 ]);
       }
+      for (const t of armas.blancosGrandes?.() || []) {
+        _v.set(t.c.x / 1e3, t.c.y / 1e3, t.c.z / 1e3);
+        _w.copy(_v);
+        _w.y += t.alto;
+        _v.project(cam);
+        _w.project(cam);
+        if (_v.z > 1 || _v.z < -1 || Math.abs(_v.x) > 1 || Math.abs(_v.y) > 1) continue;
+        out.push([ +_v.x.toFixed(3), +_v.y.toFixed(3), +Math.abs(_w.y - _v.y).toFixed(3), t.fijado ? 1 : 0 ]);
+      }
     }
     this.blancos = out;
   }

@@ -333,6 +333,6 @@ public class MainActivity extends Activity {
                 startActivityForResult(i, PEDIDO_GUARDAR);
             });
         }
-        @JavascriptInterface public String version() { return "1.5"; }
+        @JavascriptInterface public String version() { return "1.6"; }
     }
 }

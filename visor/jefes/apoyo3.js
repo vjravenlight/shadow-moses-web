@@ -241,6 +241,11 @@ class Apoyo {
       const r = fij(cam);
       return actual ? actual.fijarGrandes(Ar, cam, r) : r;
     };
+    Ar.blancosGrandes = () => actual ? actual.grandes.filter(b => b.activo()).flatMap(b => b.blancos().filter(t => t.fijable).map(t => ({
+      c: t.c,
+      alto: Math.max(500, t.s * 3 / 5) * MM,
+      fijado: t.c === actual.cFijado
+    }))) : [];
     Ar.lanzarStinger = (o, d) => {
       const r = lanzar(o, d);
       if (r && actual?.fijado && Ar.misilS.length) Ar.misilS[Ar.misilS.length - 1].grande = actual.fijado.__grande;
@@ -303,13 +308,15 @@ class Apoyo {
         if (v.z > 1 || v.z < -1) continue;
         const sx = v.x * 160, sy = -v.y * 112, caja = sy - -w.y * 112;
         if (caja <= 0 || caja >= 225) continue;
-        if (Math.abs(sx) < caja && Math.abs(sy) < caja && d < md) {
+        const hol = caja * (Ar.holguraFijado || 1);
+        if (Math.abs(sx) < hol && Math.abs(sy) < hol && d < md) {
           md = d;
           mejor = b;
           mejorC = t.c;
         }
       }
     }
+    this.cFijado = mejorC;
     if (!mejor) {
       if (this.fijado && Ar.fijado !== this.fijado) this.fijado = null;
       return elegido;

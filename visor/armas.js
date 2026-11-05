@@ -1136,7 +1136,8 @@ export class Armas {
       if (v.z > 1 || v.z < -1) continue;
       const sx = v.x * 160, sy = -v.y * 112, caja = sy - -w.y * 112;
       if (caja <= 0 || caja >= 225) continue;
-      if (Math.abs(sx) < caja && Math.abs(sy) < caja && d < md) {
+      const hol = caja * (this.holguraFijado || 1);
+      if (Math.abs(sx) < hol && Math.abs(sy) < hol && d < md) {
         md = d;
         mejor = g;
       }
