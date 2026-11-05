@@ -236,6 +236,19 @@ const $ = s => document.querySelector(s);
 
 const ALTURA_OJOS = 1.6, RADIO = .3, PASO = .45;
 
+if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) {
+  const avisoVivo = () => fetch("/__vivo", {
+    cache: "no-store"
+  }).catch(() => {});
+  avisoVivo();
+  setInterval(avisoVivo, 15e3);
+  addEventListener("pagehide", () => {
+    try {
+      navigator.sendBeacon("/__chau");
+    } catch {}
+  });
+}
+
 const TACTIL = new URLSearchParams(location.search).has("tactil") || matchMedia("(pointer: coarse)").matches;
 
 const efectosGuion = efectosPorDefecto();

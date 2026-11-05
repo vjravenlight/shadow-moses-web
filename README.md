@@ -19,6 +19,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## Novedades
 
+- **v2.7:** en la PC, el juego abre en su propia ventana, sin barras ni ventana negra, y se apaga solo al cerrarla. Sigue andando sin internet.
 - **v2.6:** ajustes finos en el menú del casco: margen de la Stinger, tiempo del gesto contra Mantis, ayuda de Campbell, fuerza del golpe, cuerpo visible y tamaño de la mira. En la PC también se pueden apagar el gesto y la ayuda.
 - **v2.5:** llega la app para Quest: se juega sin PC y sin señal, con tus datos guardados en el casco. Todavía sin probar en un Quest de verdad.
 - **v2.4:** la frecuencia de Meryl ya se puede encontrar: está en el dorso del estuche, en [la web](https://mgs.ravenlight.net/#estuche), y si seguís trabado Campbell te la dice. En el casco, la ventana de mira muestra las antiparras y el temblor del PSG1, y el modo con cuerpo sigue tu marcha.
@@ -36,14 +37,14 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v2.6.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v2.7.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
    sigue desde donde quedó.
 
-Las próximas veces: el acceso directo **Metal Gear Solid web** del Escritorio (o `JUGAR.cmd`). La ventana negra es el
-servidor: dejala abierta mientras jugás. Solo atiende a tu PC.
+Las próximas veces: el acceso directo **Metal Gear Solid web** del Escritorio (o `JUGAR.cmd`). El juego abre en
+su propia ventana y se apaga solo al cerrarla. Solo atiende a tu PC, y no necesita internet.
 
 ### Linux y Mac
 

@@ -21,7 +21,24 @@ const iC = process.argv.indexOf("--cert");
 
 const CERT = iC > 0 ? path.resolve(process.argv[iC + 1]) : os.tmpdir();
 
-const args = process.argv.slice(2).filter((x, i, l) => ![ "--assets", "--red", "--cert" ].includes(x) && ![ "--assets", "--cert" ].includes(l[i - 1]));
+const SALIR_SOLA = process.argv.includes("--salir-sola");
+
+const SIN_VENTANA = 3e4, SIN_NOTICIAS = 2e5, AL_EMPEZAR = 3e5;
+
+let ultimaNoticia = 0, ultimoChau = 0;
+
+const t0Servidor = Date.now();
+
+if (SALIR_SOLA) setInterval(() => {
+  const ahora = Date.now();
+  if (!ultimaNoticia) {
+    if (ahora - t0Servidor > AL_EMPEZAR) process.exit(0);
+    return;
+  }
+  if (ahora - ultimaNoticia > (ultimoChau > ultimaNoticia ? SIN_VENTANA : SIN_NOTICIAS)) process.exit(0);
+}, 2e3).unref();
+
+const args = process.argv.slice(2).filter((x, i, l) => ![ "--assets", "--red", "--cert", "--salir-sola" ].includes(x) && ![ "--assets", "--cert" ].includes(l[i - 1]));
 
 function certificado() {
   const fClave = path.join(CERT, "red_clave.pem"), fCert = path.join(CERT, "red_certificado.pem");
@@ -96,6 +113,18 @@ const atender = (req, res) => {
     p = decodeURIComponent(new URL(req.url, "http://x").pathname);
   } catch {
     res.writeHead(400);
+    return res.end();
+  }
+  if (p === "/__vivo") {
+    if (req.headers["x-mgs-sonda"] === undefined) ultimaNoticia = Date.now();
+    res.writeHead(204, {
+      "Cache-Control": "no-store"
+    });
+    return res.end();
+  }
+  if (p === "/__chau") {
+    ultimoChau = Date.now();
+    res.writeHead(204);
     return res.end();
   }
   if (p.endsWith("/")) p += "index.html";
