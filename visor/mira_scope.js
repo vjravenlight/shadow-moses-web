@@ -3,7 +3,7 @@ import * as THREE from "three";
 
 import { textoMenu, anchoTextoMenu, cargarAtlasHud } from "./hud.js";
 
-const W0 = 320, H0 = 240, ALTO_FRAME = 224, FPS = 30;
+export const W0 = 320, H0 = 240, ALTO_FRAME = 224, FPS = 30;
 
 const ANG = Math.PI * 2 / 4096;
 
@@ -29,7 +29,7 @@ export function cargarSgt(nombre, base = "assets/") {
   return _sgt.get(k);
 }
 
-function calc(d, m) {
+export function calc(d, m) {
   let v = d * m;
   if (v < 0) v += 3;
   return v >> 2;
@@ -37,7 +37,7 @@ function calc(d, m) {
 
 const trunc = Math.trunc;
 
-const rgb = (c, a = 1) => a >= 1 ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+export const rgb = (c, a = 1) => a >= 1 ? `rgb(${c[0]},${c[1]},${c[2]})` : `rgba(${c[0]},${c[1]},${c[2]},${a})`;
 
 function triangulo(x, a, b, c) {
   const v = [ a, b, c ].sort((p, q) => p[1] - q[1]);
@@ -51,7 +51,7 @@ function triangulo(x, a, b, c) {
   }
 }
 
-function poligono(x, v) {
+export function poligono(x, v) {
   if (v.length === 4) {
     const xs = v.map(p => p[0]), ys = v.map(p => p[1]);
     const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
@@ -65,7 +65,7 @@ function poligono(x, v) {
   } else triangulo(x, v[0], v[1], v[2]);
 }
 
-function linea(x, v, vistos) {
+export function linea(x, v, vistos) {
   for (let i = 0; i + 1 < v.length; i++) {
     let [x0, y0] = v[i];
     const [x1, y1] = v[i + 1];

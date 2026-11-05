@@ -1035,6 +1035,20 @@ export class VRPaneles {
     const recorte = k => () => {
       if (!inv.cv || !inv.k || !inv.base) return null;
       const [bx, by] = inv.base[k], arriba = !!inv.tactil;
+      if (inv.menu !== k) {
+        const CW = 72, CH = 48, x0 = bx - 12, y0 = arriba ? by - 6 : by - 12;
+        return {
+          x: x0 * inv.k,
+          y: y0 * inv.k,
+          w: CW * inv.k,
+          h: CH * inv.k,
+          lw: CW,
+          lh: CH,
+          e: 1,
+          x0: x0,
+          y0: y0
+        };
+      }
       const x0 = k ? bx + 60 - LW : bx - 12, y0 = arriba ? by - 6 : by + 36 - LH;
       return {
         x: x0 * inv.k,

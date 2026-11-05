@@ -101,6 +101,10 @@ import { iniciarMotion, cuadroMotion, moverMotion, finMotion, ALTO_CONTROL } fro
 
 import { PadDemo, BOTON, DemoCancel, LifeUp, Movie, EscenaPendiente } from "./paddemo.js";
 
+import { MiraArma } from "./mira_armas.js";
+
+import { antiparrasVR } from "./antiparras_vr.js";
+
 import { MiraScope } from "./mira_scope.js";
 
 import { ESCENARIOS as MAPAS_EXCL, MapasExclusivos, zonasDelMapa } from "./mapas_excl.js";
@@ -1099,9 +1103,10 @@ const fabManos = (new XRHandModelFactory).setPath("assets/xr/perfiles/generic-ha
 for (let i = 0; i < 2; i++) {
   const c = R.xr.getController(i);
   const g = (new THREE.BufferGeometry).setFromPoints([ new THREE.Vector3, new THREE.Vector3(0, 0, -1) ]);
-  c.add(new THREE.Line(g, new THREE.LineBasicMaterial({
+  c.userData.rayito = new THREE.Line(g, new THREE.LineBasicMaterial({
     color: 8257440
-  })));
+  }));
+  c.add(c.userData.rayito);
   c.addEventListener("connected", e => {
     c.userData.lado = e.data?.handedness || null;
   });
@@ -1125,6 +1130,8 @@ for (let i = 0; i < 2; i++) {
 const hud = new Hud;
 
 hud.cargar();
+
+const miraArma = new MiraArma;
 
 const miraScope = new MiraScope({
   se: id => audioMGS.se(id)
@@ -2049,7 +2056,7 @@ function ponerArmaEnMano() {
 function animarArma(dt) {
   if (!armaVista?.userData.base || dt <= 0) return;
   {
-    const equip = (armas ? inventario.arma >= 0 : true) && !miraScope.activo, fam = equip && inventario?.arma === WP.FAMAS;
+    const equip = (armas ? inventario.arma >= 0 : true) && !miraScope.activo && !miraArma.ocultaArma, fam = equip && inventario?.arma === WP.FAMAS;
     armaVista.userData.equipada = equip;
     if (pistolaVista && pistolaVista.visible !== (equip && !fam)) pistolaVista.visible = equip && !fam;
     if (rifleVista && rifleVista.visible !== fam) {
@@ -2128,7 +2135,7 @@ function animarArma(dt) {
   {
     const mod = armaVista.userData.modelo;
     if (mod && mod !== pistolaVista) {
-      const ver = !armas?.manoVacia?.();
+      const ver = !armas?.manoVacia?.() && !miraArma.ocultaArma;
       if (mod.visible !== ver) mod.visible = ver;
     }
   }
@@ -2161,6 +2168,56 @@ function armaEnManoTercera(wId, ver) {
     }).catch(() => {});
   }
   for (const [r, m] of M) if (m && m.visible !== (ver && r === ruta)) m.visible = ver && r === ruta;
+}
+
+let laserSocom = null;
+
+function actualizarLaser() {
+  const xr = R.xr.isPresenting;
+  if (xr) for (let i = 0; i < 2; i++) {
+    const c = R.xr.getController(i), enArma = !!armaVista?.visible && !!armaVista.userData.equipada && c.userData.lado === manoArma();
+    if (c.userData.rayito && c.userData.rayito.visible === enArma) c.userData.rayito.visible = !enArma;
+  }
+  const ok = !!armas && !!juego && modo === "escenarios" && inventario.arma === WP.SOCOM && !inventario.abierto && !muerteSnake && !enDemo && !demo.ocupada && !camLibre.activa && !ducto.activo && !armas.manoVacia?.() && !enPausa() && !codec.abierto;
+  if (!ok || !(xr || cuadradoApretado())) {
+    if (laserSocom) laserSocom.visible = false;
+    return;
+  }
+  if (!laserSocom) {
+    const g = new THREE.BufferGeometry;
+    g.setAttribute("position", new THREE.Float32BufferAttribute([ 0, 0, 0, 0, 0, 0 ], 3));
+    laserSocom = new THREE.Line(g, new THREE.LineBasicMaterial({
+      color: 16727871,
+      transparent: true,
+      opacity: .9,
+      depthWrite: false,
+      toneMapped: false
+    }));
+    laserSocom.frustumCulled = false;
+    laserSocom.userData.sinColision = true;
+    laserSocom.raycast = () => {};
+    scene.add(laserSocom);
+  }
+  const m = miraSnake(), o = new THREE.Vector3;
+  if (!terceraPersona() && fogonazo && armaVista?.visible) {
+    armaVista.updateMatrixWorld(true);
+    fogonazo.getWorldPosition(o);
+  } else {
+    const a = cuerpo?.armas3?.get(armas.arma.modelo) || cuerpo?.arma;
+    if (!a?.visible) {
+      laserSocom.visible = false;
+      return;
+    }
+    a.getWorldPosition(o);
+    o.addScaledVector(m.d, .22);
+  }
+  const h = primerGolpe(m.o, m.d, 10, colParedes ? colParedes.concat(colisiones) : colisiones);
+  const fin = h?.point || m.o.clone().addScaledVector(m.d, 10);
+  const a = laserSocom.geometry.attributes.position;
+  a.setXYZ(0, o.x, o.y, o.z);
+  a.setXYZ(1, fin.x, fin.y, fin.z);
+  a.needsUpdate = true;
+  laserSocom.visible = true;
 }
 
 function expulsarVaina() {
@@ -4725,6 +4782,7 @@ const _rC = new THREE.Vector3, _vC = new THREE.Vector3, _X = new THREE.Vector3(1
 let alfaCuerpoAct = 1;
 
 function alfaCuerpo(d) {
+  if (stealthCuerpo && stealthCuerpo === cuerpo) return;
   const a = d == null ? 1 : Math.max(.25, Math.min(1, (d - .5) / .7 * .75 + .25));
   if (!cuerpo?.obj || Math.abs(a - alfaCuerpoAct) < .02 && a === 1 === (alfaCuerpoAct === 1)) return;
   const trans = a < 1, cambia = trans !== alfaCuerpoAct < 1;
@@ -4740,6 +4798,69 @@ function alfaCuerpo(d) {
       }
     }
   });
+}
+
+const STEALTH_OPACIDAD = .35, STEALTH_OSCURO = .9;
+
+let stealthCuerpo = null;
+
+function actualizarStealth() {
+  if (!cuerpo?.obj) {
+    stealthCuerpo = null;
+    return;
+  }
+  const si = inventario.item === IT.STEALTH;
+  if (!si && stealthCuerpo !== cuerpo) return;
+  const nuevo = si && stealthCuerpo !== cuerpo;
+  cuerpo.obj.traverse(m => {
+    if (!m.userData.cuerpo || !m.material) return;
+    if (si) {
+      if (nuevo) {
+        m.userData.ordenStealth = m.renderOrder;
+        m.renderOrder = 900;
+      }
+    } else if (m.userData.ordenStealth != null) {
+      m.renderOrder = m.userData.ordenStealth;
+      delete m.userData.ordenStealth;
+    }
+    for (const mt of Array.isArray(m.material) ? m.material : [ m.material ]) {
+      if (si) {
+        if (nuevo) {
+          if (mt.color) {
+            mt.userData.colorStealth = mt.color.clone();
+            mt.color.multiplyScalar(STEALTH_OSCURO);
+          }
+          mt.userData.alphaTestStealth = mt.alphaTest;
+          mt.alphaTest = 0;
+          mt.blending = THREE.CustomBlending;
+          mt.blendEquation = THREE.AddEquation;
+          mt.blendSrc = THREE.ConstantAlphaFactor;
+          mt.blendDst = THREE.OneMinusConstantAlphaFactor;
+          mt.blendAlpha = STEALTH_OPACIDAD;
+          mt.transparent = true;
+          mt.opacity = 1;
+          mt.needsUpdate = true;
+        }
+        mt.depthWrite = false;
+      } else {
+        if (mt.userData.colorStealth) {
+          mt.color.copy(mt.userData.colorStealth);
+          delete mt.userData.colorStealth;
+        }
+        mt.blending = THREE.NormalBlending;
+        if (mt.userData.alphaTestStealth != null) {
+          mt.alphaTest = mt.userData.alphaTestStealth;
+          delete mt.userData.alphaTestStealth;
+        }
+        const trans = alfaCuerpoAct < 1;
+        mt.opacity = alfaCuerpoAct;
+        mt.transparent = trans;
+        if (!cuerpo.oculto) mt.depthWrite = !trans;
+        mt.needsUpdate = true;
+      }
+    }
+  });
+  stealthCuerpo = si ? cuerpo : null;
 }
 
 function distanciaCamara(P, C, lateral, margen, minimo) {
@@ -5277,6 +5398,8 @@ const _P = new THREE.Vector3, _C = new THREE.Vector3, _dirC = new THREE.Vector3;
 
 let muerteSnake = null;
 
+const camaraEnMisil = () => !!armas?.misil && !R.xr.isPresenting && (vista !== "arriba" || !!teclas.KeyE);
+
 function actualizarCamara(dt) {
   if (R.xr.isPresenting && vrModo() !== "pantalla") {
     rig.rotation.y = yaw;
@@ -5294,7 +5417,7 @@ function actualizarCamara(dt) {
     }
     return;
   }
-  const vm = armas?.vistaMisil();
+  const vm = camaraEnMisil() ? armas.vistaMisil() : null;
   if (vm) {
     rig.updateMatrixWorld();
     cam.position.copy(rig.worldToLocal(vm.pos.clone()));
@@ -6382,6 +6505,18 @@ R.setAnimationLoop(() => {
     });
     miraScope.dibujar();
   }
+  {
+    const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && !misionesVR.activo && !muerteSnake;
+    const tipo = !ok ? null : camaraEnMisil() ? "nikita" : inventario.arma === WP.STINGER && (!terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE || apuntaHombro()) ? "stinger" : null;
+    miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
+      tipo: tipo,
+      camara: R.xr.isPresenting ? R.xr.getCamera() : cam,
+      armas: armas,
+      vr: R.xr.isPresenting
+    });
+    miraArma.dibujar();
+    antiparrasVR(R, ok ? inventario.filtro : null);
+  }
   paneles.update(dtReal);
   seguirTerceraVR(dtReal);
   if (titulo.visible) {
@@ -6503,7 +6638,9 @@ R.setAnimationLoop(() => {
     if (armas && modo === "escenarios") {
       armas.update(dt);
       armas.actualizarFijado(cam);
-      inventario.aplicarFiltro(R.domElement);
+      actualizarStealth();
+      if (armas.misil?.obj) armas.misil.obj.visible = !camaraEnMisil();
+      if (!R.xr.isPresenting) inventario.aplicarFiltro(R.domElement); else if (R.domElement.style.filter) R.domElement.style.filter = "";
     }
     if (sensores && modo === "escenarios") {
       const eq = armas ? inventario.item : -1;
@@ -6554,6 +6691,7 @@ R.setAnimationLoop(() => {
   }
   {}
   animarArma(dt);
+  actualizarLaser();
   if (R.xr.isPresenting) for (let i = 0; i < 2; i++) {
     const g = R.xr.getControllerGrip(i);
     if (g.userData.modelo) g.userData.modelo.visible = !(armaVista?.visible && armaVista.userData.equipada && armaVista.parent === monturaVR && monturaVR.parent === g);
@@ -6674,6 +6812,8 @@ paneles.conectarFinal({
   rango: rango,
   codec: codec
 });
+
+miraArma.conectarVR(paneles);
 
 miraScope.conectarVR(paneles);
 

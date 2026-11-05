@@ -19,6 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## What's new
 
+- **v1.7:** stealth suit with visible camouflage, red laser from the SOCOM, sight and target boxes on the Stinger and the Nikita. On the headset: night vision and thermal goggles, and items no longer show up twice.
 - **v1.6:** the phone app now exports saves and photos: it asks where to store them.
 - **v1.5:** the Android app arrives: play with no browser, no PC and no internet.
 - **v1.3 and v1.4:** play over wifi from another device at home, on a secure connection with music and sound effects.
@@ -26,7 +27,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v1.6.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v1.7.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and

@@ -19,6 +19,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## Novedades
 
+- **v1.7:** traje stealth con camuflaje a la vista, láser rojo que sale de la SOCOM, mira y recuadros en el Stinger y la Nikita. En el casco: visión nocturna y térmica, y los ítems ya no se ven dobles.
 - **v1.6:** la app de celular ya exporta partidas y fotos: pregunta dónde guardarlas.
 - **v1.5:** llega la app para Android: se juega sin navegador, sin PC y sin internet.
 - **v1.3 y v1.4:** se puede jugar por wifi desde otro aparato de tu casa, por conexión segura y con música y efectos.
@@ -26,7 +27,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v1.6.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v1.7.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
