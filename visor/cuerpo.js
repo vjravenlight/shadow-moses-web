@@ -468,7 +468,7 @@ function gestoArma(G, at, st, w, cuadros) {
   };
 }
 
-export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachado, postura: postura = null, arma: arma = true, armaId: armaId = null, alerta: alerta = false, pared: pared = null, golpePared: golpePared = null, muerte: muerte = false, atras: atras = false, forzado: forzado = null, dt: dt, visible: visible, detras: detras = .08, apunta: apunta = false, disparo: disparo = false, recargando: recargando = false, golpe: golpe = false, reaccion: reaccion = null, parpadeo: parpadeo = false, caja: caja = false, armaAnim: armaAnim = null}) {
+export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachado, postura: postura = null, arma: arma = true, armaId: armaId = null, alerta: alerta = false, pared: pared = null, golpePared: golpePared = null, muerte: muerte = false, atras: atras = false, reversa: reversa = false, forzado: forzado = null, dt: dt, visible: visible, detras: detras = .08, apunta: apunta = false, disparo: disparo = false, recargando: recargando = false, golpe: golpe = false, reaccion: reaccion = null, parpadeo: parpadeo = false, caja: caja = false, armaAnim: armaAnim = null}) {
   C.obj.position.set(pos.x + Math.sin(yaw) * detras, pos.y, pos.z + Math.cos(yaw) * detras);
   C.obj.rotation.y = yaw + Math.PI;
   if (C.oculto !== !visible) ocultarCuerpo(C, !visible);
@@ -560,6 +560,7 @@ export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachad
   });
   const av = nombre === `anim ${n}` ? AVANCE[n] : 0;
   if (a) a.timeScale = !unaVez && !quieto && av ? Math.max(.3, Math.min(1.6, vel / av)) : 1;
+  if (a && reversa && !unaVez && !quieto && post !== 2) a.timeScale = -a.timeScale;
   actualizarTorso(C, torso, torsoUna, interp, dt);
   C.clip = nombre;
   C.accion = a;

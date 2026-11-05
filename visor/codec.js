@@ -1303,6 +1303,7 @@ export class Codec {
       this.cb.freq = this.freq;
       return;
     }
+    this.op.sinRespuesta?.(this.freq);
     this.estado = 9;
   }
   iniciarLlamada(freq, code) {

@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as debug from "./debug.js";
 
+import { PistaMeryl } from "./pista_meryl.js";
+
 import { RetrucoMantis } from "./retruco_mantis.js";
 
 import * as ctl from "./controles.js";
@@ -661,6 +663,7 @@ function mensajeEntrada(d, v, i) {
 }
 
 const codec = new Codec({
+  sinRespuesta: () => pistaMeryl.fallo(),
   guion: guion,
   botonTactil: TACTIL,
   audioCtx: () => audioMGS.ctx,
@@ -1153,6 +1156,8 @@ const camApuntar = () => R.xr.isPresenting && vrModo() !== "pantalla" ? camCasco
 
 const ventanaMira = new VentanaMiraVR;
 
+const _ejeY = new THREE.Vector3(0, 1, 0);
+
 const miraScope = new MiraScope({
   se: id => audioMGS.se(id)
 });
@@ -1231,6 +1236,10 @@ function miraSnake() {
     } else {
       cam.getWorldPosition(o);
       cam.getWorldDirection(d);
+    }
+    if (inventario?.arma === WP.PSG1 && armas) {
+      const b = armas.balanceo();
+      if (b.yaw || b.pitch) d.applyAxisAngle(_ejeY, b.yaw).setY(d.y + b.pitch).normalize();
     }
     if (terceraPersona()) apuntarDesdeSnake(o, d);
   } else {
@@ -4147,8 +4156,16 @@ function actualizarCuerpoYSombras(dt) {
       pos = _pc.set(_pc.x, rig.position.y, _pc.z);
       ry = Math.atan2(-d.x, -d.z);
     }
-    const vel = Math.hypot(pos.x - _prev.x, pos.z - _prev.z) / dt;
+    const dxV = pos.x - _prev.x, dzV = pos.z - _prev.z;
+    let vel = Math.hypot(dxV, dzV) / dt;
     _prev.copy(pos);
+    if (cuerpoVRActivo() && vel <= 20) {
+      const f = Math.min(1, dt * 10);
+      velVR.x += (dxV / dt - velVR.x) * f;
+      velVR.z += (dzV / dt - velVR.z) * f;
+      velVR.v = Math.hypot(velVR.x, velVR.z);
+      vel = velVR.v < .3 ? 0 : velVR.v;
+    }
     const tercera = terceraPersona() || !!juego?.__jefes?.camaraEspecial?.()?.verSnake || !!misionesVR.camaraEspecial()?.verSnake;
     if (tercera !== cuerpo.tercera) {
       cuerpo.tercera = tercera;
@@ -4175,7 +4192,8 @@ function actualizarCuerpoYSombras(dt) {
       golpePared: tGolpePared > 0 ? ladoGolpe : null,
       muerte: !!muerteSnake,
       forzado: snakeScript.motion?.clip || null,
-      atras: reptando && (giroSnake.atras || (vista !== "arriba" || R.xr.isPresenting) && (teclas.KeyS || teclas.ArrowDown || tac.y < -.3)),
+      atras: reptando && (cuerpoVRAtras || giroSnake.atras || (vista !== "arriba" || R.xr.isPresenting) && (teclas.KeyS || teclas.ArrowDown || tac.y < -.3)),
+      reversa: cuerpoVRAtras,
       dt: dt,
       visible: tercera && !ojosJ || R.xr.isPresenting && vrCuerpoVisible,
       detras: tercera ? 0 : .08,
@@ -4189,8 +4207,9 @@ function actualizarCuerpoYSombras(dt) {
       armaAnim: armas ? armas.estadoAnim() || {} : null
     });
   }
-  ajustarCuerpoVR();
+  ajustarCuerpoVR(dt);
   dibujarSombras(dt);
+  if (cuerpo?.obj && cuerpoVRActivo()) torsoVR(cuerpo, false);
   actualizarBrillos(brillos, cam);
 }
 
@@ -6187,27 +6206,77 @@ function actualizarManosVR() {
   }
 }
 
-const HUESOS_SIN_VER = [ "hueso_1" ];
+function torsoVR(C, visible) {
+  const h = C.hTorsoVR ||= C.obj.getObjectByName("hueso_1");
+  if (!h) return;
+  const e = visible ? 1 : .001;
+  if (h.scale.x === e) return;
+  h.scale.setScalar(e);
+  C.obj.updateMatrixWorld(true);
+}
 
-function ajustarCuerpoVR() {
+const CADERA_DETRAS = .12, CADERA_DETRAS_TIERRA = .5, CADERA_DEBAJO = .3;
+
+const dif = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+const _vCu = new THREE.Vector3, _vCam = new THREE.Vector3, _mCu = new THREE.Matrix4;
+
+let rumboCuerpoVR = null, velVR = {
+  x: 0,
+  z: 0,
+  v: 0
+}, cuerpoVRAtras = false, caderaVR = null, detrasVR = CADERA_DETRAS;
+
+const cuerpoVRActivo = () => R.xr.isPresenting && vrCuerpoVisible && !terceraPersona() && !vrCamara && !camLibre.activa;
+
+function ajustarCuerpoVR(dt) {
   if (!cuerpo?.obj) return;
-  const on = R.xr.isPresenting && vrCuerpoVisible && !terceraPersona() && !vrCamara && !camLibre.activa;
-  if (on || cuerpo.sinBrazos) {
-    for (const n of HUESOS_SIN_VER) {
-      const h = (cuerpo.hVR ||= {})[n] ||= cuerpo.obj.getObjectByName(n);
-      if (h) h.scale.setScalar(on ? .001 : 1);
-    }
-    cuerpo.sinBrazos = on;
+  torsoVR(cuerpo, true);
+  if (!cuerpoVRActivo()) {
+    rumboCuerpoVR = caderaVR = null;
+    cuerpoVRAtras = false;
+    return;
   }
-  if (!on) return;
-  const p = new THREE.Vector3, d = new THREE.Vector3;
+  const C = cuerpo, o = C.obj;
   cam.updateWorldMatrix(true, false);
-  cam.getWorldPosition(p);
-  cam.getWorldDirection(d);
-  const y = Math.atan2(-d.x, -d.z);
-  cuerpo.obj.position.x = p.x + Math.sin(y) * .12;
-  cuerpo.obj.position.z = p.z + Math.cos(y) * .12;
-  cuerpo.obj.rotation.y = y + Math.PI;
+  cam.getWorldPosition(_vCam);
+  const cabeza = yawCabezaVR();
+  if (rumboCuerpoVR == null) rumboCuerpoVR = cabeza;
+  let meta = rumboCuerpoVR, vel = 4;
+  cuerpoVRAtras = false;
+  if (velVR.v >= .3) {
+    const mov = Math.atan2(-velVR.x, -velVR.z);
+    cuerpoVRAtras = Math.abs(dif(mov, cabeza)) > 2;
+    meta = cuerpoVRAtras ? mov + Math.PI : mov;
+    vel = 8;
+  } else {
+    const r = dif(cabeza, rumboCuerpoVR), tope = reptando ? 1.2 : .87;
+    if (Math.abs(r) > tope) meta = cabeza - Math.sign(r) * tope; else if (!reptando && Math.abs(r) > .15) {
+      meta = cabeza;
+      vel = .35;
+    }
+  }
+  const paso = dif(meta, rumboCuerpoVR), maxPaso = vel * dt;
+  rumboCuerpoVR += Math.max(-maxPaso, Math.min(maxPaso, paso));
+  const h = C.hCaderaVR ||= o.getObjectByName("hueso_0");
+  o.updateMatrixWorld(true);
+  _vCu.setFromMatrixPosition(h.matrixWorld).applyMatrix4(_mCu.copy(o.matrixWorld).invert());
+  if (!caderaVR) caderaVR = {
+    x: _vCu.x,
+    y: _vCu.y,
+    z: _vCu.z
+  };
+  const f = Math.min(1, dt * 12);
+  caderaVR.x += (_vCu.x - caderaVR.x) * f;
+  caderaVR.y += (_vCu.y - caderaVR.y) * f;
+  caderaVR.z += (_vCu.z - caderaVR.z) * f;
+  detrasVR += ((reptando ? CADERA_DETRAS_TIERRA : CADERA_DETRAS) - detrasVR) * Math.min(1, dt * 4);
+  const giro = rumboCuerpoVR + Math.PI, c = Math.cos(giro), s = Math.sin(giro);
+  const piso = o.position.y;
+  o.rotation.y = giro;
+  o.position.x = _vCam.x - (caderaVR.x * c + caderaVR.z * s) + Math.sin(rumboCuerpoVR) * detrasVR;
+  o.position.z = _vCam.z - (-caderaVR.x * s + caderaVR.z * c) + Math.cos(rumboCuerpoVR) * detrasVR;
+  o.position.y = piso + Math.min(0, _vCam.y - CADERA_DEBAJO - (piso + caderaVR.y));
 }
 
 const _manoAnt = [ new THREE.Vector3, new THREE.Vector3 ];
@@ -6275,6 +6344,11 @@ function retrucoMantis() {
 }
 
 const ES_RETRUCO = /^es/i.test(navigator.language || "");
+
+const pistaMeryl = new PistaMeryl({
+  progreso: () => guion.vars.get("$w:G000a"),
+  mostrar: () => aviso(ES_RETRUCO ? "CAMPBELL: La frecuencia de Meryl es 140.15." : "CAMPBELL: Meryl's frequency is 140.15.", 6e3)
+});
 
 const PISTAS_RETRUCO = {
   casco: [ "CAMPBELL: ¡Cruzá los controles, Snake!", "CAMPBELL: Cross your controllers, Snake!" ],
@@ -6884,6 +6958,7 @@ R.setAnimationLoop(() => {
       armas.update(dt);
       armas.actualizarFijado(camApuntar());
       actualizarStealth();
+      pistaMeryl.cuadro(dtReal, !enPausa() && !codec.abierto && !enDemo && !demo.ocupada);
       if (!enPausa() && !codec.abierto) retruco.cuadro(dtReal, {
         xr: R.xr.isPresenting ? {
           cuadro: R.xr.getFrame?.(),
@@ -7529,6 +7604,8 @@ Object.defineProperty(window.__mgs, "enVR", {
 window.__mgs.paneles = paneles;
 
 window.__mgs.extrasVR = {
+  ventanaMira: ventanaMira,
+  pistaMeryl: pistaMeryl,
   retrucoMantis: retrucoMantis,
   peleaMantis: peleaMantis,
   puerto2Activo: puerto2Activo,

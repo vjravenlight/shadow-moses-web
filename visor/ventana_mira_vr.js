@@ -13,7 +13,7 @@ export class VentanaMiraVR {
       color: 16777215,
       depthTest: false,
       depthWrite: false,
-      toneMapped: false
+      toneMapped: true
     });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(4, 3), this.mat);
     this.mesh.geometry.scale(1.2, 1.2, 1);
@@ -36,7 +36,7 @@ export class VentanaMiraVR {
   }
   conectar(paneles) {
     if (!paneles?.agregar || paneles.panel?.("ventana_mira")) return null;
-    return paneles.agregar({
+    const p = paneles.agregar({
       id: "ventana_mira",
       tipo: "visera",
       prio: 1,
@@ -47,6 +47,9 @@ export class VentanaMiraVR {
       },
       visible: () => !!this.e
     });
+    this.mat.toneMapped = true;
+    this.mat.needsUpdate = true;
+    return p;
   }
   poner(e) {
     this.e = e;
