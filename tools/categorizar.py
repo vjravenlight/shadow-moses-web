@@ -12,6 +12,7 @@ _DK = [sys.argv[sys.argv.index('--solo') + 1]] if '--solo' in sys.argv else [dk 
 inv = [(st, rg, fn, sz, dk) for dk in _DK for st, rg, fn, sz in json.load(open(os.path.join(EXTRAIDO, dk, '01_stages', '_inventario.json')))]
 CAT = {'kmd': '01_modelos_3d', 'zmd': '01_modelos_3d', 'oar': '02_animaciones', 'hzm': '03_mapas_colision', 'lit': '04_luces', 'pcx': '05_texturas', 'gcx': '06_scripts', 'bin': '07_codigo_overlay', 'wvx': '08_audio/samples', 'mdx': '08_audio/musica', 'efx': '08_audio/efectos', 'sgt': '09_otros/sgt', 'img': '09_otros/img', 'rar': '09_otros/rar', 'crv': '09_otros/crv', 'nar': '09_otros/nar'}
 OUT = os.path.join(EXTRAIDO, sys.argv[sys.argv.index('--salida') + 1] if '--salida' in sys.argv else '02_por_tipo').replace(os.sep, '/')
+shutil.rmtree(OUT, ignore_errors=True)
 seen = {}
 donde = collections.defaultdict(list)
 discos = collections.defaultdict(set)

@@ -19,6 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## What's new
 
+- **v2.2:** the Linux and Mac package is here, not yet tested on a real Linux box or Mac. Installing with one disc and adding the second later no longer cuts the model catalog. On the headset, punches, walking and the radar follow your head even when the world is rotated.
 - **v2.1:** on the headset, the Stinger now locks on in first person: it never did before, so the Hind couldn't be beaten that way. The sight also marks the Hind and REX. With the game camera and △, the missile leaves where you look.
 - **v2.0:** sight window on the headset: the PSG1 and the binoculars now zoom, and you can look from inside the Nikita missile.
 - **v1.9:** on the headset you can now endure the torture with the controllers: the buttons used to do nothing and the story stopped there. In body mode, the legs run with Snake's animation.
@@ -31,7 +32,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v2.1.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v2.2.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and
@@ -39,6 +40,13 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 Next times: the **Metal Gear Solid web** shortcut on the Desktop (or `JUGAR.cmd`). The black window is the server: keep
 it open while playing. It only serves your PC.
+
+### Linux and Mac
+
+Download the zip ending in `_Linux_Mac.zip`, unzip it and run `sh instalar.sh` in a terminal. After that, `sh jugar.sh`.
+It uses what you have installed: Python 3.10 or newer, Node.js 18 or newer and FFmpeg with libx264. If something is
+missing, the installer tells you which command to run. **It was tested by simulating Linux on a Windows PC, not yet on a
+real Linux box or Mac:** if you try it, please tell us in an issue how it went.
 
 ## `TX-02` REQUIRED EQUIPMENT
 

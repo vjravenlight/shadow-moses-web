@@ -4,7 +4,7 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def arg(k, d=None):
     return sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
-VERSION = arg('--version', '2.1')
+VERSION = arg('--version', '2.2')
 NODE = arg('--node', 'C:\\Program Files\\nodejs\\node.exe')
 PYTHON = arg('--python', 'C:\\Python313')
 SITE = arg('--site', os.path.join(os.environ.get('APPDATA', ''), 'Python', 'Python313', 'site-packages'))
@@ -12,7 +12,7 @@ FFMPEG = arg('--ffmpeg', os.path.join(os.environ.get('LOCALAPPDATA', ''), 'JDown
 SALIDA = os.path.abspath(arg('--salida', os.path.join(RAIZ, '_release', 'MGSweb')))
 PUERTO = 8123
 TOOLS = ['archivo_celular', 'actores_export', 'anims', 'camaras_export', 'caras_ps1', 'categorizar', 'cielo', 'codec_niveles', 'codec_voces', 'codec_web', 'convertir', 'creditos_export', 'demo_dat', 'demos_cadenas', 'demos_export', 'disco', 'export_glb', 'exportar_todo', 'face_dat', 'fuente_web', 'gcl_vm', 'gcx', 'guion_disco2', 'guion_vivo', 'hud_extra', 'hud_indices', 'hzm', 'iconos_inventario', 'jeep19a_export', 'jeep_export', 'jefes_export', 'kmd2obj', 'liquid_export', 'ninja_export', 'niveles', 'oar', 'paddemo_export', 'paredes_rompibles', 'partida_items', 'pcx_mgs', 'personajes_export', 'pisos_atr', 'presets_historia', 'preshade', 'puertas_tarjeta', 'radio_dat', 'rango_export', 'rex_export', 'rpk', 'rutas', 'sgt_export', 'sonido', 'stage_extract', 'sueltos_export', 'tablas_ref', 'telops_nitidos', 'titulo_export', 'trampas_13', 'videos_export', 'voces_disco2', 'vox', 'vr_camaras', 'vr_export', 'vr_fondo', 'vr_menu', 'wolf_export', 'zako_export']
-TOOLS_DATOS = ['names.txt', 'tablas_ref.json', 'telops_textos.json', 'sueltos.json', 'servidor.mjs']
+TOOLS_DATOS = ['names.txt', 'tablas_ref.json', 'telops_textos.json', 'sueltos.json', 'servidor.mjs', 'unix_sitecustomize.py', 'unix_scripts.py']
 VISOR_FUERA = ['assets', '_*', 'prueba_*', 'log.php', '.htaccess', 'LEEME.md', 'juego_v1.js']
 ASSETS_PROPIOS = ['icono_192.png', 'icono_512.png', 'xr', 'hud/icono_socom.png', 'hud/icono_socom_sil.png', 'hud/icono_famas.png', 'hud/icono_caja.png']
 PY_FUERA = ['test', 'tests', 'idlelib', 'tkinter', 'turtledemo', 'ensurepip', 'site-packages', '__pycache__', 'lib2to3', 'pydoc_data', 'venv', 'unittest', 'turtle.py', '_test*', '_tkinter*', 'tcl*', 'tk*', 'sqlite3*', '_sqlite3*', '*.pdb', '*.lib', '*.ico', 'python_lib.cat', 'pythonw.exe']
@@ -51,10 +51,8 @@ CASCO = '@echo off\nchcp 65001 >nul\ntitle MGS web - casco por USB (Meta Quest /
 LEEME = '==================================================================\n [ CODEC ]   FREQ 140.85                     PTT  ##############\n==================================================================\n\n      S  H  A  D  O  W     M  O  S  E  S     ::     W  E  B\n\n Shadow Moses en el navegador / in your browser\n https://mgs.ravenlight.net/\n------------------------------------------------------------------\nProyecto de fans, sin fines de lucro. Metal Gear Solid es una marca de Konami; este proyecto no tiene relación con Konami.\nEste paquete NO trae ningún archivo del juego: usa TUS discos de Metal Gear Solid (PlayStation, versión USA).\n\n[TX-01] OPERACIÓN: INSTALAR (3 pasos)\n1. Descomprimí esta carpeta donde quieras (hacen falta unos 3 GB libres).\n2. Doble clic en INSTALAR.cmd y elegí tus discos: el .cue (o el .bin) del disco 1 y del disco 2.\n   Convierte todo en tu PC (de 5 a 8 minutos). Si se corta, abrí INSTALAR.cmd de nuevo y sigue.\n   Sin el disco 2 se juega hasta el cambio de disco.\n3. Se abre el navegador y listo. Las próximas veces: el acceso directo "Metal Gear Solid web" del Escritorio (o JUGAR.cmd).\n   La ventana negra es el servidor: dejala abierta mientras jugás. Solo atiende a esta PC.\n\n[TX-02] CASCO VR (Meta Quest / Pico)\n- Desde la PC: con Quest Link, Air Link o Virtual Desktop, abrí http://127.0.0.1:8123/ en Chrome o Edge.\n- Con el navegador del casco y el cable USB: corré CASCO_USB.cmd (necesita adb, ahí te dice cómo conseguirlo).\n\n[TX-03] CELULAR U OTRA PC, POR WIFI\nAbrí JUGAR_EN_RED.cmd en la PC y entrá desde el otro aparato a la dirección que te muestra (la PC tiene que quedar prendida\ny en la misma red). La primera vez el navegador avisa que la conexión no es privada, porque el certificado lo crea tu propia\nPC: tocá "Avanzado" y "Continuar". Mientras esa ventana esté abierta, cualquiera en esa red puede entrar: usalo en tu casa,\nno en un wifi público.\n\n[TX-04] APP DE CELULAR (ANDROID)\n1. Instalá el juego en la PC con INSTALAR.cmd y hacé doble clic en ARMAR_ARCHIVO_CELULAR.cmd: arma MGSweb_datos.mgs (cerca de 1 GB).\n2. Bajá ShadowMoses_celular.apk de https://github.com/vjravenlight/shadow-moses-web/releases/latest e instalala en el celular\n   (Android te va a pedir permiso para instalar apps de fuera de la tienda).\n3. Copiá MGSweb_datos.mgs al celular (por ejemplo, a Descargas), abrí la app y elegilo. Después no hace falta la PC ni internet.\n\n[TX-01] OPERATION: INSTALL (3 steps)\n1. Unzip this folder anywhere (about 3 GB free space needed).\n2. Double-click INSTALAR.cmd and choose your discs: the .cue (or .bin) of disc 1 and disc 2 (USA version).\n   Everything is converted on your PC (5 to 8 minutes). If it stops, open INSTALAR.cmd again to resume.\n   Without disc 2 you can play up to the disc change.\n3. Your browser opens. Next times: the "Metal Gear Solid web" shortcut on the Desktop (or JUGAR.cmd).\n   Keep the black server window open while playing. It only serves this PC.\nVR: Quest Link / Air Link / Virtual Desktop with Chrome or Edge on the PC, or CASCO_USB.cmd for the headset browser over USB.\nPhone or another PC over wifi: open JUGAR_EN_RED.cmd on the PC and go to the address it shows, from the same network. The\nfirst time, the browser warns that the connection is not private, because your own PC makes the certificate: tap "Advanced"\nand "Proceed". While that window is open, anyone on that network can get in: use it at home, not on public wifi.\n\nAndroid phone app: run ARMAR_ARCHIVO_CELULAR.cmd on the PC, install ShadowMoses_celular.apk from the Releases page, copy\nMGSweb_datos.mgs to the phone and choose it in the app. After that it needs neither the PC nor the internet.\n\nIncluye / Includes: Node.js, Python (con numpy y Pillow) y FFmpeg, con sus licencias en runtime/ y node/.\nFFmpeg es software libre (GPL v3). Su código fuente / Source code: https://ffmpeg.org/download.html#get-sources\n(compilación "essentials" de https://www.gyan.dev/ffmpeg/builds/ ; detalle en runtime/ffmpeg/CODIGO_FUENTE.txt).\nLos nombres de funciones y tablas del conversor (tools/names.txt, tools/tablas_ref.json) salen del proyecto de la\ncomunidad FoxdieTeam/mgs_reversing: https://github.com/FoxdieTeam/mgs_reversing\n\nFeniXVOID · Project Ravenlight\n'
 FFMPEG_FUENTE = 'FFmpeg — licencia y código fuente / license and source code\n==========================================================\nffmpeg.exe es la compilación "essentials" de gyan.dev (https://www.gyan.dev/ffmpeg/builds/), con licencia GPL v3\n(ver LICENSE.txt). No se modificó.\nffmpeg.exe is the gyan.dev "essentials" build, licensed GPL v3 (see LICENSE.txt). It was not modified.\n\nCódigo fuente / Source code:\n- FFmpeg: https://ffmpeg.org/download.html#get-sources  (git: https://git.ffmpeg.org/ffmpeg.git)\n- La compilación y sus bibliotecas / The build and its libraries: https://www.gyan.dev/ffmpeg/builds/\nVersión / Version: ver README.txt o correr / see README.txt or run: ffmpeg -version\n'
 
-def armar():
-    if os.path.exists(SALIDA):
-        shutil.rmtree(SALIDA)
-    app = os.path.join(SALIDA, 'app')
+def copiar_app(salida):
+    app = os.path.join(salida, 'app')
     copiar_arbol(os.path.join(RAIZ, 'visor'), os.path.join(app, 'visor'), VISOR_FUERA)
     for x in ASSETS_PROPIOS:
         o = os.path.join(RAIZ, 'visor', 'assets', x)
@@ -75,6 +73,12 @@ def armar():
     for t in TOOLS_DATOS:
         if os.path.exists(os.path.join(RAIZ, 'tools', t)):
             shutil.copy2(os.path.join(RAIZ, 'tools', t), os.path.join(app, 'tools', t))
+    return app
+
+def armar():
+    if os.path.exists(SALIDA):
+        shutil.rmtree(SALIDA)
+    app = copiar_app(SALIDA)
     py = os.path.join(SALIDA, 'runtime', 'python')
     copiar_arbol(PYTHON, py, PY_FUERA + ['Doc', 'Scripts', 'include', 'libs', 'NEWS.txt'])
     sp = os.path.join(py, 'Lib', 'site-packages')
@@ -125,6 +129,38 @@ def armar():
                     z.write(p, os.path.join('MGSweb', os.path.relpath(p, SALIDA)))
         print('Zip: %s (%.0f MB)' % (zipruta, os.path.getsize(zipruta) / 1048576))
 
+def armar_unix():
+    sys.path.insert(0, os.path.join(RAIZ, 'tools'))
+    import unix_scripts as U
+    sal = SALIDA + '_Linux_Mac'
+    if os.path.exists(sal):
+        shutil.rmtree(sal)
+    app = copiar_app(sal)
+    os.makedirs(os.path.join(app, 'tools', 'unix'))
+    shutil.move(os.path.join(app, 'tools', 'unix_sitecustomize.py'), os.path.join(app, 'tools', 'unix', 'sitecustomize.py'))
+    os.remove(os.path.join(app, 'tools', 'unix_scripts.py'))
+
+    def poner(nombre, texto):
+        with open(os.path.join(sal, nombre), 'w', encoding='utf-8', newline='\n') as f:
+            f.write(texto)
+    for n, t in U.SCRIPTS.items():
+        poner(n, t)
+    poner(os.path.join('app', 'unix_comun.sh'), U.COMUN)
+    poner('LEEME.txt', U.LEEME)
+    print('Listo: %s (%.0f MB)' % (sal, tam(sal) / 1048576))
+    if '--sin-zip' not in sys.argv:
+        zipruta = os.path.join(os.path.dirname(sal), 'MGSweb_v%s_Linux_Mac.zip' % VERSION)
+        with zipfile.ZipFile(zipruta, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+            for raiz, _, archivos in os.walk(sal):
+                for a in archivos:
+                    p = os.path.join(raiz, a)
+                    i = zipfile.ZipInfo.from_file(p, os.path.join('MGSweb', os.path.relpath(p, sal)))
+                    i.create_system = 3
+                    i.external_attr = (33261 if a.endswith('.sh') else 33188) << 16
+                    i.compress_type = zipfile.ZIP_DEFLATED
+                    z.writestr(i, open(p, 'rb').read(), compresslevel=9)
+        print('Zip: %s (%.0f MB)' % (zipruta, os.path.getsize(zipruta) / 1048576))
+
 def solo_cmd():
     escribir('INSTALAR.cmd', INSTALAR)
     escribir('JUGAR.cmd', JUGAR)
@@ -134,4 +170,9 @@ def solo_cmd():
     escribir('LEEME.txt', LEEME)
     print('cmd reescritos en', SALIDA)
 if __name__ == '__main__':
-    solo_cmd() if '--solo-cmd' in sys.argv else armar()
+    if '--unix' in sys.argv:
+        armar_unix()
+    elif '--solo-cmd' in sys.argv:
+        solo_cmd()
+    else:
+        armar()

@@ -819,8 +819,12 @@ const camaraJuegoActiva = () => vista === "arriba" && (!R.xr.isPresenting || vrM
 
 const _dirCab = new THREE.Vector3;
 
+const _mCabeza = new THREE.Matrix4;
+
+const dirCabezaVR = d => d.set(0, 0, -1).transformDirection(_mCabeza);
+
 const yawCabezaVR = () => {
-  R.xr.getCamera().getWorldDirection(_dirCab);
+  dirCabezaVR(_dirCab);
   return Math.atan2(-_dirCab.x, -_dirCab.z);
 };
 
@@ -2754,11 +2758,7 @@ let botonesGuion = 0;
 function snakeGuion(consumir = true) {
   const pp = !terceraPersona();
   let yawG = pp ? yaw : rumbo;
-  if (R.xr.isPresenting && pp) {
-    const d = new THREE.Vector3;
-    R.xr.getCamera().getWorldDirection(d);
-    yawG = Math.atan2(-d.x, -d.z);
-  } else if (R.xr.isPresenting && pared?.n) yawG = Math.atan2(pared.n.x, pared.n.z);
+  if (R.xr.isPresenting && pp) yawG = yawCabezaVR(); else if (R.xr.isPresenting && pared?.n) yawG = Math.atan2(pared.n.x, pared.n.z);
   _snG.pos = rig.position;
   _snG.dir = dirDesdeYaw(yawG);
   _snG.primeraPersona = pp;
@@ -3713,7 +3713,7 @@ async function cargarNivel(nv, entrada = null) {
     },
     enPantalla: p => enPantalla(p),
     postura: () => reptando ? 2 : agachado ? 1 : 0,
-    yawSnake: () => R.xr.isPresenting ? yawCabezaVR() : terceraPersona() ? rumbo : yaw,
+    yawSnake: () => terceraPersona() ? rumbo : R.xr.isPresenting ? yawCabezaVR() : yaw,
     dificultad: () => dificultad,
     balaVisual: (o, d) => balaVisual(o, d),
     vibrar: n => ctl.vibrarCuadros(n, {
@@ -5045,8 +5045,7 @@ function mover(dt) {
         if (vuelo && Math.abs(y) > Math.max(.3, Q.zonaMuerta)) up -= y;
       }
     }
-    const d = new THREE.Vector3;
-    R.xr.getCamera().getWorldDirection(d);
+    const d = dirCabezaVR(new THREE.Vector3);
     dirYaw = Math.atan2(-d.x, -d.z);
     dirPitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
     if (ctl.quest.dir === "control") {
@@ -5433,7 +5432,8 @@ function golpearPared() {
   }
   tGolpe = 34 / 30;
   tApunta = 0;
-  const fr = terceraPersona() ? new THREE.Vector3(-Math.sin(rumbo), 0, -Math.cos(rumbo)) : new THREE.Vector3(-Math.sin(yaw), 0, -Math.cos(yaw));
+  const yawG = R.xr.isPresenting ? yawCabezaVR() : yaw;
+  const fr = terceraPersona() ? new THREE.Vector3(-Math.sin(rumbo), 0, -Math.cos(rumbo)) : new THREE.Vector3(-Math.sin(yawG), 0, -Math.cos(yawG));
   if (juego && juego.golpear(rig.position.clone(), fr)) return;
   const o = rig.position.clone();
   o.y += 1;
@@ -6820,11 +6820,16 @@ R.setAnimationLoop(() => {
   mover(vrCamara ? Math.min(dtReal, .1) : codec.padTrabado || din?.bloqueaControl ? 0 : dt);
   actualizarCamara(dt);
   if (audioMGS.espacial) {
-    const c = R.xr.isPresenting ? R.xr.getCamera() : cam, q = new THREE.Quaternion;
-    c.getWorldPosition(_oido);
-    c.getWorldDirection(_mira);
-    c.getWorldQuaternion(q);
-    audioMGS.oyente(_oido, _mira, new THREE.Vector3(0, 1, 0).applyQuaternion(q));
+    if (R.xr.isPresenting) {
+      _oido.setFromMatrixPosition(_mCabeza);
+      audioMGS.oyente(_oido, dirCabezaVR(_mira), new THREE.Vector3(0, 1, 0).transformDirection(_mCabeza));
+    } else {
+      const q = new THREE.Quaternion;
+      cam.getWorldPosition(_oido);
+      cam.getWorldDirection(_mira);
+      cam.getWorldQuaternion(q);
+      audioMGS.oyente(_oido, _mira, new THREE.Vector3(0, 1, 0).applyQuaternion(q));
+    }
   }
   if ($("#museo-girar").checked) for (const g of giran) g.rotation.y += dt * .4;
   if (modo === "museo") museoVR.actualizar(dtReal, R);
@@ -6862,11 +6867,7 @@ R.setAnimationLoop(() => {
   }
   if (juego && modo === "escenarios") {
     let ry = yaw;
-    if (R.xr.isPresenting) {
-      const d = new THREE.Vector3;
-      R.xr.getCamera().getWorldDirection(d);
-      ry = Math.atan2(-d.x, -d.z);
-    }
+    if (R.xr.isPresenting) ry = yawCabezaVR();
     if (misionesVR.ocultaHud) hud.ctx?.clearRect(0, 0, hud.cv.width, hud.cv.height); else hud.dibujar({
       modo: juego.modo,
       tiempo: juego.tiempo,
@@ -6935,6 +6936,7 @@ R.setAnimationLoop(() => {
     }
   }
   paneles.dibujar(R, cam);
+  if (R.xr.isPresenting) _mCabeza.copy(R.xr.getCamera().matrixWorld);
 });
 
 addEventListener("resize", () => {

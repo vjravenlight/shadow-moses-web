@@ -19,6 +19,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## Novedades
 
+- **v2.2:** llega el paquete para Linux y Mac, todavía sin probar en un Linux ni en una Mac de verdad. Instalar con un disco y sumar el segundo después ya no recorta el catálogo de modelos. En el casco, los golpes, la marcha y el radar siguen a tu cabeza aunque el mundo esté girado.
 - **v2.1:** en el casco, la Stinger ya fija en primera persona: antes nunca lo hacía y al Hind no se le podía ganar así. La mira marca también al Hind y a REX. Con la cámara del juego y △, el misil sale hacia donde mirás.
 - **v2.0:** ventana de mira en el casco: el PSG1 y los binoculares ahora tienen zoom, y la Nikita se ve desde adentro del misil.
 - **v1.9:** en el casco ya se puede aguantar la tortura con los controles: antes los botones no respondían y se cortaba la historia. En el modo con cuerpo, las piernas corren con la animación de Snake.
@@ -31,7 +32,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v2.1.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v2.2.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
@@ -39,6 +40,13 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 Las próximas veces: el acceso directo **Metal Gear Solid web** del Escritorio (o `JUGAR.cmd`). La ventana negra es el
 servidor: dejala abierta mientras jugás. Solo atiende a tu PC.
+
+### Linux y Mac
+
+Bajá el zip que termina en `_Linux_Mac.zip`, descomprimilo y corré `sh instalar.sh` en una terminal. Después, `sh jugar.sh`.
+Usa lo que tengas instalado: Python 3.10 o más nuevo, Node.js 18 o más nuevo y FFmpeg con libx264. Si falta algo, el
+instalador te dice qué comando correr. **Se probó simulando Linux en una PC con Windows, todavía no en un Linux ni en una
+Mac de verdad:** si lo probás, contanos en un issue cómo te fue.
 
 ## `TX-02` EQUIPO NECESARIO
 
