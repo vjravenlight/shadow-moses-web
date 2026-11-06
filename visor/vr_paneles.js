@@ -81,6 +81,8 @@ export const MAPA_XR = {
 
 const PALANCA_ON = .6, PALANCA_OFF = .35;
 
+const MOVER_RAYO = 5;
+
 const SALTEA_CINE = new Set([ "circulo", "cruz", "start", "triangulo", "cuadrado" ]);
 
 const A_TITULO = {
@@ -714,6 +716,17 @@ export class VRPaneles {
       try {
         const r = e.accion?.();
         r?.catch?.(err => console.warn("vr_paneles: menú", err));
+      } catch (err) {
+        console.warn("vr_paneles: menú", err);
+      }
+      M.ver++;
+      return;
+    }
+    const volver = n === "cruz" && M.entradas.find(q => q.volver);
+    if (volver) {
+      d?.se?.(33);
+      try {
+        volver.accion?.();
       } catch (err) {
         console.warn("vr_paneles: menú", err);
       }
@@ -1590,9 +1603,13 @@ export class VRPaneles {
     }
     const g = this._golpes[this.manoActiva];
     if (g?.p.entrada.apuntar) {
-      const k = `${g.p.id}|${Math.floor(g.x)}|${Math.floor(g.y)}`;
-      if (k !== this._apuntado) {
-        this._apuntado = k;
+      const a = this._apuntado;
+      if (!a || a.id !== g.p.id || Math.hypot(g.x - a.x, g.y - a.y) >= MOVER_RAYO) {
+        this._apuntado = {
+          id: g.p.id,
+          x: g.x,
+          y: g.y
+        };
         g.p.entrada.apuntar(g.x, g.y);
       }
     } else this._apuntado = null;
@@ -1632,6 +1649,13 @@ export class VRPaneles {
     this._ant = ahora;
   }
   _ruta(n, abajo, lado) {
+    if (abajo && this._apuntado && (n === "arriba" || n === "abajo" || n === "izq" || n === "der")) {
+      const g = this._golpes[this.manoActiva];
+      if (g) {
+        this._apuntado.x = g.x;
+        this._apuntado.y = g.y;
+      }
+    }
     let dest;
     if (!abajo && this._receptor[n]) {
       dest = this._receptor[n];

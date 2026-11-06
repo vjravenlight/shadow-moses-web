@@ -1284,15 +1284,17 @@ radarTex.magFilter = radarTex.minFilter = THREE.NearestFilter;
 
 radarTex.generateMipmaps = false;
 
-{
-  const grip = R.xr.getControllerGrip(0);
-  const pantalla = new THREE.Mesh(new THREE.PlaneGeometry(.126, .07), new THREE.MeshBasicMaterial({
-    map: radarTex
-  }));
-  pantalla.position.set(0, .035, .02);
-  pantalla.rotation.x = -Math.PI / 2.6;
-  grip.add(pantalla);
-}
+const radarMuñeca = new THREE.Mesh(new THREE.PlaneGeometry(.126, .07), new THREE.MeshBasicMaterial({
+  map: radarTex
+}));
+
+radarMuñeca.position.set(0, .035, .02);
+
+radarMuñeca.rotation.x = -Math.PI / 2.6;
+
+radarMuñeca.visible = false;
+
+R.xr.getControllerGrip(0).add(radarMuñeca);
 
 if (TACTIL) {
   try {
@@ -1604,9 +1606,12 @@ async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
       R.setPixelRatio(escala);
       R.setSize(innerWidth, innerHeight);
     }
-    if (luzOriginal !== luzAntes && modo !== "escenarios") {
-      luzOriginal = luzAntes;
-      aplicarLuz();
+    {
+      const quiero = modo === "escenarios" ? !luzModernaNivel : luzAntes;
+      if (luzOriginal !== quiero) {
+        luzOriginal = quiero;
+        aplicarLuz();
+      }
     }
     enDemo = false;
     reloj.getDelta();
@@ -1615,6 +1620,23 @@ async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
 }
 
 let luzOriginal = false;
+
+let luzModernaNivel = false;
+
+try {
+  luzModernaNivel = localStorage.getItem("sm_luz") === "moderna";
+} catch {}
+
+function alternarLuz() {
+  luzOriginal = !luzOriginal;
+  if (modo === "escenarios" && !misionesVR.activo) {
+    luzModernaNivel = !luzOriginal;
+    try {
+      localStorage.setItem("sm_luz", luzModernaNivel ? "moderna" : "original");
+    } catch {}
+  }
+  aplicarLuz();
+}
 
 function aplicarLuz(root = scene) {
   root.traverse(o => {
@@ -1638,10 +1660,7 @@ texturasPixel.alCambiar(() => {
   aviso("Texturas " + (texturasPixel.pixel ? "pixeladas (como la PS1)" : "suavizadas"));
 });
 
-$("#opt-luz").onclick = () => {
-  luzOriginal = !luzOriginal;
-  aplicarLuz();
-};
+$("#opt-luz").onclick = () => alternarLuz();
 
 const rotular = () => {
   $("#opt-sombras").textContent = "Sombras: " + (conSombras ? "sí" : "no");
@@ -2739,7 +2758,7 @@ async function cargarEscenario2(id, entrada = null) {
   if ($("#esc-sel").value !== id) $("#esc-sel").value = id;
   marcarEscenario();
   limpiar();
-  luzOriginal = true;
+  luzOriginal = !luzModernaNivel;
   aplicarLuz();
   scene.background = new THREE.Color(329738);
   $("#capas").innerHTML = "";
@@ -4567,10 +4586,7 @@ addEventListener("keydown", e => {
     e.preventDefault();
     interfaz.alternarMenu();
   }
-  if (e.code === "KeyL") {
-    luzOriginal = !luzOriginal;
-    aplicarLuz();
-  }
+  if (e.code === "KeyL") alternarLuz();
   if (e.code === "KeyP") texturasPixel.alternar();
   if (e.code === "KeyF") alternarVuelo();
   if (e.code === "Space" && enSuelo && !vuelo && saltoPermitido()) vy = velSalto();
@@ -6199,7 +6215,7 @@ const AJUSTES_FABRICA = {
   cruce: 2,
   campbell: 1,
   golpe: 2.4,
-  cuerpo: .12,
+  cuerpo: .3,
   mira: 1
 };
 
@@ -6245,7 +6261,7 @@ function menuAjustesVR(volver) {
     1.6: "SUAVE",
     2.4: "NORMAL",
     3.2: "FUERTE"
-  }[AJ.golpe] ?? AJ.golpe}`, d => ponerAjuste("golpe", paso([ 1.6, 2.4, 3.2 ], AJ.golpe, d))), op(() => `CUERPO VISIBLE, HACIA ATRAS: ${Math.round(AJ.cuerpo * 100)} CM`, d => ponerAjuste("cuerpo", paso([ 0, .06, .12, .2, .3 ], AJ.cuerpo, d))), op(() => `TAMANO DE LA VENTANA DE MIRA: ${Math.round(AJ.mira * 100)}%`, d => ponerAjuste("mira", paso([ .75, 1, 1.25, 1.5 ], AJ.mira, d))), {
+  }[AJ.golpe] ?? AJ.golpe}`, d => ponerAjuste("golpe", paso([ 1.6, 2.4, 3.2 ], AJ.golpe, d))), op(() => `CUERPO VISIBLE, HACIA ATRAS: ${Math.round(AJ.cuerpo * 100)} CM`, d => ponerAjuste("cuerpo", paso([ 0, .06, .12, .2, .3, .4 ], AJ.cuerpo, d))), op(() => `TAMANO DE LA VENTANA DE MIRA: ${Math.round(AJ.mira * 100)}%`, d => ponerAjuste("mira", paso([ .75, 1, 1.25, 1.5 ], AJ.mira, d))), {
     texto: "RESTAURAR AJUSTES",
     accion: () => {
       for (const [k, v] of Object.entries(AJUSTES_FABRICA)) ponerAjuste(k, v);
@@ -6349,7 +6365,8 @@ function ajustarCuerpoVR(dt) {
   o.rotation.y = giro;
   o.position.x = _vCam.x - (caderaVR.x * c + caderaVR.z * s) + Math.sin(rumboCuerpoVR) * detrasVR;
   o.position.z = _vCam.z - (-caderaVR.x * s + caderaVR.z * c) + Math.cos(rumboCuerpoVR) * detrasVR;
-  o.position.y = piso + Math.min(0, _vCam.y - CADERA_DEBAJO - (piso + caderaVR.y));
+  const debajo = agachado || reptando ? Math.max(.05, CADERA_DEBAJO - detrasVR) : CADERA_DEBAJO;
+  o.position.y = piso + Math.min(0, _vCam.y - debajo - (piso + caderaVR.y));
 }
 
 const _manoAnt = [ new THREE.Vector3, new THREE.Vector3 ];
@@ -6455,6 +6472,13 @@ const retruco = new RetrucoMantis({
 let vrRadarGira = leerLS("sm_vrradar", "1") === "1";
 
 const manoMov = () => ctl.quest.zurdo ? "right" : "left", manoArma = () => ctl.quest.zurdo ? "left" : "right";
+
+function actualizarRadarVR() {
+  radarMuñeca.visible = R.xr.isPresenting && !!juego && modo === "escenarios" && !misionesVR.ocultaHud;
+  if (!radarMuñeca.visible) return;
+  const g = [ 0, 1 ].map(i => R.xr.getControllerGrip(i)).find(c => c.userData.lado === manoMov());
+  if (g && radarMuñeca.parent !== g) g.add(radarMuñeca);
+}
 
 let zurdoAplicado = null;
 
@@ -6907,6 +6931,7 @@ R.setAnimationLoop(() => {
     miraArma.dibujar();
     antiparrasVR(R, ok ? inventario.filtro : null);
   }
+  actualizarRadarVR();
   paneles.update(dtReal);
   seguirTerceraVR(dtReal);
   if (titulo.visible) {
@@ -7304,6 +7329,7 @@ paneles.on("boton", (b, abajo) => {
   });
   const volverControles = {
     texto: "< VOLVER",
+    volver: true,
     accion: () => paneles.submenu(menuControlesVR()),
     cierra: false
   };
@@ -7340,7 +7366,7 @@ paneles.on("boton", (b, abajo) => {
         paneles.submenu(menuAjustesVR(volverControles));
       },
       cierra: false
-    }, opcion(() => "GIRO: " + (Q.giro === "suave" ? "SUAVE" : "POR SALTOS"), () => ctl.ponerQuest("giro", Q.giro === "suave" ? "saltos" : "suave")), opcion(() => Q.giro === "suave" ? `VELOCIDAD DEL GIRO: ${Q.velGiro} GRADOS/S` : `ANGULO DEL GIRO: ${Q.angulo} GRADOS`, d => Q.giro === "suave" ? ctl.ponerQuest("velGiro", ctl.pasoLista(ctl.VELOCIDADES_GIRO, Q.velGiro, d)) : ctl.ponerQuest("angulo", ctl.pasoLista(ctl.ANGULOS_GIRO, Q.angulo, d))), opcion(() => "ZONA MUERTA: " + pct(Q.zonaMuerta), d => ctl.ponerQuest("zonaMuerta", ctl.pasoLista(ctl.ZONAS_MUERTAS, Q.zonaMuerta, d))), opcion(() => "MANO HABIL: " + (Q.zurdo ? "ZURDO" : "DIESTRO"), () => ctl.ponerQuest("zurdo", !Q.zurdo)), opcion(() => "MANOS: " + (vrManosSnake ? "DE SNAKE" : "CONTROL"), () => {
+    }, opcion(() => "GIRO: " + (Q.giro === "suave" ? "SUAVE" : "POR SALTOS"), () => ctl.ponerQuest("giro", Q.giro === "suave" ? "saltos" : "suave")), opcion(() => Q.giro === "suave" ? `VELOCIDAD DEL GIRO: ${Q.velGiro} GRADOS/S` : `ANGULO DEL GIRO: ${Q.angulo} GRADOS`, d => Q.giro === "suave" ? ctl.ponerQuest("velGiro", ctl.pasoLista(ctl.VELOCIDADES_GIRO, Q.velGiro, d, true)) : ctl.ponerQuest("angulo", ctl.pasoLista(ctl.ANGULOS_GIRO, Q.angulo, d, true))), opcion(() => "ZONA MUERTA: " + pct(Q.zonaMuerta), d => ctl.ponerQuest("zonaMuerta", ctl.pasoLista(ctl.ZONAS_MUERTAS, Q.zonaMuerta, d, true))), opcion(() => "MANO HABIL: " + (Q.zurdo ? "ZURDO" : "DIESTRO"), () => ctl.ponerQuest("zurdo", !Q.zurdo)), opcion(() => "MANOS: " + (vrManosSnake ? "DE SNAKE" : "CONTROL"), () => {
       vrManosSnake = !vrManosSnake;
       guardarExtraVR("sm_vrmanos", vrManosSnake);
     }), opcion(() => "CUERPO VISIBLE: " + (vrCuerpoVisible ? "SI" : "NO"), () => {
@@ -7350,7 +7376,7 @@ paneles.on("boton", (b, abajo) => {
       vrGolpeMano = !vrGolpeMano;
       guardarExtraVR("sm_vrgolpe", vrGolpeMano);
     }), opcion(() => "MANDO: PUERTO " + (puerto2Activo() ? 2 : 1), () => ponerPuerto2(!puerto2Activo())), opcion(() => "MOVERSE HACIA: " + (Q.dir === "control" ? "EL CONTROL" : "LA MIRADA"), () => ctl.ponerQuest("dir", Q.dir === "control" ? "mirada" : "control")), opcion(() => "VIBRACION: " + (Q.vibra > 0 ? pct(Q.vibra) : "NO"), d => {
-      ctl.ponerQuest("vibra", ctl.pasoLista(ctl.VIBRAS_QUEST, Q.vibra, d));
+      ctl.ponerQuest("vibra", ctl.pasoLista(ctl.VIBRAS_QUEST, Q.vibra, d, true));
       ctl.vibrar("leve");
     }), {
       texto: "RESTAURAR POR DEFECTO",
@@ -7358,6 +7384,7 @@ paneles.on("boton", (b, abajo) => {
       cierra: false
     }, {
       texto: "< VOLVER",
+      volver: true,
       accion: () => {
         if (desdeTitulo) paneles.cerrarMenu(); else {
           paneles.cerrarMenu();
@@ -7406,9 +7433,11 @@ paneles.on("boton", (b, abajo) => {
         const i = Math.max(0, lista.indexOf(objVR));
         objVR = lista[(i + k + lista.length) % lista.length];
       };
+      const enMisiones = misionesVR.activo, menuMisiones = enMisiones && misionesVR.estado === "menu";
+      const enEscenario = modo === "escenarios" && !menuMisiones, hayJuego = !!juego && enEscenario;
       return [ {
         texto: "CONTINUAR"
-      }, {
+      }, enEscenario ? {
         texto: () => "CAMARA: " + {
           primera: "PRIMERA PERSONA",
           hombro: "TERCERA PERSONA",
@@ -7418,7 +7447,7 @@ paneles.on("boton", (b, abajo) => {
         der: () => cambiarVista(),
         accion: () => cambiarVista(),
         cierra: false
-      }, modo === "escenarios" && !partida && ops.length ? {
+      } : null, modo === "escenarios" && !enMisiones && !partida && ops.length ? {
         texto: () => "ESCENARIO " + nombreEsc(escVR),
         izq: () => moverEsc(-1),
         der: () => moverEsc(1),
@@ -7426,7 +7455,7 @@ paneles.on("boton", (b, abajo) => {
           S.value = escVR;
           S.dispatchEvent(new Event("change"));
         }
-      } : null, modo === "catalogo" && objVR ? {
+      } : null, modo === "catalogo" && !enMisiones && objVR ? {
         texto: () => "OBJETO " + nombreLindo(objVR.nombre),
         izq: () => moverObj(-1),
         der: () => moverObj(1),
@@ -7434,35 +7463,32 @@ paneles.on("boton", (b, abajo) => {
           selCat = objVR;
           verModelo(objVR);
         }
-      } : null, modo === "museo" ? {
+      } : null, modo === "museo" && !enMisiones ? {
         texto: () => "TODOS LOS PERSONAJES: " + ($("#museo-todos").checked ? "SI" : "NO"),
         accion: () => {
           $("#museo-todos").checked = !$("#museo-todos").checked;
           construirMuseo();
         }
-      } : null, {
+      } : null, !menuMisiones ? {
         texto: () => "LUZ: " + (luzOriginal ? "ORIGINAL" : "MODERNA"),
-        accion: () => {
-          luzOriginal = !luzOriginal;
-          aplicarLuz();
-        },
+        accion: () => alternarLuz(),
         cierra: false
-      }, {
+      } : null, !menuMisiones ? {
         texto: () => "TEXTURAS: " + (texturasPixel.pixel ? "PIXELADAS (ORIGINAL)" : "SUAVIZADAS"),
         accion: () => texturasPixel.alternar(),
         cierra: false
-      }, {
+      } : null, hayJuego ? {
         texto: () => "TODAS LAS ARMAS E ITEMS: " + (todoArmas ? "SI" : "NO"),
         accion: () => alternarTodo(),
         cierra: false
-      }, {
+      } : null, hayJuego ? {
         texto: () => "RADAR: " + (vrRadarGira ? "GIRA CONMIGO" : "NORTE ARRIBA"),
         accion: () => {
           vrRadarGira = !vrRadarGira;
           guardarVR();
         },
         cierra: false
-      }, {
+      } : null, {
         texto: () => "POSICION: " + (vrSentado ? "SENTADO" : "PARADO"),
         accion: () => {
           vrSentado = !vrSentado;
@@ -7474,10 +7500,10 @@ paneles.on("boton", (b, abajo) => {
         texto: "RECENTRAR ALTURA",
         accion: () => calibrarAltura(),
         cierra: false
-      }, {
+      }, hayJuego ? {
         texto: () => vrCamara ? "SALIR DEL MODO CAMARA" : "MODO CAMARA (VOLAR LIBRE)",
         accion: () => alternarCamaraVR()
-      }, {
+      } : null, {
         texto: () => "CINEMATICAS VR: " + (vrCineInmersivo ? "ADENTRO" : "PANTALLA"),
         accion: () => ponerVrCine(!vrCineInmersivo),
         cierra: false

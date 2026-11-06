@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 const ZONA_CRUCE = .05, T_CRUCE = 2, T_MANDO = 1.5;
 
+const MIRA_MINIMA = -.4;
+
 const FALLOS_PISTA = 6, T_REPITE_PISTA = 45;
 
 const FLECHAS = [ "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight" ], WASD = [ "KeyW", "KeyA", "KeyS", "KeyD" ];
@@ -16,6 +18,8 @@ export function controlesCruzados(cuadro, ref, fuentes) {
     if (!f.gripSpace || f.handedness !== "left" && f.handedness !== "right") continue;
     const p = cuadro.getPose(f.gripSpace, ref)?.transform.position;
     if (!p) continue;
+    const c = f.targetRaySpace && cuadro.getPose(f.targetRaySpace, ref)?.transform.matrix;
+    if (c && m[8] * c[8] + m[9] * c[9] + m[10] * c[10] < MIRA_MINIMA) continue;
     const lado = (p.x - o.x) * m[0] + (p.y - o.y) * m[1] + (p.z - o.z) * m[2];
     if (f.handedness === "left" && lado > ZONA_CRUCE) izq = true;
     if (f.handedness === "right" && lado < -ZONA_CRUCE) der = true;

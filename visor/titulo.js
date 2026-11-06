@@ -1428,10 +1428,11 @@ export class Titulo {
     this.terminar(this.entradas[this.sel], NIVELES[this.selNivel].valor);
   }
   filaDisponible(i) {
-    const c = FILAS[i].clave;
+    const c = FILAS[i].clave, enCasco = !!globalThis.__mgs?.enVR;
+    if (enCasco && (c === "filtro" || c === "vr" || c === "pantallaCompleta")) return false;
     if (c === "vr" || c === "vrcine") return this.hayVR;
     if (c === "pantallaCompleta") return !!document.documentElement.requestFullscreen;
-    if (c === "offline") return !!globalThis.mgsOffline && !globalThis.__mgs?.enVR;
+    if (c === "offline") return !!globalThis.mgsOffline && !enCasco;
     return true;
   }
   moverOpc(dir) {
@@ -1497,7 +1498,7 @@ export class Titulo {
     this.opc.vibra = leer("sm_vibra") !== "0";
     const enFila = p => {
       if (p.y >= Y_EXIT - 4 && p.y < Y_EXIT + 16 && p.x >= 110 && p.x < 210) return FILAS.length - 1;
-      const i = Math.floor((p.y - Y_FILAS + 7) / PASO_FILAS);
+      const i = Math.floor((p.y - Y_FILAS + 1) / PASO_FILAS);
       return i >= 0 && i < FILAS.length - 1 && p.x >= 16 && p.x < 312 ? i : -1;
     };
     const h = this._hover();
