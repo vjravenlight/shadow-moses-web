@@ -20,6 +20,19 @@ const COLORES = {
 
 const _v = new THREE.Vector3, _w = new THREE.Vector3;
 
+const CARTON = [ 52, 38, 22 ];
+
+function bordeDifuso(x, v, c, t = [ 0, 0, 0 ]) {
+  const N = 16, a0 = c[0][0] / 255, porLado = c[0][0] !== c[1][0], a1 = (porLado ? c[1][0] : c[2][0]) / 255;
+  const [a, b, d, e] = porLado ? v : [ v[0], v[2], v[1], v[3] ];
+  const mezcla = (p, q, t) => [ p[0] + (q[0] - p[0]) * t, p[1] + (q[1] - p[1]) * t ];
+  for (let k = 0; k < N; k++) {
+    const t0 = k / N, t1 = (k + 1) / N;
+    x.fillStyle = rgb(t, a0 + (a1 - a0) * (k + .5) / N);
+    poligono(x, [ mezcla(a, b, t0), mezcla(a, b, t1), mezcla(d, e, t0), mezcla(d, e, t1) ]);
+  }
+}
+
 export class MiraArma {
   constructor({base: base = "assets/", contenedor: contenedor = null, z: z = 3} = {}) {
     this.sgt = {};
@@ -29,7 +42,7 @@ export class MiraArma {
     this.vr = false;
     this.blancos = [];
     this.lock = false;
-    for (const n of [ "stinger", "nikita" ]) cargarSgt(n, base).then(j => {
+    for (const n of [ "stinger", "nikita", "cb_box" ]) cargarSgt(n, base).then(j => {
       this.sgt[n] = j;
     });
     this.atlas = false;
@@ -47,14 +60,17 @@ export class MiraArma {
       this.x = cv.getContext("2d");
     }
   }
+  get _dibujo() {
+    return this.tipo === "caja" ? this.sgt.cb_box : this.sgt[this.tipo];
+  }
   get visible() {
-    return !!this.tipo && !!this.sgt[this.tipo];
+    return !!this.tipo && !!this._dibujo;
   }
   get ocultaArma() {
-    return !!this.tipo && !this.vr;
+    return !!this.tipo && this.tipo !== "caja" && !this.vr;
   }
   get firma() {
-    return this.visible ? `${this.atlas}|${this.tipo}|${this.t}|${this.lock}|${this.blancos.map(b => b.join()).join(";")}` : "";
+    return this.visible ? `${this.atlas}|${this.tipo}|${this.tipo === "caja" ? Math.min(this.t, this._dibujo.cuadros + 1) : this.t}|${this.lock}|${this.blancos.map(b => b.join()).join(";")}` : "";
   }
   actualizar(dt, e = {}) {
     this.vr = !!e.vr;
@@ -105,7 +121,7 @@ export class MiraArma {
   }
   pintar(x, ox, oy, Wu, Hu) {
     if (!this.visible) return false;
-    const S = this.sgt[this.tipo], s = this.t, fin = s > S.cuadros;
+    const S = this._dibujo, s = this.t, fin = s > S.cuadros;
     ox = Math.round(ox);
     oy = Math.round(oy);
     const borde = p => {
@@ -122,8 +138,13 @@ export class MiraArma {
     for (let i = S.prims.length - 1; i >= 0; i--) {
       const p = S.prims[i];
       if (p.tipo === "texto" || parpadea(p)) continue;
-      x.fillStyle = rgb(p.gouraud ? p.color[0] : p.color, p.semi ? .5 : 1);
       const v = verts(p).map(borde);
+      const carton = this.tipo === "caja" ? CARTON : null;
+      if (p.tipo === "poly" && p.gouraud && p.abr === 2 && v.length === 4) {
+        bordeDifuso(x, v, p.color, carton || undefined);
+        continue;
+      }
+      x.fillStyle = rgb(carton || (p.gouraud ? p.color[0] : p.color), p.semi ? .5 : 1);
       if (p.tipo === "poly") poligono(x, v); else linea(x, v, p.semi ? new Set : null);
     }
     const C = COLORES[this.tipo];
@@ -165,6 +186,9 @@ export class MiraArma {
     }
     if (cv.style.display !== "block") cv.style.display = "block";
     const dpr = Math.min(3, typeof devicePixelRatio === "number" && devicePixelRatio || 1), W = Math.round(innerWidth * dpr), H = Math.round(innerHeight * dpr);
+    const firma = `${this.firma}|${W}|${H}`;
+    if (this.tipo === "caja" && firma === this._firmaPC) return;
+    this._firmaPC = firma;
     if (cv.width !== W || cv.height !== H) {
       cv.width = W;
       cv.height = H;
@@ -182,6 +206,27 @@ export class MiraArma {
   }
   conectarVR(paneles) {
     if (!paneles?.agregar || paneles.panel?.("mira_arma")) return null;
+    const MC = [ 320, 240 ];
+    paneles.agregar({
+      id: "mira_caja",
+      tipo: "visera",
+      prio: 2,
+      pixel: true,
+      logico: {
+        w: 1536,
+        h: 1152
+      },
+      visible: () => this.visible && this.vr && this.tipo === "caja",
+      lienzo: () => {
+        const f = this.firma;
+        if (!this._bufCaja || f !== this._firmaCaja) {
+          this._firmaCaja = f;
+          this.lienzo(W0 + 2 * MC[0], H0 + 2 * MC[1], MC[0], MC[1], "_bufCaja");
+        }
+        return this._bufCaja;
+      },
+      firma: () => this.firma
+    });
     const M = [ 40, 30 ];
     return paneles.agregar({
       id: "mira_arma",
@@ -192,7 +237,7 @@ export class MiraArma {
         w: 640,
         h: 480
       },
-      visible: () => this.visible && this.vr,
+      visible: () => this.visible && this.vr && this.tipo !== "caja",
       lienzo: () => {
         const f = this.firma;
         if (!this._bufVR || f !== this._firmaVR) {

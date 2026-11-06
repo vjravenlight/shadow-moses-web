@@ -1299,7 +1299,7 @@ export class Armas {
       color: 9071168
     })));
     if (this.caja) {
-      this.caja.visible = enCaja && tercera;
+      this.caja.visible = enCaja && tercera && !this.ctx.cajaPorDentro?.();
       if (enCaja) {
         const s = this.posSnake(), y = this.juego?.ctx?.yawSnake?.() ?? 0;
         this.caja.position.set(s.x, s.y, s.z);

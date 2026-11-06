@@ -3858,6 +3858,7 @@ async function cargarNivel(nv, entrada = null) {
       alRafaga: (r, o, d) => tiroRafaga(r, o, d),
       postura: () => reptando ? 2 : agachado ? 1 : 0,
       primeraPersona: () => !terceraPersona(),
+      cajaPorDentro: () => miraArma.tipo === "caja",
       "daño": () => {
         hud.daño();
         const d = $("#daño");
@@ -6888,11 +6889,12 @@ R.setAnimationLoop(() => {
   {
     const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && !misionesVR.activo && !muerteSnake;
     const xrPrimera = R.xr.isPresenting && vrModo() === "primera";
-    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (!terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE || apuntaHombro()) ? "stinger" : null;
+    const enPrimera = !terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE;
+    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (enPrimera || apuntaHombro()) ? "stinger" : inventario.item >= IT.BOX1 && inventario.item <= IT.BOX3 && enPrimera ? "caja" : null;
     miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       tipo: tipo,
       camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : camApuntar(),
-      armas: armas,
+      armas: tipo === "caja" ? null : armas,
       vr: R.xr.isPresenting
     });
     let vm = null;
