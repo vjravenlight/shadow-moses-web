@@ -7,6 +7,10 @@ import { CamaraJuego } from "./camara_juego.js";
 
 import { MenuVR } from "./menu_vr.js";
 
+import { MenuDisco } from "./menu_vr_disco.js";
+
+import { Blancos } from "./blancos_vr.js";
+
 import { Chispas, Materializacion, Warp, GIRO_META, texturaPS1 } from "./efectos_vr.js";
 
 import { marcoPS1, cargarImg, Fuente, HudVR, PausaVR, ClearVR, OverVR, modular } from "./pantallas_vr.js";
@@ -169,6 +173,9 @@ export class VRMisiones {
   set vr(v) {
     this._vr = v;
   }
+  get conInventario() {
+    return !!this.invDisco && !!this.vr?.disco && ![ "off", "menu", "cargando" ].includes(this.estado);
+  }
   async prepararMenu() {
     this.datosMenu = await fetch(this.base + "vr/menu.json").then(r => r.json());
     for (const [k, v] of Object.entries(this.datosMenu.rankings_defecto || {})) if (!this.records[k]) this.records[k] = v;
@@ -214,6 +221,44 @@ export class VRMisiones {
       guardar: () => this.avisar("MEMORY CARD: LOS RÉCORDS SE GUARDAN EN EL NAVEGADOR")
     });
     await Promise.all([ this.menuVR.listo, this.fondoMenu.listo ]);
+    this.menuD = new MenuDisco({
+      base: this.base,
+      fondo: this.fondoMenu,
+      fuente: this.fuente,
+      marco: this.img.marco,
+      sonar: id => this.sonar(id),
+      elegir: e => {
+        this.pilaDisco = this.menuD.pila.map(q => ({
+          sel: q.sel,
+          ini: q.ini
+        }));
+        this.cargarMision(e.clave);
+      },
+      salir: () => {
+        this.menuD.cerrar();
+        this.volverDisco = false;
+      },
+      record: e => this.recordsDisco(e)
+    });
+    await this.menuD.cargar();
+  }
+  recordsDisco(e) {
+    if (!e?.limite) return null;
+    const c = this._recD ||= new Map;
+    if (!c.has(e.clave)) {
+      c.set(e.clave, null);
+      fetch(`${this.base}vr/disco/${e.clave}.json`).then(r => r.json()).then(d => c.set(e.clave, d.vr?.ranking || null)).catch(() => {});
+    }
+    const R = c.get(e.clave);
+    if (!R?.vars) return null;
+    return R.vars.map((k, i) => this.records[k] || R.inicial[i]);
+  }
+  abrirDisco() {
+    if (!this.menuD?.hay) return false;
+    this.menuD.abrir(this.pilaDisco);
+    this.volverDisco = true;
+    this.sonar(177);
+    return true;
   }
   get orden() {
     return this.datosMenu?.orden || [];
@@ -235,6 +280,8 @@ export class VRMisiones {
       progreso: this.todo ? 32 : Math.max(1, this.progreso),
       records: R
     });
+    this.mision = null;
+    if (this.volverDisco && this.menuD?.hay) this.menuD.abrir(this.pilaDisco); else this.menuD?.cerrar();
     this.emit("menu");
   }
   elegirMenu(n) {
@@ -252,6 +299,7 @@ export class VRMisiones {
       };
       return;
     }
+    this.volverDisco = false;
     if (e.tipo === "demo") {
       this.avisar("TECHNICAL DEMONSTRATION: NO PORTADA");
       this.agendaMenu = {
@@ -270,9 +318,11 @@ export class VRMisiones {
     };
   }
   cerrar() {
+    this.devolverInventario();
     this.limpiar3D();
     this.estado = "off";
     this.menuVR?.cerrar();
+    this.menuD?.cerrar();
     this.over = null;
     this.clear = null;
     this.pausa = null;
@@ -285,6 +335,13 @@ export class VRMisiones {
       t: 90
     };
   }
+  cargarMision(clave) {
+    this.volverDisco = true;
+    return this.cargarSala(null, null, {
+      clave: clave,
+      url: `${this.base}vr/disco/${clave}.json`
+    });
+  }
   cargarSala(st, modo, op = {}) {
     this.cola = (this.cola || Promise.resolve()).then(() => this.cargarSala1(st, modo, op)).catch(e => console.warn("vr: no cargó", st, modo, e));
     return this.cola;
@@ -294,16 +351,20 @@ export class VRMisiones {
     this.estado = "cargando";
     this.cv.style.pointerEvents = "none";
     this.menuVR.cerrar();
+    this.menuD?.cerrar();
     this.over = null;
     this.clear = null;
     this.pausa = null;
     this.fade = null;
-    const nv = await fetch(`${this.base}vr/${st}_${modo}.json`).then(r => r.json());
+    const nv = await fetch(op.url || `${this.base}vr/${st}_${modo}.json`).then(r => r.json());
     const V = nv.vr;
+    st ??= V.sala;
+    modo ??= V.modo;
     this.datos = nv;
     this.vr = V;
     this.st = st;
     this.modo = modo;
+    this.mision = op.clave || null;
     if (V.ranking?.vars) V.ranking.vars.forEach((k, i) => {
       if (!this.records[k]) this.records[k] = V.ranking.inicial[i];
     });
@@ -321,21 +382,50 @@ export class VRMisiones {
     if (modo !== 2 && modo !== 4) this.carrera = null;
     this.carreraEntrada = this.carrera ? JSON.parse(JSON.stringify(this.carrera)) : null;
     const vigilancia = nv.actores.filter(a => a.tipo === "CAMERA" || a.tipo === "SEARCHLIGHT");
+    const blancos = nv.actores.filter(a => a.tipo === "VRBOX" || a.tipo === "VRBOX2");
     const nv2 = {
       ...nv,
-      actores: nv.actores.filter(a => a.tipo !== "CAMERA" && a.tipo !== "SEARCHLIGHT")
+      actores: nv.actores.filter(a => a.tipo !== "CAMERA" && a.tipo !== "SEARCHLIGHT" && a.tipo !== "VRBOX" && a.tipo !== "VRBOX2")
     };
     this.limpiar3D();
-    const camDatos = fetch(`${this.base}vr/${st}/camaras_${modo}.json`).then(r => r.ok ? r.json() : null).catch(() => null);
-    const chispas = fetch(`${this.base}vr/${st}/chispas_${V.variante || "n"}.json`).then(r => r.ok ? r.json() : null).catch(() => null);
-    const n0001 = cargarImg(`${this.base}vr/${st}/tex/7e37.png`);
+    const D = V.disco;
+    const camDatos = fetch(D ? this.base + D.camaras : `${this.base}vr/${st}/camaras_${modo}.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const chispas = D ? Promise.resolve(null) : fetch(`${this.base}vr/${st}/chispas_${V.variante || "n"}.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+    const n0001 = D ? Promise.resolve(null) : cargarImg(`${this.base}vr/${st}/tex/7e37.png`);
     await this.ctx.cargarNivel(nv2);
+    if (D?.sonido) this.sonidoDisco(D.sonido);
     this.prepararCamara(await camDatos);
     const J = this.ctx.juego?.();
     this.grupo = new THREE.Group;
     this.grupo.name = "vr";
     this.ctx.escena.add(this.grupo);
     await Promise.all([ this.armarFondo(), this.armarMeta(), this.armarVigilancia(vigilancia) ]);
+    this.blancos = null;
+    if (blancos.length) {
+      const ga = () => {
+        const x = globalThis.__mgs?.armas;
+        return this.ctx.armas?.() ?? (typeof x === "function" ? x() : x);
+      };
+      this.blancos = new Blancos({
+        grupo: this.grupo,
+        cargarGlb: u => this.ctx.cargarGlb(u),
+        actores: blancos,
+        armas: ga,
+        sonar: id => this.sonar(id, 48),
+        alRomper: n => {
+          if (V.blancos && n >= V.blancos.n && !this.metaLista) {
+            this.metaLista = true;
+            if (this.meta) {
+              this.meta.visible = true;
+              this.meta.o.visible = true;
+            }
+            this.sonar(SE.META);
+            this.emit("meta", {});
+          }
+        }
+      });
+      await this.blancos.cargar();
+    }
     this.img["7e37"] = await n0001;
     const ch = await chispas;
     if (ch && this.texEf.b09b) {
@@ -354,7 +444,7 @@ export class VRMisiones {
     this.tiempo = this.modo === 4 ? this.carrera?.acumulado || 0 : 0;
     this.limite = this.calcularLimite();
     this.relojCorre = false;
-    this.metaLista = !V.tiro;
+    this.metaLista = !V.tiro && !V.blancos;
     this.drops = [];
     this.resultado = null;
     this.f = 0;
@@ -391,6 +481,22 @@ export class VRMisiones {
       modo: modo
     });
   }
+  sonidoDisco(S) {
+    const snd = this.ctx.sonido;
+    if (!snd?.cargarEscenario || !S.mdx) return;
+    const r = n => "../../vr/disco/sonido/" + n, k = "vrm:" + S.mdx + S.bancos.join();
+    snd.tabla ||= {};
+    snd.tabla[k] = {
+      bancos: S.bancos.map(r),
+      mdx: r(S.mdx),
+      efx: S.efx ? r(S.efx) : null,
+      canciones: S.canciones || [ 2, 2 ]
+    };
+    try {
+      const p = snd.cargarEscenario(k);
+      p?.catch?.(() => {});
+    } catch {}
+  }
   calcularLimite() {
     const V = this.vr;
     if (this.modo === 2) return this.carrera.restante;
@@ -417,8 +523,42 @@ export class VRMisiones {
         if (k === 0) this.descubierto("guardia", g.o.position);
       };
     }
+    this.invDisco = null;
+    const inv = this.vr.disco ? c.inventario || null : null;
+    if (inv) {
+      const I = this.vr.disco.inventario;
+      this.invGuardado ??= {
+        armas: [ ...inv.armas ],
+        armasMax: [ ...inv.armasMax ],
+        items: [ ...inv.items ],
+        arma: inv.arma,
+        item: inv.item,
+        cargador: inv.cargador,
+        cargadorMax: inv.cargadorMax
+      };
+      inv.armas = I.armas.slice(0, 10);
+      inv.armasMax = I.armas_max.map((m, i) => m > 0 ? m : inv.armasMax[i]);
+      inv.items = I.items.slice(0, 24);
+      inv.arma = I.arma;
+      inv.item = I.item;
+      inv.cargador = 0;
+      if (inv.lados) {
+        inv.lados[1].ultimo = I.arma;
+        inv.lados[0].ultimo = -1;
+      }
+      const ga = globalThis.__mgs?.armas, A = this.ctx.armas?.() ?? (typeof ga === "function" ? ga() : ga);
+      if (A) {
+        A.actual = -2;
+        A.c4 = [];
+        A.minas = [];
+        A.granadas = [];
+      }
+      J.arma.balas = 0;
+      J.arma.reserva = 0;
+      this.invDisco = inv;
+    }
     const M = this.vr.municion;
-    if (M) {
+    if (this.invDisco) {} else if (M) {
       let total = M.balas;
       if (this.modo === 4) {
         if (this.carrera.municion == null) this.carrera.municion = M.balas > 0 ? M.balas : 25;
@@ -450,7 +590,24 @@ export class VRMisiones {
     this.guardias = c.guardias || [];
   }
   get balasTotales() {
+    const I = this.invDisco;
+    if (I) return I.arma >= 0 ? Math.max(0, I.armas[I.arma] | 0) : 0;
     return this.J ? this.J.arma.balas + this.J.arma.reserva : 0;
+  }
+  devolverInventario() {
+    const G = this.invGuardado, inv = this.invDisco || globalThis.__mgs?.inventario;
+    this.invGuardado = null;
+    this.invDisco = null;
+    if (!G || !inv) return;
+    Object.assign(inv, {
+      armas: G.armas,
+      armasMax: G.armasMax,
+      items: G.items,
+      arma: G.arma,
+      item: G.item,
+      cargador: G.cargador,
+      cargadorMax: G.cargadorMax
+    });
   }
   async armarFondo() {
     const F = this.vr.fondo || {};
@@ -625,6 +782,7 @@ export class VRMisiones {
     this.warp = null;
     this.grupo = null;
     this.meta = null;
+    this.blancos = null;
     this.camarasV = [];
     this.reflectores = [];
   }
@@ -732,7 +890,7 @@ export class VRMisiones {
     this.f++;
     if (this.estado === "menu") {
       this.fondoMenu?.cuadro();
-      this.menuVR?.cuadro();
+      if (this.menuD?.activo) this.menuD.cuadro(); else this.menuVR?.cuadro();
       if (this.agendaMenu && --this.agendaMenu.t <= 0) {
         const a = this.agendaMenu;
         this.agendaMenu = null;
@@ -832,6 +990,7 @@ export class VRMisiones {
   cuadroJuego() {
     const J = this.J, V = this.vr;
     this.cuadroVigilancia();
+    this.blancos?.cuadro();
     if (this.estado !== "juego") return;
     if (this.relojCorre) {
       this.tiempo++;
@@ -1014,8 +1173,8 @@ export class VRMisiones {
     this.fc = 0;
     if (J) J.activo = false;
     const crudo = this.tiempo;
-    const bonif = V.tiro ? V.tiro.espera ?? 10 : 0, balas = V.tiro ? this.balasTotales : 0;
-    const final = crudo - balas * bonif;
+    const bonif = V.tiro && (!V.disco || V.ranking) ? V.tiro.espera ?? 10 : 0, balas = bonif ? this.balasTotales : 0;
+    const final = V.disco ? Math.max(0, crudo - balas * bonif) : crudo - balas * bonif;
     let lista = null, puesto = 3, vars = V.ranking?.vars || (this.modo === 2 && this.st === this.orden[this.orden.length - 1] ? TA10.vars : null);
     if (this.modo === 2) this.carrera.restante -= crudo;
     if (this.modo === 4) {
@@ -1118,6 +1277,10 @@ export class VRMisiones {
         }
       });
     }
+    if (!hayClear && V.clear?.mostrar != null) {
+      hayClear = true;
+      A(V.clear.mostrar, crearClear);
+    }
     if (!ev.length) {
       hayClear = true;
       A(15, crearClear);
@@ -1176,7 +1339,7 @@ export class VRMisiones {
     if (o.tipo === "reintentar") {
       this.ctx.sonido?.codigo?.(4278190334);
       ir(25, 30, () => this.reintentar());
-    } else if (o.tipo === "siguiente") ir(10, 15, () => this.cargarSala(o.st, this.modo, {
+    } else if (o.tipo === "siguiente" && this.mision) ir(10, 15, () => o.clave ? this.cargarMision(o.clave) : this.abrirMenu()); else if (o.tipo === "siguiente") ir(10, 15, () => this.cargarSala(o.st, this.modo, {
       continuar: true
     })); else if (o.tipo === "modo") ir(10, 15, () => {
       this.carrera = null;
@@ -1259,6 +1422,7 @@ export class VRMisiones {
     });
   }
   reintentar({mantenerTiempo: mantenerTiempo = false} = {}) {
+    if (this.mision) return this.cargarMision(this.mision);
     if (this.modo === 4) {
       const acc = this.carrera?.acumulado ?? 0, mun = this.carreraEntrada?.municion;
       this.carrera = this.carreraEntrada ? JSON.parse(JSON.stringify(this.carreraEntrada)) : null;
@@ -1283,12 +1447,17 @@ export class VRMisiones {
     return this.reintentar();
   }
   soltar(code) {
-    if (this.estado === "menu") this.menuVR?.tecla(code, false);
+    if (this.estado === "menu" && !this.menuD?.activo) this.menuVR?.tecla(code, false);
   }
   entrada(code) {
     const E = this.estado;
     if (E === "off" || E === "cargando") return false;
     const b = PAD[code];
+    if (E === "menu" && this.menuD?.activo) return this.menuD.tecla(code, true) || true;
+    if (E === "menu" && this.menuD?.hay && (code === "KeyM" || (code === "ArrowRight" || code === "KeyD") && this.menuVR.pag === 0 && this.menuVR.estado === 0 && this.menuVR.it[this.menuVR.cur]?.vec?.[3] === -1)) {
+      this.abrirDisco();
+      return true;
+    }
     if (E === "menu") {
       if (code === "KeyU") {
         this.todo = !this.todo;
@@ -1335,6 +1504,8 @@ export class VRMisiones {
   clic(px, py) {
     const {sx: sx, sy: sy, ox: ox, oy: oy} = this.marco(), x = (px - ox) / sx, y = (py - oy) / sy;
     const E = this.estado;
+    if (E === "menu" && this.menuD?.activo) return this.menuD.clic(x, y);
+    if (E === "menu" && this.menuD?.hay && this.menuVR.pag === 0 && x >= 214 && y >= 204) return this.abrirDisco();
     if (E === "menu") return this.menuVR.clic(x, y);
     if (E === "ventana") return this.cerrarVentana();
     if (E === "pausa" && this.pausa) {
@@ -1366,7 +1537,7 @@ export class VRMisiones {
     if (id != null) this.ctx.sonido?.se?.(id, 0, vol);
   }
   reproducirVoz(id) {
-    const url = this.datosMenu?.voces?.[id];
+    const url = (this.vr?.disco ? this.menuD?.datos?.voces?.[id] : null) || this.datosMenu?.voces?.[id];
     if (!url) return;
     try {
       this.audioVoz?.pause();
@@ -1522,6 +1693,11 @@ export class VRMisiones {
     };
   }
   get menu() {
+    if (this.menuD?.activo) return {
+      nivel: 3,
+      i: this.menuD.tope?.sel ?? 0,
+      j: "d|" + this.menuD.firma
+    };
     const m = this.menuVR;
     return {
       nivel: (m?.pag ?? 0) === 0 ? 1 : 2,
@@ -1574,7 +1750,10 @@ export class VRMisiones {
         x.fillStyle = "#000";
         x.fillRect(-margen, -M.margenY, 320 + 2 * margen, 224 + 2 * M.margenY);
       }
-      this.menuVR.dibujar(x, margen);
+      if (this.menuD?.activo) this.menuD.dibujar(x, margen); else {
+        this.menuVR.dibujar(x, margen);
+        if (this.menuD?.hay && this.menuVR.pag === 0 && this.menuVR.estado === 0) this.fuente?.texto(x, "VR MISSIONS >", 312, 210, [ 208, 107, 57 ], 1);
+      }
     } else if (E === "cargando") {
       x.fillStyle = "#000";
       x.fillRect(-margen, -M.margenY, 320 + 2 * margen, 224 + 2 * M.margenY);
@@ -1589,7 +1768,10 @@ export class VRMisiones {
       if (this.win) this.dibujarVentana(x);
       this.dibujarMaterializacion(xs, M);
       if (E === "pausa") this.pausa?.dibujar(x, margen, xs);
-      if (E === "clear" && this.clear) this.clear.dibujar(x, margen, this.img, xs);
+      if (E === "clear" && this.clear) {
+        this.clear.dibujar(x, margen, this.img, xs);
+        if (this.vr?.disco) this.dibujarClearDisco(x);
+      }
       if (E === "derrota") this.over?.dibujar(x, margen);
       if (this.fade) {
         const v = this.fade.modo === "entra" ? 255 - Math.trunc(this.fade.n * 255 / this.fade.total) : Math.min(255, Math.trunc(this.fade.n * 255 / this.fade.total));
@@ -1611,7 +1793,7 @@ export class VRMisiones {
     x.fillText(s, X, Y);
   }
   dibujarArma(x, margen) {
-    if (!this.vr?.municion || !this.J || this.estado === "ventana" || this.estado === "intro" && !this.relojCorre) return;
+    if (this.conInventario || !this.vr?.municion || !this.J || this.estado === "ventana" || this.estado === "intro" && !this.relojCorre) return;
     const h = this.ctx.hud;
     if (!h?.recuadroArma) return;
     try {
@@ -1622,6 +1804,18 @@ export class VRMisiones {
         recargando: this.J.arma.recargando > 0
       });
     } catch {}
+  }
+  dibujarClearDisco(x) {
+    const C = this.clear, W = this.vr.ventana;
+    if (!C || !W || !this.fuente) return;
+    for (const k of [ 0, 1 ]) C.it[k].tex = null;
+    if (C.estado === 4) return;
+    const t = s => String(s || "").replace(/\s+/g, " ").trim(), n = /(\d+)\s*$/.exec(t(W.lineas[1]))?.[1];
+    if (C.estado !== 2) {
+      this.fuente.texto(x, t(W.lineas[0]), 160, 26, [ 148, 148, 148 ], 2);
+      this.fuente.texto(x, t(W.lineas[1]), 160, 44, [ 148, 148, 148 ], 2);
+    }
+    if (n && C.estado !== 2 || n && C.anim > 4) this.fuente.texto(x, n.padStart(4, "0"), 151, 65, [ 148, 148, 148 ], 2);
   }
   dibujarVentana(x) {
     const W = this.win;

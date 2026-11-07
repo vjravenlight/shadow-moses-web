@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
+import { ArcoPlasma } from "../plasma.js";
+
 import { Jefe, Flujo, MM, ANG, ratan2, randU, nearExp, nearExp4, nearExp4P, nearTimeP, cargarModelo, cargarAnim, aplicarPose, rotY } from "./base.js";
 
 import { IT, TIPO_ARMA, TIPO_ITEM } from "../inventario.js";
@@ -4509,42 +4511,16 @@ class EfectosNinja {
   arco(b1, b2, cuadros = 4) {
     const n = this.n, h1 = n.huesos[b1 % 16], h2 = n.huesos[b2 % 16];
     if (!h1 || !h2) return;
-    const geo = new THREE.BufferGeometry;
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(10 * 3), 3));
-    const l = new THREE.Line(geo, new THREE.LineBasicMaterial({
-      color: 10475775,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false
-    }));
-    l.frustumCulled = false;
-    l.userData.sinColision = true;
-    this.mundo.add(l);
+    const arco = new ArcoPlasma(this.mundo);
     const act = () => {
-      const a = (new THREE.Vector3).setFromMatrixPosition(h1.matrixWorld), b = (new THREE.Vector3).setFromMatrixPosition(h2.matrixWorld), P = geo.attributes.position.array;
-      for (let i = 0; i < 10; i++) {
-        const t = i / 9, p = a.clone().lerp(b, t);
-        if (i && i < 9) {
-          p.x += (Math.random() - .5) * .12;
-          p.y += (Math.random() - .5) * .12;
-          p.z += (Math.random() - .5) * .12;
-        }
-        P[i * 3] = p.x;
-        P[i * 3 + 1] = p.y;
-        P[i * 3 + 2] = p.z;
-      }
-      geo.attributes.position.needsUpdate = true;
+      arco.actualizar((new THREE.Vector3).setFromMatrixPosition(h1.matrixWorld), (new THREE.Vector3).setFromMatrixPosition(h2.matrixWorld));
     };
     act();
     this.fx.push({
       t: 0,
       dur: cuadros,
       fn: act,
-      fin: () => {
-        l.removeFromParent();
-        geo.dispose();
-        l.material.dispose();
-      }
+      fin: () => arco.quitar()
     });
   }
   chispa(hueso, color = 16777215, escala = .35) {

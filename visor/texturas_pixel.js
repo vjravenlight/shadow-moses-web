@@ -56,11 +56,11 @@ export const texturasPixel = {
   get pixel() {
     return pixel;
   },
-  poner(si) {
+  poner(si, guardar = true) {
     si = !!si;
     if (si === pixel) return;
     pixel = si;
-    try {
+    if (guardar) try {
       localStorage.setItem(CLAVE, si ? "1" : "0");
     } catch {}
     resubir();

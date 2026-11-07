@@ -5,6 +5,8 @@ import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
 import { sonido as sonar } from "./juego.js";
 
+import { WP } from "./inventario.js";
+
 import { ducto as ductoSnake } from "./ducto.js";
 
 const MM = .001, FPS = 30, ANG = Math.PI * 2 / 4096;
@@ -864,15 +866,15 @@ class Claymore {
     if (this.estado === 2) {
       if (++this.f130 < 45) {
         if (this.f130 === 1) {
-          if (S.claymores >= S.claymoresMax) {
+          const inv = S.juego?.ctx?.inventario, hay = inv ? inv.armas[WP.CLAYMORE] : S.claymores, max = inv ? inv.armasMax[WP.CLAYMORE] : S.claymoresMax;
+          if (hay >= max) {
             S.son(SE.LLENO, this.mov, "bomba");
             this.lleno = true;
           } else {
-            S.claymores++;
+            if (inv) inv.armas[WP.CLAYMORE] = Math.max(0, hay) + 1; else S.claymores++;
             S.son(SE.ITEM, this.mov, "bomba");
             this.levantada = true;
             this.lleno = false;
-            S.ctx.alRecoger?.("claymore", S.claymores);
           }
         }
         S.cartel(this, this.lleno ? "CLAYMORE" : "CLAYMORE", this.lleno ? "#ff3030" : "#c8c8c8");
@@ -894,15 +896,19 @@ class Claymore {
     }
     if (this.estado >= 2) return;
     this.visible = S.termicos;
-    const empujada = sn.visible && choca(sn.mov, sn.tam, this.centro, this.tam);
-    if (empujada && !this.explota) {
+    const pisaSnake = sn.visible && choca(sn.mov, sn.tam, this.centro, this.tam);
+    const empujada = !this.explota && (pisaSnake || S.guardias().some(g => {
+      const k = S.cajaGuardia(g);
+      return choca(k.c, k.s, this.centro, this.tam);
+    }));
+    if (empujada) {
       if (S.claymoreExplotando) {
         this.muerta = true;
         this.arg = 1;
         if (this.proc >= 0) S.proc(this.proc, this, 1);
         return;
       }
-      if (sn.estado & 64) return;
+      if (pisaSnake && (sn.estado & 64 || !S.juego?.dañable?.())) return;
       S.claymoreExplotando = this;
       this.explota = true;
       this.visible = true;
@@ -1226,7 +1232,7 @@ export class Sensores {
     this.guncamCd = 0;
     this.guncamRota = false;
     this.guncamRotas = 0;
-    this.invul = 0;
+    this.dañoPend = null;
     this.modoLocal = 0;
     this.alertaLocal = 0;
     this.mallas = {};
@@ -1464,14 +1470,31 @@ export class Sensores {
     m.updateMatrixWorld(true);
     return this.mallas[mascara] = m;
   }
-  "dañarSnake"(n, modo) {
+  "dañarSnake"(n, modo, fuerza) {
     const J = this.juego;
-    if (!J || this.invul > 0 || !this.sn.visible) return false;
-    J.vida -= n / 256;
-    this.invul = 32;
-    J.ctx.daño?.();
-    sonar(modo === 2 ? SE.DAÑO2 : SE.DAÑO1);
+    if (!J || !this.sn.visible || !J.dañable()) return false;
+    const p = this.dañoPend ||= {
+      n: 0,
+      modo: modo,
+      x: 0,
+      z: 0
+    };
+    p.n += n;
+    p.modo = modo;
+    if (fuerza) {
+      p.x += fuerza.x;
+      p.z += fuerza.z;
+    }
     return true;
+  }
+  "aplicarDaño"() {
+    const p = this.dañoPend;
+    if (!p) return;
+    this.dañoPend = null;
+    this.juego.dañoSnake(p.n, p.modo, p.x || p.z ? {
+      x: p.x,
+      z: p.z
+    } : null);
   }
   guardias() {
     return this.juego ? this.juego.activos().filter(g => ![ "muerto" ].includes(g.accion)) : [];
@@ -1571,10 +1594,7 @@ export class Sensores {
       let fin = false;
       if (this.sn.visible) {
         const h = segmentoCaja(b.p, sig, this.sn.mov, this.sn.tam);
-        if (h) {
-          this.dañarSnake(b.daño, 1);
-          fin = true;
-        }
+        if (h && this.dañarSnake(b.daño, 1)) fin = true;
       }
       if (!fin) for (const g of this.guardias()) {
         const k = this.cajaGuardia(g);
@@ -1655,10 +1675,7 @@ export class Sensores {
       let golpe = false;
       if (this.sn.visible) {
         const h = segmentoCaja(e.p, sig, this.sn.mov, this.sn.tam);
-        if (h) {
-          this.dañarSnake(256, 2);
-          golpe = true;
-        }
+        if (h && this.dañarSnake(256, 2, V(e.d.x * 1500 / 32, 0, e.d.z * 1500 / 32))) golpe = true;
       }
       if (!golpe) for (const g of this.guardias()) {
         const k = this.cajaGuardia(g);
@@ -1935,12 +1952,12 @@ export class Sensores {
     this.cuadros++;
     this.gvTime++;
     if (this.chaffT > 0) this.chaffT--;
-    if (this.invul > 0) this.invul--;
     this.guncamRota = false;
     this.infoSnake();
     for (const s of this.lista) if (!s.muerta) s.cuadro();
     this.balasCuadro();
     this.esquirlasCuadro();
+    this.aplicarDaño();
     for (const s of this.lista.filter(x => x.muerta)) {
       s.obj?.removeFromParent();
       s.cartelSpr?.removeFromParent();

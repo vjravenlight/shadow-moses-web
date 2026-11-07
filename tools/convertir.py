@@ -7,8 +7,8 @@ import disco as D
 UNIX = os.path.isdir(os.path.join(AQUI, 'unix'))
 INSTALADOR = 'sh instalar.sh' if UNIX else 'INSTALAR.cmd'
 P = sys.executable
-PASOS = [('extraer1', 'Leyendo el disco 1 / Reading disc 1', None, '1', 12), ('extraer2', 'Leyendo el disco 2 / Reading disc 2', None, '2', 12), ('stages1', 'Separando los escenarios del disco 1 / Splitting disc 1 stages', ['stage_extract.py', 'disco1'], '1', 74), ('stages2', 'Separando los escenarios del disco 2 / Splitting disc 2 stages', ['stage_extract.py', 'disco2'], '2', 74), ('categorizar', 'Ordenando archivos / Sorting files', ['categorizar.py'], '12', 75), ('categorizar2', 'Ordenando archivos del disco 2 / Sorting disc 2 files', ['categorizar.py', '--solo', 'disco2', '--salida', '_02_por_tipo_solo_disco2'], '2', 86), ('modelos', 'Modelos 3D y escenarios / 3D models and maps', ['exportar_todo.py'], '12', 102), ('niveles', 'Niveles / Levels', ['niveles.py'], '1', 90), ('pisos', 'Pisos / Floors', ['pisos_atr.py'], '1', 3), ('paredes', 'Paredes que se rompen / Breakable walls', ['paredes_rompibles.py'], '1', 3), ('camaras', 'Cámaras del juego / Game cameras', ['camaras_export.py'], '1', 9), ('caras', 'Caras de los modelos / Model faces', ['caras_ps1.py'], '1', 4), ('puertas', 'Puertas y tarjetas / Doors and cards', ['puertas_tarjeta.py'], '1', 4), ('zako', 'Soldados / Soldiers', ['zako_export.py'], '1', 21), ('sonido', 'Música y efectos / Music and sound effects', ['sonido.py'], '1', 2), ('anims', 'Animaciones / Animations', ['anims.py'], '1', 2), ('titulo', 'Pantalla de título / Title screen', ['titulo_export.py'], '1', 2), ('hud', 'Pantalla de juego (HUD) / HUD', ['hud_indices.py'], '1', 2), ('inventario', 'Inventario / Inventory', ['iconos_inventario.py'], '1', 2), ('hud_extra', 'Pantalla de juego: letras y radar / HUD: fonts and radar', ['hud_extra.py'], '1', 2), ('fuente', 'Letras del juego / Game fonts', ['fuente_web.py'], '1', 2), ('mira', 'Mira / Scope', ['sgt_export.py'], '1', 2), ('rango', 'Rango final / Final rank', ['rango_export.py'], '1', 2), ('radio', 'Códec: llamadas / Codec: calls', ['radio_dat.py'], '12', 9), ('caras_codec', 'Códec: caras / Codec: faces', ['face_dat.py'], '1', 8), ('codec', 'Códec: pantalla / Codec: screen', ['codec_web.py'], '1', 9), ('vox_refs', 'Voces: lista / Voices: list', ['vox.py', 'refs'], '1', 12), ('voces', 'Voces del códec / Codec voices', ['codec_voces.py'], '1', 20), ('codec_niveles', 'Códec por escenario / Codec per stage', ['codec_niveles.py'], '1', 8), ('guion', 'Guion de cada escenario / Stage scripts', ['guion_vivo.py'], '1', 26), ('guion_extra', 'Guion del título y la intro / Title and intro scripts', ['guion_vivo.py', 'init', 'init_tux', 'opening'], '1', 3), ('guion2', 'Guion del disco 2 / Disc 2 scripts', ['guion_disco2.py', '--en-el-lugar'], '2', 10), ('voces2', 'Voces del disco 2 / Disc 2 voices', ['voces_disco2.py'], '2', 15), ('paddemo', 'Demos de mando / Pad demos', ['paddemo_export.py'], '1', 16), ('partida', 'Partida e ítems / Game state and items', ['partida_items.py'], '1', 2), ('presets', 'Puntos de la historia / Story checkpoints', ['presets_historia.py'], '1', 2), ('trampas', 'Zonas del guion / Script zones', ['trampas_13.py', '--aplicar'], '12', 2), ('anims_st', 'Animaciones de Snake por escenario / Snake animations per stage', ['anims.py', 'escenarios'], '1', 4), ('actores', 'Objetos y actores / Props and actors', ['actores_export.py'], '1', 3), ('personajes', 'Personajes / Characters', ['personajes_export.py'], '1', 18), ('jefes', 'Jefes / Bosses', ['jefes_export.py'], '1', 10), ('liquid', 'Jefe: Liquid / Boss: Liquid', ['liquid_export.py'], '1', 4), ('ninja', 'Jefe: Ninja / Boss: Ninja', ['ninja_export.py'], '1', 3), ('rex', 'Jefe: REX / Boss: REX', ['rex_export.py'], '1', 6), ('wolf', 'Jefe: Wolf / Boss: Wolf', ['wolf_export.py'], '1', 4), ('jeep', 'La persecución en jeep / Jeep chase', ['jeep_export.py', '--voces'], '1', 12), ('jeep19a', 'Jeep (s19a) / Jeep (s19a)', ['jeep19a_export.py'], '1', 2), ('voces_extra', 'Voces sueltas (título, s19a) / Extra voices', ['codec_voces.py', '--solo', '80445,80464,80475,80490,80505,80521,80546,80562,80574,80585,80597,94672'], '1', 2), ('demos_lista', 'Cinemáticas: lista / Cutscenes: list', ['demo_dat.py', 'scripts'], '12', 6), ('demos', 'Cinemáticas del disco 1 / Disc 1 cutscenes', ['demos_export.py', '--todas'], '1', 96), ('demos2', 'Cinemáticas del disco 2 / Disc 2 cutscenes', ['demos_export.py', '--disco', '2', '--todas'], '2', 58), ('cadenas', 'Orden de las cinemáticas / Cutscene order', ['demos_cadenas.py'], '1', 10), ('creditos', 'Créditos / Credits', ['creditos_export.py'], '2', 3), ('videos', 'Videos / Videos', ['videos_export.py'], '12', 148), ('telops', 'Textos de las cinemáticas / Cutscene captions', ['telops_nitidos.py'], '1', 10), ('vr', 'VR Training', ['vr_export.py'], '1', 21), ('vr_fondo', 'VR Training: fondo / background', ['vr_fondo.py'], '1', 2), ('vr_menu', 'VR Training: menú / menu', ['vr_menu.py'], '1', 2), ('vr_camaras', 'VR Training: cámaras / cameras', ['vr_camaras.py'], '1', 2), ('sueltos', 'Armas e íconos / Weapons and icons', ['sueltos_export.py'], '1', 2), ('propios', 'Archivos propios del visor / Viewer files', None, '1', 2)]
-DEPENDE = {'extraer1': [], 'extraer2': [], 'stages1': ['extraer1'], 'stages2': ['extraer2'], 'categorizar': ['stages1', 'stages2'], 'categorizar2': ['stages2'], 'modelos': ['categorizar'], 'niveles': ['stages1'], 'pisos': ['niveles'], 'paredes': ['pisos'], 'camaras': ['paredes'], 'caras': ['camaras'], 'puertas': ['caras'], 'zako': ['puertas'], 'sonido': ['stages1'], 'anims': ['zako'], 'titulo': ['stages1'], 'hud': ['stages1'], 'inventario': ['hud'], 'hud_extra': ['inventario'], 'fuente': ['hud_extra'], 'mira': ['categorizar'], 'rango': ['stages1'], 'radio': ['stages1', 'stages2'], 'caras_codec': ['extraer1'], 'codec': ['radio', 'caras_codec'], 'vox_refs': ['radio'], 'voces': ['vox_refs'], 'codec_niveles': ['zako', 'codec'], 'guion': ['codec_niveles'], 'guion_extra': ['guion'], 'guion2': ['guion_extra', 'stages2'], 'voces2': ['guion2', 'codec', 'voces'], 'paddemo': ['stages1'], 'partida': ['voces2'], 'presets': ['partida'], 'trampas': ['presets', 'categorizar', 'categorizar2'], 'anims_st': ['trampas', 'anims'], 'actores': ['zako'], 'personajes': ['voces'], 'jefes': ['personajes'], 'liquid': ['jefes'], 'ninja': ['liquid'], 'rex': ['ninja'], 'wolf': ['rex'], 'jeep': ['wolf'], 'jeep19a': ['jeep'], 'voces_extra': ['jeep19a'], 'demos_lista': ['stages1', 'stages2'], 'demos': ['demos_lista', 'modelos', 'zako', 'categorizar'], 'demos2': ['demos'], 'cadenas': ['demos2', 'zako'], 'creditos': ['stages2'], 'videos': ['extraer1', 'extraer2'], 'telops': ['demos2', 'zako'], 'vr': ['stages1'], 'vr_fondo': ['vr'], 'vr_menu': ['vr_fondo'], 'vr_camaras': ['vr_menu'], 'sueltos': ['vr_camaras', 'fuente', 'categorizar'], 'propios': ['sueltos']}
+PASOS = [('extraer1', 'Leyendo el disco 1 / Reading disc 1', None, '1', 12), ('extraer2', 'Leyendo el disco 2 / Reading disc 2', None, '2', 12), ('stages1', 'Separando los escenarios del disco 1 / Splitting disc 1 stages', ['stage_extract.py', 'disco1'], '1', 74), ('stages2', 'Separando los escenarios del disco 2 / Splitting disc 2 stages', ['stage_extract.py', 'disco2'], '2', 74), ('categorizar', 'Ordenando archivos / Sorting files', ['categorizar.py'], '12', 75), ('categorizar2', 'Ordenando archivos del disco 2 / Sorting disc 2 files', ['categorizar.py', '--solo', 'disco2', '--salida', '_02_por_tipo_solo_disco2'], '2', 86), ('modelos', 'Modelos 3D y escenarios / 3D models and maps', ['exportar_todo.py'], '12', 102), ('niveles', 'Niveles / Levels', ['niveles.py'], '1', 90), ('pisos', 'Pisos / Floors', ['pisos_atr.py'], '1', 3), ('paredes', 'Paredes que se rompen / Breakable walls', ['paredes_rompibles.py'], '1', 3), ('camaras', 'Cámaras del juego / Game cameras', ['camaras_export.py'], '1', 9), ('caras', 'Caras de los modelos / Model faces', ['caras_ps1.py'], '1', 4), ('puertas', 'Puertas y tarjetas / Doors and cards', ['puertas_tarjeta.py'], '1', 4), ('zako', 'Soldados / Soldiers', ['zako_export.py'], '1', 21), ('sonido', 'Música y efectos / Music and sound effects', ['sonido.py'], '1', 2), ('anims', 'Animaciones / Animations', ['anims.py'], '1', 2), ('titulo', 'Pantalla de título / Title screen', ['titulo_export.py'], '1', 2), ('extras', 'Album, fotos y operaciones previas / Album, photos and previous operations', ['extras_export.py'], '1', 3), ('hud', 'Pantalla de juego (HUD) / HUD', ['hud_indices.py'], '1', 2), ('inventario', 'Inventario / Inventory', ['iconos_inventario.py'], '1', 2), ('hud_extra', 'Pantalla de juego: letras y radar / HUD: fonts and radar', ['hud_extra.py'], '1', 2), ('fuente', 'Letras del juego / Game fonts', ['fuente_web.py'], '1', 2), ('mira', 'Mira / Scope', ['sgt_export.py'], '1', 2), ('rango', 'Rango final / Final rank', ['rango_export.py'], '1', 2), ('radio', 'Códec: llamadas / Codec: calls', ['radio_dat.py'], '12', 9), ('caras_codec', 'Códec: caras / Codec: faces', ['face_dat.py'], '1', 8), ('codec', 'Códec: pantalla / Codec: screen', ['codec_web.py'], '1', 9), ('vox_refs', 'Voces: lista / Voices: list', ['vox.py', 'refs'], '1', 12), ('voces', 'Voces del códec / Codec voices', ['codec_voces.py'], '1', 20), ('codec_niveles', 'Códec por escenario / Codec per stage', ['codec_niveles.py'], '1', 8), ('guion', 'Guion de cada escenario / Stage scripts', ['guion_vivo.py'], '1', 26), ('guion_extra', 'Guion del título y la intro / Title and intro scripts', ['guion_vivo.py', 'init', 'init_tux', 'opening'], '1', 3), ('guion2', 'Guion del disco 2 / Disc 2 scripts', ['guion_disco2.py', '--en-el-lugar'], '2', 10), ('voces2', 'Voces del disco 2 / Disc 2 voices', ['voces_disco2.py'], '2', 15), ('paddemo', 'Demos de mando / Pad demos', ['paddemo_export.py'], '1', 16), ('partida', 'Partida e ítems / Game state and items', ['partida_items.py'], '1', 2), ('presets', 'Puntos de la historia / Story checkpoints', ['presets_historia.py'], '1', 2), ('trampas', 'Zonas del guion / Script zones', ['trampas_13.py', '--aplicar'], '12', 2), ('anims_st', 'Animaciones de Snake por escenario / Snake animations per stage', ['anims.py', 'escenarios'], '1', 4), ('actores', 'Objetos y actores / Props and actors', ['actores_export.py'], '1', 3), ('personajes', 'Personajes / Characters', ['personajes_export.py'], '1', 18), ('jefes', 'Jefes / Bosses', ['jefes_export.py'], '1', 10), ('liquid', 'Jefe: Liquid / Boss: Liquid', ['liquid_export.py'], '1', 4), ('ninja', 'Jefe: Ninja / Boss: Ninja', ['ninja_export.py'], '1', 3), ('rex', 'Jefe: REX / Boss: REX', ['rex_export.py'], '1', 6), ('wolf', 'Jefe: Wolf / Boss: Wolf', ['wolf_export.py'], '1', 4), ('jeep', 'La persecución en jeep / Jeep chase', ['jeep_export.py', '--voces'], '1', 12), ('jeep19a', 'Jeep (s19a) / Jeep (s19a)', ['jeep19a_export.py'], '1', 2), ('voces_extra', 'Voces sueltas (título, s19a) / Extra voices', ['codec_voces.py', '--solo', '80445,80464,80475,80490,80505,80521,80546,80562,80574,80585,80597,94672'], '1', 2), ('demos_lista', 'Cinemáticas: lista / Cutscenes: list', ['demo_dat.py', 'scripts'], '12', 6), ('demos', 'Cinemáticas del disco 1 / Disc 1 cutscenes', ['demos_export.py', '--todas'], '1', 96), ('demos2', 'Cinemáticas del disco 2 / Disc 2 cutscenes', ['demos_export.py', '--disco', '2', '--todas'], '2', 58), ('cadenas', 'Orden de las cinemáticas / Cutscene order', ['demos_cadenas.py'], '1', 10), ('creditos', 'Créditos / Credits', ['creditos_export.py'], '2', 3), ('videos', 'Videos / Videos', ['videos_export.py'], '12', 148), ('telops', 'Textos de las cinemáticas / Cutscene captions', ['telops_nitidos.py'], '1', 10), ('vr', 'VR Training', ['vr_export.py'], '1', 21), ('vr_fondo', 'VR Training: fondo / background', ['vr_fondo.py'], '1', 2), ('vr_menu', 'VR Training: menú / menu', ['vr_menu.py'], '1', 2), ('vr_camaras', 'VR Training: cámaras / cameras', ['vr_camaras.py'], '1', 2), ('sueltos', 'Armas e íconos / Weapons and icons', ['sueltos_export.py'], '1', 2), ('propios', 'Archivos propios del visor / Viewer files', None, '1', 2), ('extraerI', 'Leyendo el Integral / Reading Integral', None, 'I', 3), ('stagesI', 'Separando los escenarios del Integral / Splitting Integral stages', ['stage_extract.py', 'integral1'], 'I', 74), ('integral', 'Integral: VERY EASY y traje de Meryl / Integral: VERY EASY and Meryl suit', ['integral_export.py'], 'I', 4), ('extraerV', 'Leyendo VR Missions / Reading VR Missions', None, 'V', 3), ('stagesV', 'Separando los escenarios de VR Missions / Splitting VR Missions stages', ['stage_extract.py', 'vr_usa'], 'V', 60), ('vr_disco', 'VR Missions: misiones del disco / disc missions', ['vr_disco_export.py'], 'V', 120)]
+DEPENDE = {'extraer1': [], 'extraer2': [], 'stages1': ['extraer1'], 'stages2': ['extraer2'], 'categorizar': ['stages1', 'stages2'], 'categorizar2': ['stages2'], 'modelos': ['categorizar'], 'niveles': ['stages1'], 'pisos': ['niveles'], 'paredes': ['pisos'], 'camaras': ['paredes'], 'caras': ['camaras'], 'puertas': ['caras'], 'zako': ['puertas'], 'sonido': ['stages1'], 'anims': ['zako'], 'titulo': ['stages1'], 'extras': ['stages1'], 'hud': ['stages1'], 'inventario': ['hud'], 'hud_extra': ['inventario'], 'fuente': ['hud_extra'], 'mira': ['categorizar'], 'rango': ['stages1'], 'radio': ['stages1', 'stages2'], 'caras_codec': ['extraer1'], 'codec': ['radio', 'caras_codec'], 'vox_refs': ['radio'], 'voces': ['vox_refs'], 'codec_niveles': ['zako', 'codec'], 'guion': ['codec_niveles'], 'guion_extra': ['guion'], 'guion2': ['guion_extra', 'stages2'], 'voces2': ['guion2', 'codec', 'voces'], 'paddemo': ['stages1'], 'partida': ['voces2'], 'presets': ['partida'], 'trampas': ['presets', 'categorizar', 'categorizar2'], 'anims_st': ['trampas', 'anims'], 'actores': ['zako'], 'personajes': ['voces'], 'jefes': ['personajes'], 'liquid': ['jefes'], 'ninja': ['liquid'], 'rex': ['ninja'], 'wolf': ['rex'], 'jeep': ['wolf'], 'jeep19a': ['jeep'], 'voces_extra': ['jeep19a'], 'demos_lista': ['stages1', 'stages2'], 'demos': ['demos_lista', 'modelos', 'zako', 'categorizar'], 'demos2': ['demos'], 'cadenas': ['demos2', 'zako'], 'creditos': ['stages2'], 'videos': ['extraer1', 'extraer2'], 'telops': ['demos2', 'zako'], 'vr': ['stages1'], 'vr_fondo': ['vr'], 'vr_menu': ['vr_fondo'], 'vr_camaras': ['vr_menu'], 'sueltos': ['vr_camaras', 'fuente', 'categorizar'], 'propios': ['sueltos'], 'extraerI': [], 'stagesI': ['extraerI'], 'integral': ['stagesI', 'stages1'], 'extraerV': [], 'stagesV': ['extraerV'], 'vr_disco': ['stagesV', 'vr_camaras', 'sueltos']}
 RAM_MINIMA = 500
 
 def hms(s):
@@ -128,6 +128,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--disco1')
     ap.add_argument('--disco2')
+    ap.add_argument('--integral')
+    ap.add_argument('--vr')
     ap.add_argument('--trabajo', default=os.path.join(RAIZ, 'trabajo'))
     ap.add_argument('--assets', default=os.path.join(RAIZ, 'datos'))
     ap.add_argument('--base')
@@ -179,6 +181,30 @@ def main():
         for x in avisos:
             print('  ' + x)
         imagenes[n] = im
+    imagen_integral = None
+    if a.integral:
+        try:
+            im = D.Imagen(a.integral)
+            ci = im.integral()
+        except D.ErrorDisco as e:
+            print('\n  Integral: %s\n  (%s)' % (e, a.integral))
+            return 3
+        if ci != 1:
+            print('\n  Ese archivo no es el disco 1 de Metal Gear Solid: Integral (SLPM-86247). / Not MGS Integral disc 1.\n  (%s)' % a.integral)
+            return 3
+        imagen_integral = im
+    imagen_vr = None
+    if a.vr:
+        try:
+            im = D.Imagen(a.vr)
+            ok = im.vr_missions()
+        except D.ErrorDisco as e:
+            print('\n  VR Missions: %s\n  (%s)' % (e, a.vr))
+            return 3
+        if not ok:
+            print('\n  Ese archivo no es Metal Gear Solid: VR Missions (SLUS-00957). / Not MGS VR Missions.\n  (%s)' % a.vr)
+            return 3
+        imagen_vr = im
     if 1 not in imagenes and (not estado['discos'].get('1')) and (not a.validar):
         print('  Falta el disco 1. / Disc 1 is missing.')
         return 3
@@ -190,6 +216,18 @@ def main():
         if estado['discos'].get(n) and estado['discos'][n] != h:
             estado['pasos'] = {}
         estado['discos'][n] = h
+    if imagen_integral is not None:
+        hi = D.huella(imagen_integral.ruta)
+        if estado['discos'].get('I') and estado['discos']['I'] != hi:
+            estado['pasos'] = {k: v for k, v in estado['pasos'].items() if k not in ('extraerI', 'stagesI', 'integral')}
+        estado['discos']['I'] = hi
+    hayI = bool(estado['discos'].get('I'))
+    if imagen_vr is not None:
+        hv = D.huella(imagen_vr.ruta)
+        if estado['discos'].get('V') and estado['discos']['V'] != hv:
+            estado['pasos'] = {k: v for k, v in estado['pasos'].items() if k not in ('extraerV', 'stagesV', 'vr_disco')}
+        estado['discos']['V'] = hv
+    hayV = bool(estado['discos'].get('V'))
     hay2 = bool(estado['discos'].get('2'))
     if hay2 and (not estado.get('con_disco2')) and any((v.get('ok') for k, v in estado['pasos'].items() if k not in ('extraer1', 'stages1'))):
         print('  Se agregó el disco 2: se rehace la conversión (lo leído del disco 1 queda). / Disc 2 added: converting again.')
@@ -212,6 +250,10 @@ def main():
     for p in elegidos:
         pid, dk = (p[0], p[3])
         if dk == '2' and (not hay2):
+            continue
+        if dk == 'I' and (not hayI):
+            continue
+        if dk == 'V' and (not hayV):
             continue
         if estado['pasos'].get(pid, {}).get('ok') and (not a.rehacer) and (not a.solo):
             continue
@@ -240,6 +282,24 @@ def main():
                 ultimo[0] = time.time()
                 print('      disco %d: %3d %%' % (n, 100 * h // max(1, t)), flush=True)
         im.extraer(os.path.join(extraido, 'disco%d' % n, '00_disco'), avance)
+        return 0
+
+    def leer_integral():
+        if imagen_integral is None:
+            if estado['pasos'].get('extraerI', {}).get('ok'):
+                return 0
+            print('  Falta el archivo del Integral. / Integral file missing.')
+            return 3
+        imagen_integral.extraer(os.path.join(extraido, 'integral1', '00_disco'), None, solo={'MGS/STAGE.DIR'})
+        return 0
+
+    def leer_vr():
+        if imagen_vr is None:
+            if estado['pasos'].get('extraerV', {}).get('ok'):
+                return 0
+            print('  Falta el archivo de VR Missions. / VR Missions file missing.')
+            return 3
+        imagen_vr.extraer(os.path.join(extraido, 'vr_usa', '00_disco'), None, solo={'MGS/STAGE.DIR', 'MGS/VOX.DAT'})
         return 0
     t_ini = time.time()
     pendientes = [p[0] for p in hacer]
@@ -275,6 +335,10 @@ def main():
                     corriendo[pid] = t
                     if pid in ('extraer1', 'extraer2'):
                         t.lanzar_hilo(lambda n=int(pid[-1]): leer_disco(n))
+                    elif pid == 'extraerI':
+                        t.lanzar_hilo(leer_integral)
+                    elif pid == 'extraerV':
+                        t.lanzar_hilo(leer_vr)
                     elif pid == 'propios':
                         t.lanzar_hilo(lambda: copiar_propios(a.base, assets, hay2))
                     else:
@@ -330,7 +394,7 @@ def main():
             pass
         print('  Volvé a correr %s para reintentar desde este paso. / Run %s again to retry from this step.' % (INSTALADOR, INSTALADOR))
         return 4
-    json.dump({'disco1': True, 'disco2': hay2, 'generado': time.strftime('%Y-%m-%d %H:%M')}, open(os.path.join(assets, 'discos.json'), 'w', encoding='utf-8'))
+    json.dump({'disco1': True, 'disco2': hay2, 'integral': hayI, 'vr_missions': hayV, 'generado': time.strftime('%Y-%m-%d %H:%M')}, open(os.path.join(assets, 'discos.json'), 'w', encoding='utf-8'))
     print('\n  Conversión terminada en %s. / Conversion finished.' % hms(time.time() - t_ini))
     return 0
 

@@ -1,5 +1,9 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { leerFotos, agregarFoto, recortarFoto } from "./fotos.js";
+
 import * as THREE from "three";
+
+import { integral } from "./integral.js";
 
 import { atlasNum, disposicionHud } from "./hud.js";
 
@@ -320,7 +324,7 @@ export class Inventario {
     this.deshabilitadas = 0;
     this.deshabilitados = 0;
     this.usoRaciones = 0;
-    this.fotos = [];
+    this.fotos = leerFotos();
     this.misilEnVuelo = false;
     this.chaff = false;
     this.agachado = false;
@@ -381,6 +385,17 @@ export class Inventario {
     this.meta = meta;
     this.atlas = teñir(atlas, null);
     this.atlasOsc = teñir(atlas, null, .5);
+    integral.listo.then(async d => {
+      const ic = d?.muy_facil?.icono;
+      if (!ic) return;
+      const im = await cargarImg("assets/" + ic.png);
+      if (im) this.mp5 = {
+        claro: teñir(im, null),
+        osc: teñir(im, null, .5),
+        ox: ic.ox,
+        oy: ic.oy
+      };
+    });
     const t = this.tema;
     if (num) {
       const c = document.createElement("canvas");
@@ -888,17 +903,15 @@ export class Inventario {
     const f = this.filtro, css = f === "nvg" ? "grayscale(1) brightness(1.8) sepia(1) hue-rotate(52deg) saturate(2.6) contrast(1.05)" : f === "termica" ? "grayscale(1) sepia(1) saturate(7) hue-rotate(-42deg) brightness(0.62) contrast(1.15)" : "";
     if (el.style.filter !== css) el.style.filter = css;
   }
-  foto(R, escena, cam) {
-    try {
-      R.render(escena, cam);
-      const url = R.domElement.toDataURL("image/png");
-      this.fotos.push(url);
-      if (this.fotos.length > 24) this.fotos.shift();
-      this.se(SE.FOTO);
-      return url;
-    } catch {
+  foto(captura, fantasma = 0) {
+    this.se(SE.FOTO);
+    return Promise.resolve().then(captura).then(img => img ? agregarFoto(this.fotos, {
+      img: recortarFoto(img),
+      fantasma: fantasma
+    }) : null).catch(e => {
+      console.warn("foto: " + e.message);
       return null;
-    }
+    });
   }
   equiparArma(id) {
     if (id >= 0 && (this.armas[id] < 0 || this.armaDeshabilitada(id))) return false;
@@ -1469,9 +1482,10 @@ export class Inventario {
       this.letra(x, ox + 46, py + 22, "NO ITEM", "texto", 1);
       return;
     }
-    if (arma && p.cur && this.cargadorMax > 0) this.cargadorBalas(x, ox + 45, py + 20); else this.letra(x, ox + 46, py + 22, arma ? NOMBRE_ARMA[p.id] : NOMBRE_ITEM[p.id], "texto", 1);
+    const mp5 = arma && p.id === WP.FAMAS && this.mp5 && integral.esMp5(this.nivelJuego) ? this.mp5 : null;
+    if (arma && p.cur && this.cargadorMax > 0) this.cargadorBalas(x, ox + 45, py + 20); else this.letra(x, ox + 46, py + 22, mp5 ? integral.muyFacil.nombre : arma ? NOMBRE_ARMA[p.id] : NOMBRE_ITEM[p.id], "texto", 1);
     const rpk = arma ? p.id === WP.SOCOM && this.silenciador === 0 ? 2 : RPK_ARMA[p.id] : RPK_ITEM[p.id];
-    this.icono(x, rpk, ox, py, p.pos === 0);
+    if (mp5) x.drawImage(p.pos === 0 ? mp5.claro : mp5.osc, ox + mp5.ox, py + mp5.oy); else this.icono(x, rpk, ox, py, p.pos === 0);
     if (arma) {
       if (p.num >= 0 && p.num < 1e4) this.numero2(x, ox, py + 11, p.num, this.armasMax[p.id]);
     } else if (TIPO_ITEM[p.id] & 8192) this.numero2(x, ox, py + 11, p.num, this.itemsMax[p.id - IT.RATION]); else if (p.id === IT.CARD) {

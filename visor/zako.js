@@ -520,10 +520,7 @@ export class Zakos {
         });
         if (this.ctx.armas?.explosion) this.ctx.armas.explosion(g.p.clone()); else {
           const s = J.ctx.rig.position;
-          if (Math.abs(s.x - g.p.x) < 2.3 && Math.abs(s.z - g.p.z) < 2.3 && Math.abs(s.y + .5 - g.p.y) < 2.5) {
-            J.vida -= 64 / 256;
-            J.ctx.daño?.();
-          }
+          if (Math.abs(s.x - g.p.x) < 2.3 && Math.abs(s.z - g.p.z) < 2.3 && Math.abs(s.y + .5 - g.p.y) < 2.5) J.dañoSnake(64, 2);
           J.setRuido(255, 32, g.p);
         }
       }

@@ -1289,6 +1289,13 @@ export class GuionVivo extends Guion {
     }
     if (o.c) this.vars.resultado = this.codec?.estadoVoz?.() ?? -1;
     if (o.n) this.vars.resultado = 0;
+    if (o.p) {
+      const v = o.p.map(x => this.v(x, args));
+      this.fotoFantasma = {
+        codigo: v[4] === H.SALIR ? 0 : v[0],
+        pos: [ v[1], v[2], v[3] ]
+      };
+    }
     return null;
   }
   alerta(modoVisor) {

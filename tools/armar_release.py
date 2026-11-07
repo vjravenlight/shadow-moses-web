@@ -4,14 +4,14 @@ RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def arg(k, d=None):
     return sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
-VERSION = arg('--version', '2.9')
+VERSION = arg('--version', '2.10')
 NODE = arg('--node', 'C:\\Program Files\\nodejs\\node.exe')
 PYTHON = arg('--python', 'C:\\Python313')
 SITE = arg('--site', os.path.join(os.environ.get('APPDATA', ''), 'Python', 'Python313', 'site-packages'))
 FFMPEG = arg('--ffmpeg', os.path.join(os.environ.get('LOCALAPPDATA', ''), 'JDownloader 2', 'tools', 'Windows', 'ffmpeg', 'x64', 'ffmpeg.exe'))
 SALIDA = os.path.abspath(arg('--salida', os.path.join(RAIZ, '_release', 'MGSweb')))
 PUERTO = 8123
-TOOLS = ['archivo_celular', 'actores_export', 'anims', 'camaras_export', 'caras_ps1', 'categorizar', 'cielo', 'codec_niveles', 'codec_voces', 'codec_web', 'convertir', 'creditos_export', 'demo_dat', 'demos_cadenas', 'demos_export', 'disco', 'export_glb', 'exportar_todo', 'face_dat', 'fuente_web', 'gcl_vm', 'gcx', 'guion_disco2', 'guion_vivo', 'hud_extra', 'hud_indices', 'hzm', 'iconos_inventario', 'jeep19a_export', 'jeep_export', 'jefes_export', 'kmd2obj', 'liquid_export', 'ninja_export', 'niveles', 'oar', 'paddemo_export', 'paredes_rompibles', 'partida_items', 'pcx_mgs', 'personajes_export', 'pisos_atr', 'presets_historia', 'preshade', 'puertas_tarjeta', 'radio_dat', 'rango_export', 'rex_export', 'rpk', 'rutas', 'sgt_export', 'sonido', 'stage_extract', 'sueltos_export', 'tablas_ref', 'telops_nitidos', 'titulo_export', 'trampas_13', 'videos_export', 'voces_disco2', 'vox', 'vr_camaras', 'vr_export', 'vr_fondo', 'vr_menu', 'wolf_export', 'zako_export']
+TOOLS = ['archivo_celular', 'actores_export', 'anims', 'camaras_export', 'caras_ps1', 'categorizar', 'cielo', 'codec_niveles', 'codec_voces', 'codec_web', 'convertir', 'creditos_export', 'demo_dat', 'demos_cadenas', 'demos_export', 'disco', 'export_glb', 'exportar_todo', 'face_dat', 'fuente_web', 'gcl_vm', 'gcx', 'guion_disco2', 'guion_vivo', 'hud_extra', 'hud_indices', 'hzm', 'iconos_inventario', 'integral_export', 'jeep19a_export', 'jeep_export', 'jefes_export', 'kmd2obj', 'liquid_export', 'ninja_export', 'niveles', 'oar', 'paddemo_export', 'paredes_rompibles', 'partida_items', 'pcx_mgs', 'personajes_export', 'pisos_atr', 'presets_historia', 'preshade', 'puertas_tarjeta', 'radio_dat', 'rango_export', 'rex_export', 'rpk', 'rutas', 'sgt_export', 'sonido', 'stage_extract', 'sueltos_export', 'tablas_ref', 'telops_nitidos', 'titulo_export', 'extras_export', 'trampas_13', 'videos_export', 'voces_disco2', 'vox', 'vr_camaras', 'vr_export', 'vr_fondo', 'vr_menu', 'wolf_export', 'zako_export']
 TOOLS_DATOS = ['names.txt', 'tablas_ref.json', 'telops_textos.json', 'sueltos.json', 'servidor.mjs', 'unix_sitecustomize.py', 'unix_scripts.py']
 VISOR_FUERA = ['assets', '_*', 'prueba_*', 'log.php', '.htaccess', 'LEEME.md', 'juego_v1.js']
 ASSETS_PROPIOS = ['icono_192.png', 'icono_512.png', 'xr', 'hud/icono_socom.png', 'hud/icono_socom_sil.png', 'hud/icono_famas.png', 'hud/icono_caja.png']

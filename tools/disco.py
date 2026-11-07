@@ -121,11 +121,23 @@ class Imagen:
             raise ErrorDisco('Parece Metal Gear Solid pero no la versión USA (no tiene SLUS-00594 ni SLUS-00776).\nIt looks like Metal Gear Solid but not the USA version (no SLUS-00594 / SLUS-00776).')
         raise ErrorDisco('Este disco no es Metal Gear Solid (USA). / This disc is not Metal Gear Solid (USA).')
 
-    def extraer(self, salida, avance=None):
-        total = sum((s for p, _, s, _ in self.archivos if os.path.basename(p).upper() not in NO_HACEN_FALTA))
+    def integral(self):
+        n = self.nombres()
+        for exe, d in (('SLPM_862.47', 1), ('SLPM_862.48', 2)):
+            if (exe in n or 'MGS/' + exe in n) and 'MGS/STAGE.DIR' in n:
+                return d
+        return None
+
+    def vr_missions(self):
+        n = self.nombres()
+        return ('SLUS_009.57' in n or 'MGS/SLUS_009.57' in n) and 'MGS/STAGE.DIR' in n
+
+    def extraer(self, salida, avance=None, solo=None):
+        elegido = lambda p: os.path.basename(p).upper() not in NO_HACEN_FALTA and (solo is None or p.upper() in solo)
+        total = sum((s for p, _, s, _ in self.archivos if elegido(p)))
         hecho = 0
         for p, l, s, x in self.archivos:
-            if os.path.basename(p).upper() in NO_HACEN_FALTA:
+            if not elegido(p):
                 continue
             dst = os.path.join(salida, *p.split('/'))
             os.makedirs(os.path.dirname(dst), exist_ok=True)

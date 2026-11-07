@@ -920,9 +920,6 @@ export class Armas {
     this.minas.push(m);
     return m;
   }
-  ponerMinasNivel(actores) {
-    for (const a of actores || []) if (a.tipo === "CLAYMORE" && a.p) this.crearMina(new THREE.Vector3(a.p[0] * MM, a.p[1] * MM, a.p[2] * MM), (a.d ? a.d[1] : 0) * ANG, false).actor = a;
-  }
   dentroZona(m, q, alto) {
     const f = new THREE.Vector3(Math.sin(m.rot), 0, Math.cos(m.rot)), c = m.pos.clone().addScaledVector(f, .6);
     const v = q.clone().sub(c), lx = v.x * Math.cos(m.rot) - v.z * Math.sin(m.rot), lz = v.x * Math.sin(m.rot) + v.z * Math.cos(m.rot);
@@ -974,7 +971,8 @@ export class Armas {
       if (g.vital > 0) this.juego.dañar(g, 3, 4);
       tocados.add(g);
     }
-    let snake = false;
+    let snake = false, s0 = this.posSnake();
+    const enZona = this.postura() !== 2 && this.dentroZona(m, s0, [ 1.1, .5, .14 ][this.postura()] || 1.1);
     for (let k = -3; k <= 3; k++) {
       const d = f.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), k * .12), h = this.pared(o, d, 4.5), lejos = h ? h.distance : 4.5;
       const gg = this.guardiaEn(o, d, lejos, .35);
@@ -987,13 +985,11 @@ export class Armas {
       sv.y = 0;
       const t = sv.dot(d);
       if (!snake && t > 0 && t < lejos && sv.clone().addScaledVector(d, -t).length() < .3 && this.postura() !== 2 && this.juego) {
-        snake = true;
-        if (this.juego.dañoSnake) this.juego.dañoSnake(256, 2, d.clone().multiplyScalar(100)); else {
-          this.juego.vida -= 256 / (this.inv.vidaMax || 256);
-          this.ctx.daño?.();
-        }
+        snake = d.clone().multiplyScalar(1500 / 32);
       }
     }
+    const aSnake = (enZona ? 128 : 0) + (snake ? 256 : 0);
+    if (aSnake && this.juego?.dañoSnake) this.juego.dañoSnake(aSnake, 2, snake || null);
     m.fx = 6;
     this.fx.push({
       t: 0,
@@ -1461,7 +1457,6 @@ export class Armas {
   }
   dibujarHud(x, W, H) {
     if (this.fijado && (this.tFijado >> 3 & 1) === 0) this.inv.letra?.(x, 180 + (W - 320 >> 1), 16, "LOCK_ON", "cian");
-    if (this.itemConZoom() && this.inv.item === IT.CAMERA) this.inv.letra?.(x, (W >> 1) - 40, H - 40, "ZOOM LEVEL " + Math.round(this.zoomItem / 3.2), "blanco");
     const M = this.misil;
     if (M) {
       const f = Math.max(0, 1 - M.t / 1e3), h = Math.round(10 * f);

@@ -91,9 +91,11 @@ import { PantallaRango } from "./rango.js";
 
 import { VRPaneles, MAPA_XR } from "./vr_paneles.js";
 
+import { puntoEnCuadro } from "./fotos.js";
+
 import { CamaraLibre, sacarFoto, descargar } from "./camara_libre.js";
 
-import { REND, unirMallas, cullingPersonajes, prepararPersonajes, parcheAtlas, ordenOpaco, unirSiempre, texturasQueCorren } from "./rendimiento.js";
+import { refrescarNormalesUnidas, REND, unirMallas, cullingPersonajes, prepararPersonajes, parcheAtlas, ordenOpaco, unirSiempre, texturasQueCorren } from "./rendimiento.js";
 
 import { registrarCargador } from "./cargador.js";
 
@@ -113,11 +115,17 @@ import { VentanaMiraVR } from "./ventana_mira_vr.js";
 
 import { MiraArma } from "./mira_armas.js";
 
+import { ajustes } from "./ajustes_imagen.js";
+
+import { normalesSuaves } from "./normales_suaves.js";
+
 import { antiparrasVR } from "./antiparras_vr.js";
 
 import { MiraScope } from "./mira_scope.js";
 
 import { ESCENARIOS as MAPAS_EXCL, MapasExclusivos, zonasDelMapa } from "./mapas_excl.js";
+
+import { integral } from "./integral.js";
 
 const pantallaGameOver = new GameOver;
 
@@ -1159,7 +1167,9 @@ const hud = new Hud;
 
 hud.cargar();
 
-const miraArma = new MiraArma;
+const miraArma = new MiraArma({
+  se: id => audioMGS.se(id)
+});
 
 const camCasco = new THREE.PerspectiveCamera;
 
@@ -1441,6 +1451,9 @@ const liberarTurno = () => {
 };
 
 async function cargar(url) {
+  url = integral.modelo(url, {
+    traje: !!partida?.vars?.get?.("$f:G0435.0")
+  });
   if (!cache.has(url)) {
     cargando(1);
     const bajar = (k = 0) => loader.loadAsync("assets/" + url).catch(e => {
@@ -1451,6 +1464,7 @@ async function cargar(url) {
       await carasPS1(g.scene, url);
       if (piezasMapa.has(url) || unirSiempre(url)) unirMallas(g.scene, R, url, compartirTextura);
       preparar(g.scene);
+      normalesSuaves.registrar(g.scene);
       prepararPersonajes(g.scene, R);
       resueltos.set(url, g);
       return g;
@@ -1661,6 +1675,46 @@ texturasPixel.alCambiar(() => {
 });
 
 $("#opt-luz").onclick = () => alternarLuz();
+
+normalesSuaves.alEscribir = refrescarNormalesUnidas;
+
+function rotularImagen() {
+  const pon = (id, t) => {
+    const b = $(id);
+    if (b) b.textContent = t;
+  };
+  pon("#opt-brillo", "Brillo: " + ajustes.nombre("brillo").toLowerCase());
+  pon("#opt-contraste", "Contraste: " + ajustes.nombre("contraste").toLowerCase());
+  pon("#opt-color", "Color: " + ajustes.nombre("color").toLowerCase());
+  pon("#opt-poligonos", "Polígonos: " + (normalesSuaves.suaves ? "suaves" : "originales"));
+}
+
+function cambiarAjuste(k, dir = 1, vuelta = false) {
+  ajustes.mover(k, dir, vuelta);
+  antiparrasVR(R, R.xr.isPresenting ? inventario?.filtro ?? null : null);
+  rotularImagen();
+  if (camLibre.activa) pintarFotoOp();
+  aviso({
+    brillo: "Brillo",
+    contraste: "Contraste",
+    color: "Color"
+  }[k] + ": " + ajustes.nombre(k).toLowerCase());
+}
+
+for (const k of [ "brillo", "contraste", "color" ]) {
+  const b = $("#opt-" + k);
+  if (b) b.onclick = () => cambiarAjuste(k, 1, true);
+}
+
+{
+  const b = $("#opt-poligonos");
+  if (b) b.onclick = () => {
+    normalesSuaves.alternar();
+    rotularImagen();
+  };
+}
+
+rotularImagen();
 
 const rotular = () => {
   $("#opt-sombras").textContent = "Sombras: " + (conSombras ? "sí" : "no");
@@ -1947,6 +2001,12 @@ function ubicar(x, y, z, ang = 0) {
   vy = 0;
 }
 
+const MODELO_SMOKING = "modelos/init_tux_snake.glb";
+
+const enSmoking = () => !!partida?.vars?.get?.("$f:G0435.0");
+
+const modeloDeSnake = m => enSmoking() && !/nude/.test(m || "") ? MODELO_SMOKING : m;
+
 const ANIM_DE = nombre => /ippanhei|lopryhei|out_c_m1|mel_hei/.test(nombre) ? "enemy" : /snake|sne_|tux/.test(nombre) ? "snake" : null;
 
 function animador(obj, datos) {
@@ -2056,6 +2116,19 @@ async function prepararArma() {
       rifleVista = f;
       armaVista.add(f);
     }).catch(() => {});
+    integral.listo.then(d => d?.muy_facil && cargar(d.muy_facil.modelo)).then(f => {
+      if (!f) return;
+      f.setRotationFromMatrix((new THREE.Matrix4).makeBasis(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0)));
+      f.traverse(o => {
+        if (o.isMesh) {
+          o.material = o.material.clone();
+          o.material.color?.setScalar?.(1.6);
+        }
+      });
+      f.visible = false;
+      mp5Vista = f;
+      armaVista.add(f);
+    }).catch(() => {});
     armaVista.add(new THREE.PointLight(16777215, .6, 1.2));
     fogonazo = new THREE.Sprite(new THREE.SpriteMaterial({
       map: texArma("socom_f"),
@@ -2100,7 +2173,7 @@ async function prepararArma() {
   ponerArmaEnMano();
 }
 
-let corredera = null, pistolaVista = null, rifleVista = null;
+let corredera = null, pistolaVista = null, rifleVista = null, mp5Vista = null;
 
 const vainas = [];
 
@@ -2144,9 +2217,14 @@ function animarArma(dt) {
     const equip = (armas ? inventario.arma >= 0 : true) && !miraScope.activo && !miraArma.ocultaArma, fam = equip && inventario?.arma === WP.FAMAS;
     armaVista.userData.equipada = equip;
     if (pistolaVista && pistolaVista.visible !== (equip && !fam)) pistolaVista.visible = equip && !fam;
-    if (rifleVista && rifleVista.visible !== fam) {
-      rifleVista.visible = fam;
-      fogonazo.position.set(0, fam ? .086 : .02, fam ? -.5 : -.25);
+    const mp5 = fam && !!mp5Vista && integral.esMp5(inventario?.nivelJuego), rif = fam && !mp5;
+    if (mp5Vista && mp5Vista.visible !== mp5) {
+      mp5Vista.visible = mp5;
+      if (mp5) fogonazo.position.set(0, .106, -.52);
+    }
+    if (rifleVista && rifleVista.visible !== rif) {
+      rifleVista.visible = rif;
+      if (!mp5) fogonazo.position.set(0, fam ? .086 : .02, fam ? -.5 : -.25);
     }
   }
   const b = armaVista.userData.base, vr = R.xr.isPresenting;
@@ -2241,7 +2319,9 @@ function armaEnManoTercera(wId, ver) {
   if (!cuerpo) return;
   const M = cuerpo.armas3 ||= new Map;
   if (cuerpo.arma && !M.has("armas/socom.glb")) M.set("armas/socom.glb", cuerpo.arma);
-  const ruta = !armas ? "armas/socom.glb" : wId >= 0 ? armas.arma.modelo : null, C = cuerpo;
+  let ruta = !armas ? "armas/socom.glb" : wId >= 0 ? armas.arma.modelo : null;
+  const C = cuerpo;
+  if (ruta === "armas/famas.glb" && integral.esMp5(inventario?.nivelJuego)) ruta = integral.muyFacil.modelo;
   if (ruta && !M.has(ruta)) {
     M.set(ruta, null);
     cargar(ruta).then(m => {
@@ -2318,6 +2398,45 @@ function expulsarVaina() {
   vn.m.visible = true;
 }
 
+async function capturarFoto() {
+  const xr = R.xr.enabled;
+  R.xr.enabled = false;
+  cam.updateMatrixWorld();
+  const c = cam.clone();
+  cam.matrixWorld.decompose(c.position, c.quaternion, c.scale);
+  const v = cam.view;
+  if (v?.enabled) c.fov = 2 * Math.atan(Math.tan(cam.fov * Math.PI / 360) * (v.height / v.fullHeight)) * 180 / Math.PI;
+  let p;
+  try {
+    p = sacarFoto(R, {
+      escena: scene,
+      camara: c,
+      tipo: "plana",
+      ancho: 640
+    });
+  } finally {
+    R.xr.enabled = xr;
+  }
+  return createImageBitmap(await p);
+}
+
+const vFantasma = new THREE.Vector3;
+
+function codigoFantasma() {
+  const g = guion.fotoFantasma;
+  if (!g?.codigo) return 0;
+  vFantasma.set(g.pos[0], g.pos[1], g.pos[2]).multiplyScalar(.001);
+  cam.updateMatrixWorld();
+  cam.matrixWorldInverse.copy(cam.matrixWorld).invert();
+  const z = -vFantasma.clone().applyMatrix4(cam.matrixWorldInverse).z;
+  vFantasma.project(cam);
+  return puntoEnCuadro({
+    x: vFantasma.x,
+    y: vFantasma.y,
+    z: z
+  }) ? g.codigo : 0;
+}
+
 function disparo(origen, dir) {
   if (!juego || vuelo) return;
   const r = armas ? armas.disparar(origen, dir) : juego.disparar(origen, dir);
@@ -2364,7 +2483,8 @@ function tiroRafaga(r, o, d) {
 const BOCA_ARMA = {
   "armas/socom.glb": [ 0, -.25, .02 ],
   "armas/socom2.glb": [ 0, -.36, .02 ],
-  "armas/famas.glb": [ 0, -.5, .086 ]
+  "armas/famas.glb": [ 0, -.5, .086 ],
+  "integral/mp5.glb": [ 0, -.52, .106 ]
 };
 
 let fogonazo3 = null;
@@ -3714,7 +3834,7 @@ async function cargarNivel(nv, entrada = null) {
   tNivel = 0;
   await prepararArma();
   try {
-    const modeloSnake = snake?.modelo || catalogo.find(c => c.nombre === "snake")?.archivo;
+    const modeloSnake = modeloDeSnake(snake?.modelo || catalogo.find(c => c.nombre === "snake")?.archivo);
     if (modeloSnake) {
       const o = prepararCuerpo(await cargar(modeloSnake));
       mundo.add(o);
@@ -3836,7 +3956,7 @@ async function cargarNivel(nv, entrada = null) {
       muere?.(g);
     };
   }
-  if (!/^vr/.test(nv.id)) {
+  if (!/^vr/.test(nv.id) || nv.vr?.disco) {
     juego.ctx.inventario = inventario;
     inventario.conectarJuego(juego);
     partida?.aplicarInventario(inventario);
@@ -3870,7 +3990,10 @@ async function cargarNivel(nv, entrada = null) {
           navigator.vibrate?.(n * 33);
         } catch {}
       },
-      foto: () => inventario.foto(R, scene, cam),
+      foto: () => {
+        inventario.foto(capturarFoto, codigoFantasma());
+        return true;
+      },
       destello: () => {
         const d = $("#daño");
         d.style.background = "#fff";
@@ -3882,7 +4005,6 @@ async function cargarNivel(nv, entrada = null) {
       },
       alEquipar: (id, previo, a) => cambiarModeloArma(a)
     });
-    armas.ponerMinasNivel(vivos);
   }
   audioMGS.cargarEscenario(nv.id);
   juego.activo = $("#modo-sigilo").checked;
@@ -4576,6 +4698,8 @@ addEventListener("keydown", e => {
     if (e.code === "Tab") e.preventDefault();
     if (!e.repeat && e.code === "KeyF") fotoModoCamara("plana");
     if (!e.repeat && e.code === "KeyP") fotoModoCamara("360");
+    if (!e.repeat && e.code === "KeyB") cambiarBrilloFoto();
+    if (!e.repeat && e.code === "KeyT") cambiarSuaveFoto();
     return;
   }
   if (misionesVR.entrada(e.code)) {
@@ -5948,6 +6072,36 @@ const camLibre = new CamaraLibre;
 
 let camPrevia = null, arrastreCam = null;
 
+const fotoOp = (() => {
+  let s = false;
+  try {
+    s = localStorage.getItem("sm_foto_suave") === "1";
+  } catch {}
+  return {
+    suave: s,
+    pixelPrevio: null
+  };
+})();
+
+function pintarFotoOp() {
+  const b = $('#cam-botones [data-c="brillo"]'), s = $('#cam-botones [data-c="suave"]');
+  if (b) b.textContent = "BRILLO: " + ajustes.nombre("brillo");
+  if (s) s.textContent = "SUAVE: " + (fotoOp.suave ? "SÍ" : "NO");
+}
+
+function cambiarBrilloFoto() {
+  cambiarAjuste("brillo", 1, true);
+}
+
+function cambiarSuaveFoto() {
+  fotoOp.suave = !fotoOp.suave;
+  try {
+    localStorage.setItem("sm_foto_suave", fotoOp.suave ? "1" : "0");
+  } catch {}
+  pintarFotoOp();
+  texturasPixel.poner(fotoOp.suave ? false : fotoOp.pixelPrevio, false);
+}
+
 function alternarModoCamara() {
   if (camLibre.activa) {
     salirModoCamara();
@@ -5988,7 +6142,10 @@ function alternarModoCamara() {
     $("#panel").classList.add("oculto");
   }
   if (inventario.cv) inventario.cv.style.visibility = "hidden";
-  $("#cam-aviso").textContent = TACTIL ? "MODO CÁMARA · palanca = mover · arrastrar = mirar · FOTO / 360 = guardar" : "MODO CÁMARA · O = salir · WASD + mouse · Q/E bajar/subir · Shift/Ctrl rápido/lento · rueda = zoom · F = foto 4K · P = foto 360";
+  fotoOp.pixelPrevio = texturasPixel.pixel;
+  if (fotoOp.suave) texturasPixel.poner(false, false);
+  pintarFotoOp();
+  $("#cam-aviso").textContent = TACTIL ? "MODO CÁMARA · palanca = mover · arrastrar = mirar · FOTO / 360 = guardar" : "MODO CÁMARA · O = salir · WASD + mouse · Q/E bajar/subir · Shift/Ctrl rápido/lento · rueda = zoom · B = brillo · T = suave · F = foto 4K · P = foto 360";
   document.body.classList.add("modo-camara");
   document.body.classList.toggle("cam-tactil", TACTIL);
 }
@@ -5997,6 +6154,10 @@ function salirModoCamara() {
   camLibre.salir();
   arrastreCam = null;
   document.body.classList.remove("modo-camara");
+  if (fotoOp.pixelPrevio !== null) {
+    texturasPixel.poner(fotoOp.pixelPrevio, false);
+    fotoOp.pixelPrevio = null;
+  }
   if (inventario.cv) inventario.cv.style.visibility = "";
   const p = camPrevia;
   camPrevia = null;
@@ -6076,7 +6237,9 @@ async function fotoModoCamara(tipo) {
       tipo: tipo,
       vistaAgua: vistaAgua,
       agua: zonas?.length ? vistaAgua.zonaEn(camLibre.cam.position, zonas) : null,
-      filtro: R.domElement.style.filter || ""
+      filtro: R.domElement.style.filter || "",
+      suave: fotoOp.suave,
+      caraMax: TACTIL ? 2048 : 0
     });
     const f = new Date, dd = n => String(n).padStart(2, "0");
     const nombre = `mgs_${tipo === "360" ? "360_" : ""}${(cine ? "cinematica" : $("#esc-sel").value) || "mgs"}_${f.getFullYear()}${dd(f.getMonth() + 1)}${dd(f.getDate())}_${dd(f.getHours())}${dd(f.getMinutes())}${dd(f.getSeconds())}.jpg`;
@@ -6132,7 +6295,7 @@ $("#esc-camara").onclick = () => alternarModoCamara();
 for (const b of document.querySelectorAll("#cam-botones button")) b.addEventListener("pointerdown", e => {
   e.preventDefault();
   e.stopPropagation();
-  if (b.dataset.c === "salir") alternarModoCamara(); else fotoModoCamara(b.dataset.c);
+  if (b.dataset.c === "salir") alternarModoCamara(); else if (b.dataset.c === "brillo") cambiarBrilloFoto(); else if (b.dataset.c === "suave") cambiarSuaveFoto(); else fotoModoCamara(b.dataset.c);
 });
 
 let todoArmas = (() => {
@@ -6200,7 +6363,14 @@ function ponerVrCine(si) {
 
 addEventListener("mgs:opcion", e => {
   const {clave: clave, valor: valor} = e.detail || {};
-  if (clave === "pixel") texturasPixel.poner(valor); else if (clave === "vrcine") ponerVrCine(valor); else if (clave === "filtro") filtroPantalla.poner(valor);
+  if (clave === "pixel") texturasPixel.poner(valor); else if (clave === "vrcine") ponerVrCine(valor); else if (clave === "filtro") filtroPantalla.poner(valor); else if (clave === "brillo" || clave === "contraste" || clave === "color") {
+    ajustes.poner(clave, valor);
+    antiparrasVR(R, null);
+    rotularImagen();
+  } else if (clave === "poligonos") {
+    normalesSuaves.poner(valor);
+    rotularImagen();
+  }
 });
 
 let vrManosSnake = leerLS("sm_vrmanos", "0") === "1", vrCuerpoVisible = leerLS("sm_vrcuerpo", "0") === "1", vrGolpeMano = leerLS("sm_vrgolpe", "0") === "1";
@@ -6271,7 +6441,7 @@ function menuAjustesVR(volver) {
   }, volver ];
 }
 
-const manosSnake = new ManosSnake(() => cargar("modelos/snake.glb"));
+const manosSnake = new ManosSnake(() => cargar(enSmoking() ? MODELO_SMOKING : "modelos/snake.glb"));
 
 function actualizarManosVR() {
   const on = R.xr.isPresenting && vrManosSnake;
@@ -6475,7 +6645,7 @@ let vrRadarGira = leerLS("sm_vrradar", "1") === "1";
 const manoMov = () => ctl.quest.zurdo ? "right" : "left", manoArma = () => ctl.quest.zurdo ? "left" : "right";
 
 function actualizarRadarVR() {
-  radarMuñeca.visible = R.xr.isPresenting && !!juego && modo === "escenarios" && !misionesVR.ocultaHud;
+  radarMuñeca.visible = R.xr.isPresenting && !!juego && modo === "escenarios" && !misionesVR.ocultaHud && miraArma.tipo !== "camara";
   if (!radarMuñeca.visible) return;
   const g = [ 0, 1 ].map(i => R.xr.getControllerGrip(i)).find(c => c.userData.lado === manoMov());
   if (g && radarMuñeca.parent !== g) g.add(radarMuñeca);
@@ -6872,7 +7042,7 @@ R.setAnimationLoop(() => {
     museo: modo === "museo"
   });
   if (inventario.cv) {
-    const v = titulo.visible || enDemo || demo.ocupada || !(juego && modo === "escenarios") || misionesVR.activo ? "none" : "";
+    const v = titulo.visible || enDemo || demo.ocupada || !(juego && modo === "escenarios") || misionesVR.activo && !misionesVR.conInventario ? "none" : "";
     if (inventario.cv.style.display !== v) inventario.cv.style.display = v;
   }
   {
@@ -6890,12 +7060,13 @@ R.setAnimationLoop(() => {
     const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && !misionesVR.activo && !muerteSnake;
     const xrPrimera = R.xr.isPresenting && vrModo() === "primera";
     const enPrimera = !terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE;
-    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (enPrimera || apuntaHombro()) ? "stinger" : inventario.item >= IT.BOX1 && inventario.item <= IT.BOX3 && enPrimera ? "caja" : null;
+    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (enPrimera || apuntaHombro()) ? "stinger" : inventario.arma === WP.PSG1 && !R.xr.isPresenting && !terceraPersona() && (armas?.zoom ?? 0) > 330 ? "rifle" : inventario.item >= IT.BOX1 && inventario.item <= IT.BOX3 && enPrimera ? "caja" : inventario.item === IT.CAMERA && !terceraPersona() ? "camara" : enPrimera && inventario.item === IT.NVG ? "nvg" : enPrimera && inventario.item === IT.THERMG ? "termica" : enPrimera && inventario.item === IT.GASMASK && inventario.arma !== WP.PSG1 ? "mascara" : null;
     miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       tipo: tipo,
       camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : camApuntar(),
-      armas: tipo === "caja" ? null : armas,
-      vr: R.xr.isPresenting
+      armas: tipo === "stinger" || tipo === "nikita" ? armas : null,
+      vr: R.xr.isPresenting,
+      zoom: armas?.zoomItem
     });
     let vm = null;
     if (ok && xrPrimera && armas && !inventario.abierto && !codec.abierto && !enPausa()) {
@@ -7000,7 +7171,7 @@ R.setAnimationLoop(() => {
   if (partida && juego && modo === "escenarios") partida.tick(enPausa() ? 0 : dtReal);
   $("#pausa").hidden = !pausa || TACTIL;
   if (pausa) dt = 0;
-  if (juego && modo === "escenarios" && !titulo.visible && !misionesVR.activo) inventario.update(dtReal, pausa);
+  if (juego && modo === "escenarios" && !titulo.visible && (!misionesVR.activo || misionesVR.conInventario)) inventario.update(dtReal, pausa);
   if (inventario.abierto) dt = 0;
   misionesVR.actualizar(dt);
   if (misionesVR.congelado) dt = 0;
@@ -7079,7 +7250,7 @@ R.setAnimationLoop(() => {
     }
     if (sensores && modo === "escenarios") {
       const eq = armas ? inventario.item : -1;
-      sensores.detectorMinas = eq === IT.MINED;
+      sensores.detectorMinas = eq === IT.MINED && !(inventario.nivelJuego >= 2);
       sensores.termicos = eq === IT.THERMG;
       sensores.cigarrillos = eq === IT.CIGS;
       if (armas?.chaff > 0) sensores.chaff(armas.chaff);
@@ -7111,6 +7282,10 @@ R.setAnimationLoop(() => {
         recargando: juego.arma.recargando > 0
       },
       minas: [ ...armas ? inventario.minasRadar(armas.minas) : [], ...din?.extras?.puntosRadar() || [] ],
+      chaff: !!armas && armas.chaff > 0,
+      o2: juego.o2Hud?.() ?? null,
+      sinRadar: dificultad >= 3 || ducto.activo,
+      camaraFotos: miraArma.tipo === "camara",
       vidaMax: inventario.vidaMax,
       menuAbierto: inventario.abierto,
       primeraPersona: !terceraPersona(),
@@ -7118,7 +7293,7 @@ R.setAnimationLoop(() => {
       sonar: id => seEn(id)
     }, dt);
     radarTex.needsUpdate = true;
-    $("#mira").style.display = (TACTIL || document.pointerLockElement === R.domElement) && vista !== "arriba" && !miraScope.visible ? "block" : "none";
+    $("#mira").style.display = (TACTIL || document.pointerLockElement === R.domElement) && vista !== "arriba" && !miraScope.visible && miraArma.tipo !== "camara" && miraArma.tipo !== "rifle" ? "block" : "none";
   }
   {}
   animarArma(dt);
@@ -7479,7 +7654,20 @@ paneles.on("boton", (b, abajo) => {
         texto: () => "TEXTURAS: " + (texturasPixel.pixel ? "PIXELADAS (ORIGINAL)" : "SUAVIZADAS"),
         accion: () => texturasPixel.alternar(),
         cierra: false
-      } : null, hayJuego ? {
+      } : null, !menuMisiones ? {
+        texto: () => "POLIGONOS: " + (normalesSuaves.suaves ? "SUAVES" : "ORIGINALES"),
+        accion: () => {
+          normalesSuaves.alternar();
+          rotularImagen();
+        },
+        cierra: false
+      } : null, ...[ "brillo", "contraste", "color" ].map(k => ({
+        texto: () => k.toUpperCase() + ": " + ajustes.nombre(k),
+        izq: () => cambiarAjuste(k, -1),
+        der: () => cambiarAjuste(k, 1),
+        accion: () => cambiarAjuste(k, 1, true),
+        cierra: false
+      })), hayJuego ? {
         texto: () => "TODAS LAS ARMAS E ITEMS: " + (todoArmas ? "SI" : "NO"),
         accion: () => alternarTodo(),
         cierra: false
@@ -7532,6 +7720,16 @@ if (!new URLSearchParams(location.search).get("modo")) mostrarTitulo("logos");
 
 catalogo = await (await fetch("assets/catalogo.json")).json();
 
+if (await integral.listo) {
+  try {
+    const r = await fetch("assets/integral/catalogo.json");
+    if (r.ok) for (const c of await r.json()) {
+      catalogo.push(c);
+      if (c.titulo && !NOMBRES[c.nombre]) NOMBRES[c.nombre] = c.titulo;
+    }
+  } catch {}
+}
+
 escenarios = await (await fetch("assets/escenarios.json")).json();
 
 personajes = catalogo.filter(c => c.categoria === "personaje").sort((a, b) => b.con_nombre - a.con_nombre || !!NOMBRES[b.nombre] - !!NOMBRES[a.nombre] || a.nombre.localeCompare(b.nombre));
@@ -7543,6 +7741,15 @@ avisarDatos();
 const q = new URLSearchParams(location.search);
 
 if (q.get("esc")) $("#esc-sel").value = q.get("esc");
+
+function activarSmoking(p) {
+  if (p?.vars?.get?.("$w:L0006") !== 3) return false;
+  p.vars.set("$w:L0004", p.vars.get("$w:L0004") | 32);
+  p.vars.set("$f:G0435.0", 1);
+  return true;
+}
+
+titulo.fotosAlbum = () => inventario.fotos;
 
 async function mostrarTitulo(desde = "titulo", cursor = null) {
   document.exitPointerLock?.();
@@ -7564,6 +7771,7 @@ async function mostrarTitulo(desde = "titulo", cursor = null) {
     usarPartida(r.accion === "nueva" ? await Partida.nueva(r.dificultad) : Partida.cargar(r.datos));
     const clear = r.accion !== "nueva" && !!partida?.visor?.nuevaPartida;
     if (clear) delete partida.visor.nuevaPartida;
+    if (clear) activarSmoking(partida);
     if (r.accion === "nueva" || clear) await correrDemos((await cargarCadenas())?.partida_nueva?.pasos);
     return cambiarModo("jugar", partida.st);
   }

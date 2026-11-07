@@ -19,6 +19,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## Novedades
 
+- **v2.10:** las claymores ya no estaban dos veces y su daño sigue al original; la cámara, la máscara de gas, las antiparras y la mira del PSG1 usan sus dibujos del juego; el radar se traba con el chaff y aparece la barra de O2; Opciones suma BRILLO, CONTRASTE, COLOR y POLIGONOS; nuevo menú SPECIAL con el álbum de fotos, las fotos de fantasmas y PREVIOUS OPERATIONS, y la partida con smoking. Con el disco del Integral, además, muy fácil con la MP5 y la Meryl de la vuelta con smoking.
 - **v2.9:** en primera persona, la caja de cartón se ve desde adentro, con el agujero del juego original, en la PC y en el casco. Se abre con su animación y el borde es difuso. Alrededor es cartón oscuro en lugar del negro del original.
 - **v2.8:** en el casco, el cuerpo visible deja ver las piernas y los pies ya no atraviesan el piso. En los menús, el temblor de la mano ya no le saca la elección a la palanca y B vuelve al menú anterior. El menú muestra sólo lo que sirve donde estás, y el radar va en la mano sin arma, también para zurdos. El gesto contra Mantis ya no se activa con sólo girar la cabeza. La luz elegida queda guardada, y en OPCIONES el rayo y el mouse eligen la fila correcta.
 - **v2.7:** en la PC, el juego abre en su propia ventana, sin barras ni ventana negra, y se apaga solo al cerrarla. Sigue andando sin internet.
@@ -39,7 +40,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v2.9.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v2.10.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y

@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
+import { ajustes } from "./ajustes_imagen.js";
+
 const VEL = 3, RAPIDO = 4, LENTO = .25;
 
 const PITCH_MAX = 1.55, FOV_MIN = 15, FOV_MAX = 110;
@@ -71,11 +73,12 @@ const VS_PANTALLA = "varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4
 
 const FS_EQUI = `uniform samplerCube cubo; uniform float rumbo; varying vec2 vUv;\n  void main(){\n    float lon = (vUv.x - 0.5) * 6.28318530718 - rumbo, lat = (vUv.y - 0.5) * 3.14159265359;\n    vec3 d = vec3(sin(lon) * cos(lat), sin(lat), -cos(lon) * cos(lat));\n    gl_FragColor = vec4(textureCube(cubo, d).rgb, 1.0);\n    #include <colorspace_fragment>\n  }`;
 
-export async function sacarFoto(R, {escena: escena, camara: camara, tipo: tipo = "360", ancho: ancho = 0, agua: agua = null, vistaAgua: vistaAgua = null, filtro: filtro = ""}) {
+export async function sacarFoto(R, {escena: escena, camara: camara, tipo: tipo = "360", ancho: ancho = 0, agua: agua = null, vistaAgua: vistaAgua = null, filtro: filtro = "", suave: suave = false, caraMax: caraMax = 0}) {
   const max = R.capabilities.maxTextureSize, basura = [];
-  const nuevaRT = (w, h, prof) => {
+  const nuevaRT = (w, h, prof, samples = 0) => {
     const r = new THREE.WebGLRenderTarget(w, h, {
-      depthBuffer: prof
+      depthBuffer: prof,
+      samples: samples
     });
     r.texture.colorSpace = THREE.SRGBColorSpace;
     basura.push(r);
@@ -98,8 +101,11 @@ export async function sacarFoto(R, {escena: escena, camara: camara, tipo: tipo =
       w = Math.min(ancho || 4096, max);
       w -= w % 2;
       h = w / 2;
-      const cara = Math.min(R.capabilities.maxCubemapSize || max, w / 2);
-      const rc = new THREE.WebGLCubeRenderTarget(cara, {
+      const cara = Math.min(R.capabilities.maxCubemapSize || max, suave ? caraMax || w : w / 2);
+      const rc = new THREE.WebGLCubeRenderTarget(cara, suave ? {
+        generateMipmaps: true,
+        minFilter: THREE.LinearMipmapLinearFilter
+      } : {
         generateMipmaps: false
       });
       rc.texture.colorSpace = THREE.SRGBColorSpace;
@@ -139,7 +145,7 @@ export async function sacarFoto(R, {escena: escena, camara: camara, tipo: tipo =
       c.aspect = w / h;
       c.clearViewOffset();
       c.updateProjectionMatrix();
-      rt = nuevaRT(w, h, true);
+      rt = nuevaRT(w, h, true, suave ? 4 : 0);
       R.setRenderTarget(rt);
       R.clear();
       R.render(escena, c);
@@ -157,6 +163,7 @@ export async function sacarFoto(R, {escena: escena, camara: camara, tipo: tipo =
     R.setScissorTest(prev.tijera);
     for (const b of basura) b.dispose();
   }
+  ajustes.aplicarBytes(px.datos);
   const img = new ImageData(w, h), fila = w * 4;
   for (let y = 0; y < h; y++) img.data.set(px.datos.subarray((h - 1 - y) * fila, (h - y) * fila), y * fila);
   for (let i = 3; i < img.data.length; i += 4) img.data[i] = 255;

@@ -644,6 +644,19 @@ function unirGeos(mallas, nombres, uvs = null) {
 
 const _plantillas = new WeakMap;
 
+export function refrescarNormalesUnidas(root) {
+  for (const P of _plantillas.get(root) || []) for (const T of P.tramos) {
+    const N = T.geo.attributes.normal;
+    if (!N || !T.normalesDe) continue;
+    let o = 0;
+    for (const g of T.normalesDe) {
+      const a = g.attributes.normal;
+      for (let i = 0; i < a.count; i++) N.setXYZ(o++, a.getX(i), a.getY(i), a.getZ(i));
+    }
+    N.needsUpdate = true;
+  }
+}
+
 export function prepararPersonajes(root, R) {
   if (!REND.activo || !REND.unirPersonajes || !R || !root || _plantillas.has(root)) return;
   _R = R;
@@ -742,6 +755,7 @@ export function prepararPersonajes(root, R) {
           P.atlas.add(sb.atlas);
           P.tramos.push({
             ...U,
+            normalesDe: sb.mallas.map(o => o.geometry),
             idx: sb.mallas.map(o => partes.indexOf(o)),
             texs: sb.mallas.map(o => o.material.map),
             imgs: sb.mallas.map(o => o.material.map.image),

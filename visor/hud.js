@@ -808,7 +808,7 @@ export class Hud {
     if (n === 4) this.acum = 0;
     disposicion.vidaY = this.barra.y;
     actualizarOrigenJefes(D);
-    const sinRadar = d.sinRadar && rM !== 3 && rM !== 2;
+    const sinRadar = d.camaraFotos || d.sinRadar && rM !== 3 && rM !== 2;
     if (!sinRadar) this.dibujarRadar(d, rM, nivel);
     const cv = this.cv, Wd = Math.round(D.iw * D.dpr), Hd = Math.round(D.ih * D.dpr);
     const x = this.ctx;

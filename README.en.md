@@ -19,6 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## What's new
 
+- **v2.10:** level claymores no longer exist twice and their damage follows the original; the camera, gas mask, goggles and PSG1 scope use their drawings from the game; chaff jams the radar and the O2 bar shows; Options adds BRIGHTNESS, CONTRAST, COLOR and POLYGONS; new SPECIAL menu with the photo album, ghost photos and PREVIOUS OPERATIONS, and the tuxedo game. With the Integral disc, also Very Easy with the MP5 and Meryl from the tuxedo round.
 - **v2.9:** in first person, the cardboard box is seen from inside, through the hole from the original game, on PC and in the headset. It opens with its animation and has a soft edge. Around it is dark cardboard instead of the original black.
 - **v2.8:** in the headset, the visible body now shows the legs and the feet no longer go through the floor. In menus, a shaky hand no longer takes the selection away from the stick, and B goes back to the previous menu. The menu shows only what works where you are, and the radar sits on the hand without the weapon, for left-handed players too. Just turning your head no longer triggers the gesture against Mantis. Your light choice is saved, and in OPTIONS the ray and the mouse pick the right row.
 - **v2.7:** on PC, the game opens in its own window, with no bars or black window, and stops by itself when you close it. It still works offline.
@@ -39,7 +40,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v2.9.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v2.10.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and

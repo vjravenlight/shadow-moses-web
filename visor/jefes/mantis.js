@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
+import { ArcoPlasma } from "../plasma.js";
+
 import { Jefe, Flujo, MM, ANG, ratan2, randU, randS, nearExp4, nearExp8, nearExp4P, cargarModelo, aplicarPose, rotY } from "./base.js";
 
 import { WP, IT, TIPO_ARMA, TIPO_ITEM } from "../inventario.js";
@@ -1314,6 +1316,11 @@ class Sonic extends Jefe {
   se(id, p = null, modo = null) {
     seMM(this, id, p, modo);
   }
+  destruir(...a) {
+    for (const p of this.plasmas || []) p.arco.quitar();
+    this.plasmas = [];
+    return super.destruir(...a);
+  }
   constructor(mantis, dir, speed, vital) {
     super({
       tipo: "PSYSONIC",
@@ -1328,6 +1335,7 @@ class Sonic extends Jefe {
     this.time = 0;
     this.count = 128;
     this.size = [ 4096, 4096, 4096 ];
+    this.plasmas = [];
     this.c = {
       mov: mantis.manoMM(),
       step: [ 0, 0, 0 ]
@@ -1349,7 +1357,24 @@ class Sonic extends Jefe {
       this.destruir();
       return;
     }
-    if (t % 4 === 0) this.mgr.chispa(aV3(this.c.mov), .25, 6, 8965375);
+    if (t % 4 === 0) this.plasmas.push({
+      arco: new ArcoPlasma(this.mgr.mundo, {
+        color: 5263440,
+        tam: .16,
+        ruido: .09
+      }),
+      t: 0,
+      d: (new THREE.Vector3).randomDirection().multiplyScalar(.4)
+    });
+    const c = aV3(this.c.mov);
+    this.plasmas = this.plasmas.filter(p => {
+      if (++p.t > 8) {
+        p.arco.quitar();
+        return false;
+      }
+      p.arco.actualizar(c, c.clone().add(p.d));
+      return true;
+    });
   }
   fase0(t) {
     if (this.sala.flagsMantis & 4) {

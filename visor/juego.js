@@ -2772,9 +2772,13 @@ export class Juego {
   velAgarre() {
     return this.agarrado ? this.sn.cuadrado ? this.velArrastre || 0 : 0 : null;
   }
+  "dañable"() {
+    const S = this.sn;
+    return !(this.muerto || this.ctx.vuelo?.() || S.inv > 0 || S.reac && S.reac.tipo !== "piso");
+  }
   "dañoSnake"(daño, aMode = 1, fuerza = null, punto = null) {
     const S = this.sn, inv = this.ctx.inventario;
-    if (this.muerto || this.ctx.vuelo?.() || S.inv > 0 || S.reac && S.reac.tipo !== "piso") return false;
+    if (!this.dañable()) return false;
     let d = daño;
     if (aMode === 1 && inv) d = inv.dañoBala(d);
     this.vida -= d / (inv?.vidaMax || 256);

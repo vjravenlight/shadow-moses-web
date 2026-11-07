@@ -1,4 +1,6 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { integral } from "./integral.js";
+
 import { VarsGCL, Guion } from "./codec_gcl.js";
 
 const BASE = "assets/partida/";
@@ -522,6 +524,8 @@ export class Partida {
     const e = d.niveles[String(Math.max(-1, Math.min(3, (dificultad | 0) - 1)))];
     juntar(e.g, p.vars.g);
     juntar(e.l, p.vars.l);
+    const mf = (dificultad | 0) === 0 ? (await integral.listo)?.muy_facil?.vars : null;
+    if (mf) for (const [k, v] of Object.entries(mf)) p.vars.set(k, v);
     p.historial = [ ...d.historial, ...new Array(HISTORIAL).fill(0) ].slice(0, HISTORIAL);
     p.st = d.st;
     p._pend = {

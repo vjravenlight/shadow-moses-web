@@ -3,9 +3,34 @@ import * as THREE from "three";
 
 import { cargarSgt, poligono, linea, rgb, calc, W0, H0, ALTO_FRAME } from "./mira_scope.js";
 
-import { textoMenu, cargarAtlasHud } from "./hud.js";
+import { textoMenu, anchoTextoMenu, cargarAtlasHud } from "./hud.js";
 
-const FPS = 30;
+const FPS = 30, ANG = Math.PI * 2 / 4096;
+
+const ESPERA_MASCARA = 9;
+
+const CAPAS = {
+  camara: [ "camera", "camera_2" ],
+  mascara: [ "mask" ],
+  nvg: [ "nv_ggle1", "nv_ggle2", "nv_ggle3" ],
+  termica: [ "ir_ggle1", "ir_ggle2", "ir_ggle3" ],
+  rifle: [ "rifle1", "rifle3", "rifle2" ]
+};
+
+const MUEVEN = {
+  camara: {},
+  nvg: {
+    capas: [ [ 1, 2, 20, false, false ], [ 2, 1, 12, true, true ] ]
+  },
+  termica: {
+    capas: [ [ 1, 2, 20, false, false ], [ 2, 1, 12, true, true ] ]
+  },
+  rifle: {
+    capas: [ [ 0, 1, 8, false, false ], [ 1, 1, 8, false, false ] ]
+  }
+};
+
+const SIN_OCULTAR = new Set([ "caja", "mascara", "nvg", "termica" ]);
 
 const COLORES = {
   stinger: {
@@ -34,7 +59,8 @@ function bordeDifuso(x, v, c, t = [ 0, 0, 0 ]) {
 }
 
 export class MiraArma {
-  constructor({base: base = "assets/", contenedor: contenedor = null, z: z = 3} = {}) {
+  constructor({base: base = "assets/", contenedor: contenedor = null, z: z = 3, se: se = null} = {}) {
+    this.se = se;
     this.sgt = {};
     this.tipo = null;
     this.t = 0;
@@ -42,7 +68,7 @@ export class MiraArma {
     this.vr = false;
     this.blancos = [];
     this.lock = false;
-    for (const n of [ "stinger", "nikita", "cb_box" ]) cargarSgt(n, base).then(j => {
+    for (const n of [ "stinger", "nikita", "cb_box", ...new Set(Object.values(CAPAS).flat()) ]) cargarSgt(n, base).then(j => {
       this.sgt[n] = j;
     });
     this.atlas = false;
@@ -61,13 +87,28 @@ export class MiraArma {
     }
   }
   get _dibujo() {
+    const capas = CAPAS[this.tipo];
+    if (capas) {
+      this._armados ||= {};
+      if (!this._armados[this.tipo] && capas.every(n => this.sgt[n])) {
+        this._armados[this.tipo] = {
+          cuadros: Math.max(...capas.map(n => this.sgt[n].cuadros)),
+          prims: capas.flatMap((n, c) => this.sgt[n].prims.map(p => ({
+            ...p,
+            capa: c,
+            v: p.v?.map(q => [ q[0], q[1] > 2048 ? q[1] - 4096 : q[1] ])
+          })))
+        };
+      }
+      return this._armados[this.tipo] || null;
+    }
     return this.tipo === "caja" ? this.sgt.cb_box : this.sgt[this.tipo];
   }
   get visible() {
     return !!this.tipo && !!this._dibujo;
   }
   get ocultaArma() {
-    return !!this.tipo && this.tipo !== "caja" && !this.vr;
+    return !!this.tipo && !SIN_OCULTAR.has(this.tipo) && !this.vr;
   }
   get firma() {
     return this.visible ? `${this.atlas}|${this.tipo}|${this.tipo === "caja" ? Math.min(this.t, this._dibujo.cuadros + 1) : this.t}|${this.lock}|${this.blancos.map(b => b.join()).join(";")}` : "";
@@ -78,6 +119,10 @@ export class MiraArma {
       this.tipo = e.tipo || null;
       this.t = 0;
       this.acum = 0;
+      this.despl = [ [ 0, 0 ], [ 0, 0 ], [ 0, 0 ] ];
+      this.respiro = 0;
+      this.angPrevio = null;
+      if (this.tipo === "camara") this.se?.(21);
     }
     if (!this.tipo) {
       this.blancos = [];
@@ -85,11 +130,64 @@ export class MiraArma {
       return;
     }
     this.acum += Math.min(dt, .25) * FPS;
+    let cuadros = 0;
     while (this.acum >= 1) {
       this.acum -= 1;
       this.t++;
+      cuadros++;
+    }
+    if (this.tipo === "mascara" && this.t > ESPERA_MASCARA) for (let k = 0; k < cuadros; k++) if (++this.respiro === 45) {
+      this.respiro = 0;
+      this.se?.(114);
+    }
+    if (MUEVEN[this.tipo]) {
+      this.zoom = Math.round(e.zoom ?? 320);
+      this.ang = [ 0, 0 ];
+      if (e.camara?.getWorldDirection) {
+        const d = e.camara.getWorldDirection(_v);
+        this.ang = [ Math.round(Math.asin(Math.max(-1, Math.min(1, d.y))) / ANG), (Math.round((Math.atan2(-d.x, -d.z) + Math.PI) / ANG) % 4096 + 4096) % 4096 ];
+      }
+      this._moverCapas(cuadros);
     }
     this._medirBlancos(e.camara, e.armas);
+  }
+  _moverCapas(cuadros) {
+    const M = MUEVEN[this.tipo], a = this.ang, p = this.angPrevio;
+    this.angPrevio = a;
+    if (!p || !M.capas || !cuadros || this.t < 10) return;
+    const dv = (a[1] - p[1] + 6144) % 4096 - 2048, dp = a[0] - p[0];
+    const sx = dv < -1 ? 1 : dv > 1 ? -1 : 0, sy = dp > 1 ? -1 : dp < -1 ? 1 : 0;
+    for (let k = 0; k < cuadros; k++) for (const [c, sens, max, inv, soloX] of M.capas) {
+      const d = this.despl[c], paso = (i, s) => {
+        if (s) d[i] = Math.max(-max, Math.min(max, d[i] + (inv ? -s : s) * sens)); else if (d[i] > 0) d[i] = Math.max(0, d[i] - sens); else if (d[i] < 0) d[i] = Math.min(0, d[i] + sens);
+      };
+      paso(0, sx);
+      if (!soloX) paso(1, sy);
+    }
+  }
+  _hudAntiparras(x, ox, oy) {
+    const col = this.tipo === "nvg" ? [ 255, 0, 0 ] : [ 65, 160, 74 ], rgbT = rgb(col, .5), vy = this.ang[1];
+    const a4 = Math.trunc(vy % 64 * 24 / 64) + 160;
+    let X = a4 - Math.trunc(a4 / 24) * 24, n = Math.trunc(vy / 64) + Math.trunc(a4 / 24);
+    x.fillStyle = rgbT;
+    for (;X < 300; X += 24, n--) {
+      if (X < 20) continue;
+      const v = n >= 65 ? n - 64 : n < 0 ? -n : n > 32 ? 64 - n : n, s = String(v).padStart(2, "0");
+      textoMenu(x, X + ox - (anchoTextoMenu(s) >> 1), 148 + oy, s, col);
+      x.fillRect(X + ox, 144 + oy, 1, 1);
+    }
+    if ((this.t + 16) % 33 - 16 > 0) textoMenu(x, 41 + ox, 42 + oy, "SCAN", col);
+    textoMenu(x, 137 + ox, 42 + oy, this.tipo === "nvg" ? "MODE - B" : "MODE - A", col);
+    [ 8 * (vy & 2047), 4 * (vy & 4095), 16 * (vy & 1023) ].forEach((v, k) => textoMenu(x, 40 + ox, 56 + 8 * k + oy, String(v), col));
+    const barra = (k, v) => {
+      const h = v < 32 ? 64 - v : v, P = 40 + 12 * k;
+      x.fillStyle = rgbT;
+      x.fillRect(P + ox, 140 - h + oy, 3, h);
+      x.fillRect(P + 3 + ox, 140 - h + oy, 3, 1);
+    };
+    barra(0, (vy + 1024 & 2047) >> 5);
+    barra(1, vy >> 6);
+    barra(2, (vy - 1024 & 1023) >> 4);
   }
   _medirBlancos(cam, armas) {
     const out = [];
@@ -121,7 +219,8 @@ export class MiraArma {
   }
   pintar(x, ox, oy, Wu, Hu) {
     if (!this.visible) return false;
-    const S = this._dibujo, s = this.t, fin = s > S.cuadros;
+    const S = this._dibujo, s = this.tipo === "mascara" ? this.t - ESPERA_MASCARA : this.t, fin = s > S.cuadros;
+    if (s < 0) return true;
     ox = Math.round(ox);
     oy = Math.round(oy);
     const borde = p => {
@@ -129,22 +228,23 @@ export class MiraArma {
       return [ X + ox, Y + oy ];
     };
     const verts = p => p.v.map((v, k) => {
-      const a = p.anim?.[k];
-      if (!a || fin) return [ v[0], v[1] ];
+      const a = p.anim?.[k], o = p.capa != null ? this.despl?.[p.capa] : null, ex = o ? o[0] : 0, ey = o ? o[1] : 0;
+      if (!a || fin) return [ v[0] + ex, v[1] + ey ];
       const d = Math.min(Math.max(s, a[0]), a[1]) - a[1];
-      return [ v[0] + calc(d, a[2]), v[1] + calc(d, a[3]) ];
+      return [ v[0] + calc(d, a[2]) + ex, v[1] + calc(d, a[3]) + ey ];
     });
     const parpadea = p => p.parpadeo && s % p.parpadeo[0] < p.parpadeo[1];
     for (let i = S.prims.length - 1; i >= 0; i--) {
       const p = S.prims[i];
       if (p.tipo === "texto" || parpadea(p)) continue;
+      if (this.tipo === "camara" && this.vr && p.tipo === "poly") continue;
       const v = verts(p).map(borde);
       const carton = this.tipo === "caja" ? CARTON : null;
       if (p.tipo === "poly" && p.gouraud && p.abr === 2 && v.length === 4) {
         bordeDifuso(x, v, p.color, carton || undefined);
         continue;
       }
-      x.fillStyle = rgb(carton || (p.gouraud ? p.color[0] : p.color), p.semi ? .5 : 1);
+      if (p.semi && p.abr === 2 && !carton && !p.gouraud) x.fillStyle = `rgba(0,0,0,${p.color[0] / 255})`; else x.fillStyle = rgb(carton || (p.gouraud ? p.color[0] : p.color), p.semi ? .5 : 1);
       if (p.tipo === "poly") poligono(x, v); else linea(x, v, p.semi ? new Set : null);
     }
     const C = COLORES[this.tipo];
@@ -157,6 +257,12 @@ export class MiraArma {
       if (p.tipo !== "texto" || parpadea(p)) continue;
       const [v] = verts(p);
       textoMenu(x, v[0] + ox, v[1] + oy, p.texto, p.color);
+    }
+    if ((this.tipo === "nvg" || this.tipo === "termica") && this.t >= 6) this._hudAntiparras(x, ox, oy);
+    if (this.tipo === "camara") {
+      const n = (v, a = 4) => String(v).padStart(a, " ");
+      textoMenu(x, 200 + ox, 25 + oy, `zoom  : ${n(this.zoom)}`, [ 192, 144, 128 ]);
+      textoMenu(x, 200 + ox, 33 + oy, `angle : ${n(this.ang[0])}, ${n(this.ang[1])}`, [ 192, 144, 128 ]);
     }
     if (this.vr && this.tipo === "stinger" && this.lock && (s >> 3 & 1) === 0) textoMenu(x, 180 + ox, 16 + oy, "LOCK_ON", [ 60, 200, 200 ]);
     return true;
@@ -216,7 +322,7 @@ export class MiraArma {
         w: 1536,
         h: 1152
       },
-      visible: () => this.visible && this.vr && this.tipo === "caja",
+      visible: () => this.visible && this.vr && (this.tipo === "caja" || this.tipo === "mascara"),
       lienzo: () => {
         const f = this.firma;
         if (!this._bufCaja || f !== this._firmaCaja) {
@@ -237,7 +343,7 @@ export class MiraArma {
         w: 640,
         h: 480
       },
-      visible: () => this.visible && this.vr && this.tipo !== "caja",
+      visible: () => this.visible && this.vr && this.tipo !== "caja" && this.tipo !== "mascara",
       lienzo: () => {
         const f = this.firma;
         if (!this._bufVR || f !== this._firmaVR) {

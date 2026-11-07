@@ -3,11 +3,13 @@ import * as ctl from "./controles.js";
 
 import { urlVoz } from "./audio_ps1.js";
 
+import { leerFotos } from "./fotos.js";
+
 const W = 320, H = 224, HT = 240;
 
 const BASE = new URL("./assets/", import.meta.url).href;
 
-const OPACO = 0, ADD = 1, RESTA = 2, MITAD = 3;
+export const OPACO = 0, ADD = 1, RESTA = 2, MITAD = 3;
 
 const PALETA = [ [ 223, 115, 119 ], [ 31, 128, 128 ], [ 55, 142, 121 ], [ 65, 156, 188 ], [ 93, 148, 165 ], [ 40, 128, 171 ], [ 112, 163, 142 ], [ 189, 162, 145 ] ];
 
@@ -45,6 +47,18 @@ export const ENTRADAS = [ {
   id: "opciones",
   texto: "OPCIONES",
   interna: true
+}, {
+  id: "briefing",
+  texto: "BRIEFING",
+  etiqueta: "op_brf",
+  interna: true,
+  extra: "brf"
+}, {
+  id: "special",
+  texto: "SPECIAL",
+  etiqueta: "op_special",
+  interna: true,
+  extra: "preope"
 } ];
 
 export const NIVELES = [ {
@@ -135,6 +149,26 @@ const FILAS = [ {
   valores: FILTROS,
   nombres: FILTROS_NOMBRES
 }, {
+  clave: "brillo",
+  texto: "BRILLO",
+  valores: [ 0, 1, 2, 3, 4, 5, 6 ],
+  nombres: [ "MENOS 2", "MENOS 1", "NORMAL", "MAS 1", "MAS 2", "MAS 3", "MAS 4" ]
+}, {
+  clave: "contraste",
+  texto: "CONTRASTE",
+  valores: [ 0, 1, 2, 3, 4 ],
+  nombres: [ "MENOS 2", "MENOS 1", "NORMAL", "MAS 1", "MAS 2" ]
+}, {
+  clave: "color",
+  texto: "COLOR",
+  valores: [ 0, 1, 2, 3, 4 ],
+  nombres: [ "MENOS 2", "MENOS 1", "NORMAL", "MAS 1", "MAS 2" ]
+}, {
+  clave: "poligonos",
+  texto: "POLIGONOS",
+  valores: [ true, false ],
+  nombres: [ "SUAVES", "ORIGINALES" ]
+}, {
   clave: "sonido",
   texto: "SONIDO",
   valores: [ true, false ],
@@ -187,7 +221,7 @@ const FILAS = [ {
   clave: "salir"
 } ];
 
-const Y_FILAS = 34, PASO_FILAS = 10, X_ROTULO = 34, X_VALOR = 228, Y_EXIT = 186;
+const Y_FILAS = 33, PASO_FILAS = 8, X_ROTULO = 34, X_VALOR = 228, Y_EXIT = 186;
 
 const leer = k => {
   try {
@@ -218,6 +252,10 @@ export function leerOpciones() {
     debug: leer("sm_debug") === "1",
     pixel: leer("sm_pixel") !== "0",
     filtro: FILTROS.includes(leer("sm_filtro")) ? leer("sm_filtro") : "ninguno",
+    brillo: leer("sm_brillo") !== null && +leer("sm_brillo") >= 0 && +leer("sm_brillo") <= 6 ? +leer("sm_brillo") : 2,
+    contraste: leer("sm_contraste") !== null && +leer("sm_contraste") >= 0 && +leer("sm_contraste") <= 4 ? +leer("sm_contraste") : 2,
+    color: leer("sm_color") !== null && +leer("sm_color") >= 0 && +leer("sm_color") <= 4 ? +leer("sm_color") : 2,
+    poligonos: leer("sm_poligonos") !== "0",
     vrcine: leer("sm_vrcine") !== "0"
   };
 }
@@ -234,9 +272,13 @@ export function guardarOpciones(o) {
   escribir("sm_pixel", o.pixel ? "1" : "0");
   escribir("sm_filtro", o.filtro || "ninguno");
   escribir("sm_vrcine", o.vrcine ? "1" : "0");
+  escribir("sm_brillo", o.brillo);
+  escribir("sm_contraste", o.contraste);
+  escribir("sm_color", o.color);
+  escribir("sm_poligonos", o.poligonos ? "1" : "0");
 }
 
-function cargarImg(src) {
+export function cargarImg(src) {
   return new Promise(ok => {
     const i = new Image;
     i.onload = () => ok(i);
@@ -245,7 +287,7 @@ function cargarImg(src) {
   });
 }
 
-function texDeImagen(img) {
+export function texDeImagen(img) {
   const c = document.createElement("canvas");
   c.width = img.width;
   c.height = img.height;
@@ -260,7 +302,7 @@ function texDeImagen(img) {
   };
 }
 
-function texVacia(w, h) {
+export function texVacia(w, h) {
   return {
     d: new Uint8ClampedArray(w * h * 4),
     w: w,
@@ -274,7 +316,7 @@ function pixel(t, x, y, v, a = 255) {
   t.d[o + 3] = a;
 }
 
-function blit(dst, tex, dx, dy, dw, dh, tr, tg, tb, modo = OPACO, sx = 0, sy = 0, sw = tex.w, sh = tex.h, grad = null) {
+export function blit(dst, tex, dx, dy, dw, dh, tr, tg, tb, modo = OPACO, sx = 0, sy = 0, sw = tex.w, sh = tex.h, grad = null) {
   if (!tex) return;
   dx = Math.round(dx);
   dy = Math.round(dy);
@@ -325,7 +367,7 @@ function blit(dst, tex, dx, dy, dw, dh, tr, tg, tb, modo = OPACO, sx = 0, sy = 0
   }
 }
 
-function limpiar(dst) {
+export function limpiar(dst) {
   const D = dst.d;
   for (let i = 0; i < D.length; i += 4) {
     D[i] = D[i + 1] = D[i + 2] = 0;
@@ -533,9 +575,11 @@ export class Titulo {
     this.contenedor = contenedor || document.body;
     this.conInicio = inicio && !/[?&]inicio=0\b/.test(globalThis.location?.search || "");
     this.sonido = sonido || MUDO;
-    this.entradas = entradas.map(e => ({
+    this.todasEntradas = entradas.map(e => ({
       ...e
     }));
+    this.entradas = this.todasEntradas.filter(e => !e.extra);
+    this.fotosAlbum = null;
     this.alElegir = alElegir;
     this.alDemo = alDemo;
     this.extremo = extremo;
@@ -564,6 +608,8 @@ export class Titulo {
       this.cerrar();
       return promesa;
     }
+    if (!this.visible) return promesa;
+    await this._cargarExtras();
     if (!this.visible) return promesa;
     this._prepararRotulos();
     this.opc = leerOpciones();
@@ -606,6 +652,18 @@ export class Titulo {
     }
     return promesa;
   }
+  async _cargarExtras() {
+    if (this.extras === undefined) {
+      try {
+        const r = await fetch(BASE + "extras/extras.json");
+        this.extras = r.ok ? await r.json() : null;
+      } catch {
+        this.extras = null;
+      }
+    }
+    const hay = this.extras || {};
+    this.entradas = this.todasEntradas.filter(e => !e.extra || hay[e.extra] && Object.keys(hay[e.extra]).length);
+  }
   cerrar() {
     if (!this.visible && !this.capaEl) return;
     this.visible = false;
@@ -615,6 +673,7 @@ export class Titulo {
     this._raf = 0;
     this._pararDemo?.();
     this._pararDemo = null;
+    this.sub = null;
     if (this.musica) this.pararMusica();
     this._desmontar();
     const r = this._resolver;
@@ -928,6 +987,16 @@ export class Titulo {
       this.pantalla = "opciones";
       this.selOpc = 0;
     }
+    if (estado === "esp_abre") {
+      this.pantalla = "especial";
+      this.selEsp = 0;
+      this.armarEspecial();
+    }
+    if (estado === "especial") {
+      this.pantalla = "especial";
+      this.armarEspecial();
+    }
+    if (estado === "extra" || estado === "extra_carga") this.pantalla = "extra";
     if (estado === "modo") {
       this.pantalla = "modo";
       if (typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches) this.puntero = true;
@@ -995,7 +1064,7 @@ export class Titulo {
     this.n++;
     this._gamepad();
     const E = this.estado;
-    if (E === "nivel" || E === "opciones" || E === "modo") this._repetir();
+    if (E === "nivel" || E === "opciones" || E === "modo" || E === "extra") this._repetir();
     this.pulso = (this.pulso + 1) % 80;
     const algo = this.hayAlgo() || DIRS.some(d => this.sostenido(d));
     this.quieto = algo ? 0 : this.quieto + 1;
@@ -1094,6 +1163,26 @@ export class Titulo {
             ...this.opc
           }
         });
+      }
+    } else if (E === "esp_abre") {
+      if (++this.f === 1) this.se(125);
+      if (this.f >= 48) this.ir("especial");
+    } else if (E === "especial") {
+      this.f++;
+      this.cuadroEspecial();
+    } else if (E === "esp_cierra") {
+      if (++this.f >= 17) {
+        this.ir("menu");
+        this.todoA128();
+      }
+    } else if (E === "extra") {
+      this.f++;
+      this.sub?.cuadro();
+      if (this.sub?.fin) {
+        const v = this.volverDe;
+        this.sub = null;
+        this.ir(v);
+        if (v === "menu") this.todoA128();
       }
     } else if (E === "fundido") {
       if (this.pulsado("start", "o") || this.tomarToque()) {
@@ -1323,8 +1412,130 @@ export class Titulo {
       this.ir("opc_abre");
       return;
     }
+    if (e.id === "special") {
+      this.pararMusica(33554187);
+      this.ir("esp_abre");
+      return;
+    }
+    if (e.id === "briefing") {
+      this.pararMusica();
+      this.abrirExtra("brf", "menu");
+      return;
+    }
     this.pararMusica();
     this.terminar(e);
+  }
+  armarEspecial() {
+    const hayFotos = !!this.extras?.camera && (this.fotosAlbum?.() || leerFotos()).length > 0;
+    this.itemsEsp = hayFotos ? [ {
+      id: "preope",
+      tex: "sp_pre",
+      x: 80,
+      y: 74,
+      w: 160,
+      h: 8
+    }, {
+      id: "album",
+      tex: "sp_album",
+      x: 136,
+      y: 109,
+      w: 48,
+      h: 8
+    }, {
+      id: "salir",
+      tex: "sp_exit",
+      x: 132,
+      y: 158,
+      w: 56,
+      h: 12
+    } ] : [ {
+      id: "preope",
+      tex: "sp_pre",
+      x: 80,
+      y: 90,
+      w: 160,
+      h: 8
+    }, {
+      id: "salir",
+      tex: "sp_exit",
+      x: 132,
+      y: 158,
+      w: 56,
+      h: 12
+    } ];
+    this.selEsp = Math.min(this.selEsp || 0, this.itemsEsp.length - 1);
+  }
+  cerrarEsp() {
+    this.se(33);
+    this.ir("esp_cierra");
+  }
+  cuadroEspecial() {
+    const I = this.itemsEsp, enItem = p => I.findIndex(it => p.x >= it.x - 8 && p.x < it.x + it.w + 8 && p.y >= it.y - 6 && p.y < it.y + it.h + 6);
+    const h = this._hover();
+    if (h) {
+      const i = enItem(h);
+      if (i >= 0 && i !== this.selEsp) {
+        this.selEsp = i;
+        this.se(31);
+      }
+    }
+    const t = this.tomarToque();
+    if (t) {
+      const i = enItem(t);
+      if (i >= 0) {
+        if (i !== this.selEsp) this.selEsp = i;
+        this.elegirEsp();
+      }
+      return;
+    }
+    if (this.pulsado("x")) return this.cerrarEsp();
+    if (this.pulsado("arriba")) {
+      if (this.selEsp > 0) {
+        this.selEsp--;
+        this.se(31);
+      }
+      return;
+    }
+    if (this.pulsado("abajo")) {
+      if (this.selEsp < I.length - 1) {
+        this.selEsp++;
+        this.se(31);
+      }
+      return;
+    }
+    if (this.pulsado("o", "start")) this.elegirEsp();
+  }
+  elegirEsp() {
+    const it = this.itemsEsp[this.selEsp];
+    if (it.id === "salir") return this.cerrarEsp();
+    this.se(102);
+    this.abrirExtra(it.id, "especial");
+  }
+  abrirExtra(cual, volver) {
+    this.volverDe = volver;
+    this.ir("extra_carga");
+    const modulo = {
+      preope: "./preope.js",
+      album: "./album.js"
+    }[cual];
+    if (!modulo) {
+      this.ir(volver);
+      if (volver === "menu") this.todoA128();
+      return;
+    }
+    import(modulo).then(async m => {
+      const p = new m.Pantalla(this);
+      await p.cargar();
+      if (this.estado !== "extra_carga") return;
+      this.sub = p;
+      this.ir("extra");
+    }).catch(e => {
+      console.warn("extra " + cual + ": " + e.message);
+      if (this.estado === "extra_carga") {
+        this.ir(volver);
+        if (volver === "menu") this.todoA128();
+      }
+    });
   }
   pasoInicio() {
     return !inicioHecho && this.conInicio ? PASOS_INICIO[0] || null : null;
@@ -1558,7 +1769,7 @@ export class Titulo {
       const tactil = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
       const t = this.texto("menu", tactil ? "TOUCH THE SCREEN" : "PRESS ANY BUTTON");
       if (this.pulso < 52 && t) blit(fb, t, Math.round((W - t.w) / 2), 104, t.w, t.h, ITEM[0], ITEM[1], ITEM[2], ADD);
-    } else if (E === "negro" || E === "demo" || E === "carga") {} else if (E === "modo" || E === "modo_sale") this.dibujarModo(fb); else if (this.pantalla === "nivel") this.dibujarNivel(fb); else if (this.pantalla === "opciones") this.dibujarOpciones(fb); else if (this.fondo) this.dibujarTitulo(fb);
+    } else if (E === "negro" || E === "demo" || E === "carga") {} else if (E === "modo" || E === "modo_sale") this.dibujarModo(fb); else if (this.pantalla === "nivel") this.dibujarNivel(fb); else if (this.pantalla === "opciones") this.dibujarOpciones(fb); else if (this.pantalla === "especial") this.dibujarEspecial(fb); else if (this.pantalla === "extra") this.sub?.dibujar(fb); else if (this.fondo) this.dibujarTitulo(fb);
     if (E === "fundido") atenuar(fb, Math.max(0, 128 - f * 4 / 3) / 128);
     if (E === "saliendo") atenuar(fb, f < 8 ? 1 : Math.max(0, 1 - (f - 8) / 12));
     if (E === "modo" && f < 8) atenuar(fb, f / 8);
@@ -1732,6 +1943,31 @@ export class Titulo {
     chico("SE PUEDE CAMBIAR DESPUES EN OPCIONES", Y_MODO_PIE, TIT);
     const ok = this.texto("menu", "CONTINUAR"), c = this.colorPulso();
     blit(fb, ok, 160 - Math.floor(ok.ancho / 2), Y_MODO_OK, ok.w, ok.h, c[0], c[1], c[2], ADD);
+  }
+  dibujarEspecial(fb) {
+    const T = this.R.tex, E = this.estado, f = E === "esp_abre" ? this.f : 48, caja = T.sp_special;
+    const k = E === "esp_cierra" ? Math.max(0, 1 - this.f / 16) : 1;
+    const xF = 160 - Math.floor(caja.w / 2), tit = escalar(TIT, k);
+    const bF = (f < 33 ? 0 : f <= 36 ? Math.round(12.75 * (f - 32)) : f <= 42 ? Math.round(64 + (f - 37) * 12.8) : 128) * k;
+    if (bF > 0) {
+      blit(fb, T.sp_back_l, 0, 0, 160, 224, bF, bF, bF);
+      blit(fb, T.sp_back_r, 160, 0, 160, 224, bF, bF, bF);
+    }
+    const yT = f <= 28 ? 99 : f <= 32 ? 99 - 20 * (f - 28) : 19;
+    if (f < 8) {
+      blit(fb, caja, xF + 240 - 30 * f, 99, caja.w, caja.h, tit[0], tit[1], tit[2], ADD);
+      blit(fb, caja, xF - 240 + 30 * f, 99, caja.w, caja.h, tit[0], tit[1], tit[2], ADD);
+    } else blit(fb, caja, xF, yT, caja.w, caja.h, tit[0], tit[1], tit[2], ADD);
+    const bM = f < 13 ? 0 : f <= 16 ? 64 * (f - 12) - 1 : f <= 24 ? 255 : Math.max(0, 255 - 64 * (f - 24));
+    if (bM > 0 && f <= 28) this.cursor(fb, xF, 99, caja.w, 13, bM, 0);
+    if (f < 37) return;
+    const abre = f >= 43 ? 1 : (f - 36) / 6;
+    this.itemsEsp.forEach((it, i) => {
+      const t = T[it.tex], elegida = i === this.selEsp && f >= 45, c = escalar(elegida ? SEL : ITEM, k);
+      const w = Math.max(1, Math.round(t.w * abre)), cx = it.x + it.w / 2;
+      blit(fb, t, cx - w / 2, it.y, w, t.h, c[0], c[1], c[2], ADD);
+      if (elegida && E !== "esp_cierra") this.cursor(fb, it.x, it.y, it.w, it.h, 255, 1);
+    });
   }
   dibujarOpciones(fb) {
     const T = this.R.tex, E = this.estado, f = E === "opc_abre" ? this.f : 48, caja = this.cajaOpc;

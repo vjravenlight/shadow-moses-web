@@ -637,7 +637,17 @@ export async function precalentar(R, escena, cam) {
     } catch {}
   }
   try {
-    if (R.compileAsync) await Promise.race([ R.compileAsync(escena, cam), new Promise(r => setTimeout(r, 1e4)) ]); else R.compile(escena, cam);
+    const mats = R.compile(escena, cam);
+    if (mats?.forEach) await new Promise(listo => {
+      const mirar = () => {
+        mats.forEach(m => {
+          const pr = R.properties.get(m)?.currentProgram;
+          if (!pr || pr.isReady()) mats.delete(m);
+        });
+        if (mats.size === 0 || performance.now() - t0 > 1e4) listo(); else setTimeout(mirar, 10);
+      };
+      mirar();
+    });
   } catch {}
   return {
     ms: Math.round(performance.now() - t0),
