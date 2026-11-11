@@ -13,9 +13,11 @@ const PROPORCION = .5 / (112 / (320 * 58 / 64));
 
 const VERT_PANTALLA = `\nout vec2 vP;\nvoid main() { vP = position.xy; gl_Position = vec4(position.xy, 1.0, 1.0); }`;
 
+const VERT_PLANO = `\nout vec2 vP;\nvoid main() { vP = uv * 2.0 - 1.0; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
+
 const VERT_ESFERA = `\nout vec3 vDir;\nvoid main() { vDir = position; vec4 p = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = p.xyww; }`;
 
-const FRAG = `\nprecision highp float; precision highp int;\nuniform sampler2D tL, tR;          // op_back_l (160x224) y op_back_r con 22 filas de VRAM arriba (160x246)\nuniform vec3 uSprX, uSprT;         // VRBG: x de los 3 SPRT y su textura (0 = l, 1 = r)\nuniform vec3 uTinte, uCol;         // VRBG: color de los SPRT; VRBG2: color de los POLY_FT4 (0..255, 128 = 1)\nuniform float uS, uVR, uOn1, uOn2, uBrillo;\nuniform vec2 uMedio;               // pantalla: medio ancho y medio alto visibles en píxeles de la PS1\n#ifdef ESFERA\nin vec3 vDir;\n#else\nin vec2 vP;\n#endif\nout vec4 color;\nconst int TRAMA[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);   // GPU de la PS1, 4x4\n// texel de la página de VRAM (u, v absolutos de 0..255): false si no hay textura o es el índice transparente (0x0000)\nbool leer(int cual, int u, int v, out ivec3 t5, out bool stp) {\n  vec4 c;\n  if (cual == 0) { if (u < 0 || u > 159 || v < 0 || v > 223) return false; c = texelFetch(tL, ivec2(u, v), 0); }\n  else { int f = v + 22 - int(uVR); if (u < 0 || u > 159 || f < 0 || f > 245) return false; c = texelFetch(tR, ivec2(u, f), 0); }\n  ivec3 c8 = ivec3(c.rgb * 255.0 + 0.5);\n  if (c8.r == 0 && c8.g == 0 && c8.b == 0) return false;\n  t5 = c8 >> 3; stp = ((c8.r | c8.g | c8.b) & 7) != 0;   // libdg/loader.c LoadPalette\n  return true;\n}\nvoid main() {\n#ifdef ESFERA\n  vec3 d = normalize(vDir);\n  float th = atan(d.x, -d.z), ph = asin(clamp(d.y, -1.0, 1.0));\n  vec2 q = vec2(th / atan(0.5) * 160.0, -tan(clamp(ph, -1.3, 1.3)) * 320.0 * 58.0 / 64.0);\n#else\n  vec2 q = vec2(vP.x * uMedio.x, -vP.y * uMedio.y);\n#endif\n  int px = int(floor(q.x)), py = int(floor(q.y));\n  ivec3 B = ivec3(0); ivec3 t5; bool stp;\n  // ---- VRBG: tira de SPRT (backgrnd.c 0x800DB0A4 / 0x800DB1CC)\n  if (uOn1 > 0.5 && py >= -112 && py < 112) {\n    int cual = -1, dx = 0;\n    int xmin = 100000, xmax = -100000, tmin = 0, tmax = 0;\n    for (int k = 0; k < 3; k++) {\n      int X = int(uSprX[k]), T = int(uSprT[k]);\n      if (px >= X && px < X + 160) { cual = T; dx = px - X; }\n      if (X < xmin) { xmin = X; tmin = T; }\n      if (X > xmax) { xmax = X; tmax = T; }\n    }\n    if (cual < 0 && px < xmin) { int n = (xmin - px + 159) / 160; cual = (tmin + n) & 1; dx = px - (xmin - n * 160); }\n    else if (cual < 0) { int n = (px - xmax) / 160; cual = (tmax + n) & 1; dx = px - (xmax + n * 160); }\n    int v = (cual == 0 ? 0 : int(uVR)) + py + 112;\n    if (leer(cual, dx, v, t5, stp)) B = min(ivec3(31), (t5 * ivec3(uTinte)) >> 7);   // SPRT 0x64: opaco, sin tramado\n  }\n  // ---- VRBG2: zoom hacia el centro (bg2.c 0x800DB74C), POLY_FT4 0x2E semitransparente, modo 1 (fondo + textura)\n  if (uOn2 > 0.5) {\n    int s = int(uS), vR = int(uVR);\n    bool izq = px < 0, arr = py < 0;\n    int x0 = izq ? -160 : 0, y0 = arr ? -112 : 0, u0, u1, v0, v1, cual;\n    if (izq) { cual = 0; u0 = s; u1 = 159; if (arr) { v0 = s; v1 = 111; } else { v0 = 112; v1 = 223 - s; } }\n    else { cual = 1; u0 = 0; u1 = 159 - s; if (arr) { v0 = vR + s; v1 = vR + 111; } else { v0 = 0; v1 = 111 - s; } }   // abajo a la derecha: v absoluta (así está en el original)\n    int u = u0 + int(floor(float((u1 - u0) * (px - x0)) / 160.0));\n    int v = v0 + int(floor(float((v1 - v0) * (py - y0)) / 112.0));\n    if (leer(cual, u, v, t5, stp)) {\n      ivec3 c8 = clamp(((t5 << 3) * ivec3(uCol)) / 128 + TRAMA[(py & 3) * 4 + (px & 3)], 0, 255);\n      ivec3 F = c8 >> 3;\n      B = stp ? min(ivec3(31), B + F) : F;\n    }\n  }\n  color = vec4(vec3(B) / 31.0 * uBrillo, 1.0);\n}`;
+const FRAG = `\nprecision highp float; precision highp int;\nuniform sampler2D tL, tR;          // op_back_l (160x224) y op_back_r con 22 filas de VRAM arriba (160x246)\nuniform vec3 uSprX, uSprT;         // VRBG: x de los 3 SPRT y su textura (0 = l, 1 = r)\nuniform vec3 uTinte, uCol;         // VRBG: color de los SPRT; VRBG2: color de los POLY_FT4 (0..255, 128 = 1)\nuniform float uS, uVR, uOn1, uOn2, uBrillo;\nuniform vec2 uMedio;               // pantalla: medio ancho y medio alto visibles en píxeles de la PS1\n#ifdef ESFERA\nin vec3 vDir;\n#else\nin vec2 vP;\n#endif\nout vec4 color;\nconst int TRAMA[16] = int[16](-4, 0, -3, 1, 2, -2, 3, -1, -3, 1, -4, 0, 3, -1, 2, -2);   // GPU de la PS1, 4x4\n// texel de la página de VRAM (u, v absolutos de 0..255): false si no hay textura o es el índice transparente (0x0000)\nbool leer(int cual, int u, int v, out ivec3 t5, out bool stp) {\n  vec4 c;\n  if (cual == 0) { if (u < 0 || u > 159 || v < 0 || v > 223) return false; c = texelFetch(tL, ivec2(u, v), 0); }\n  else { int f = v + 22 - int(uVR); if (u < 0 || u > 159 || f < 0 || f > 245) return false; c = texelFetch(tR, ivec2(u, f), 0); }\n  ivec3 c8 = ivec3(c.rgb * 255.0 + 0.5);\n  if (c8.r == 0 && c8.g == 0 && c8.b == 0) return false;\n  t5 = c8 >> 3; stp = ((c8.r | c8.g | c8.b) & 7) != 0;   // libdg/loader.c LoadPalette\n  return true;\n}\nvoid main() {\n#ifdef ESFERA\n  vec3 d = normalize(vDir);\n  float th = atan(d.x, -d.z), ph = asin(clamp(d.y, -1.0, 1.0));\n  vec2 q = vec2(th / atan(0.5) * 160.0, -tan(clamp(ph, -1.3, 1.3)) * 320.0 * 58.0 / 64.0);\n#elif defined(PLANO)\n  vec2 q = vec2(vP.x * 160.0, -vP.y * 112.0);   // el cuadro de 320x224 justo\n#else\n  vec2 q = vec2(vP.x * uMedio.x, -vP.y * uMedio.y);\n#endif\n  int px = int(floor(q.x)), py = int(floor(q.y));\n  ivec3 B = ivec3(0); ivec3 t5; bool stp;\n  // ---- VRBG: tira de SPRT (backgrnd.c 0x800DB0A4 / 0x800DB1CC)\n  if (uOn1 > 0.5 && py >= -112 && py < 112) {\n    int cual = -1, dx = 0;\n    int xmin = 100000, xmax = -100000, tmin = 0, tmax = 0;\n    for (int k = 0; k < 3; k++) {\n      int X = int(uSprX[k]), T = int(uSprT[k]);\n      if (px >= X && px < X + 160) { cual = T; dx = px - X; }\n      if (X < xmin) { xmin = X; tmin = T; }\n      if (X > xmax) { xmax = X; tmax = T; }\n    }\n    if (cual < 0 && px < xmin) { int n = (xmin - px + 159) / 160; cual = (tmin + n) & 1; dx = px - (xmin - n * 160); }\n    else if (cual < 0) { int n = (px - xmax) / 160; cual = (tmax + n) & 1; dx = px - (xmax + n * 160); }\n    int v = (cual == 0 ? 0 : int(uVR)) + py + 112;\n    if (leer(cual, dx, v, t5, stp)) B = min(ivec3(31), (t5 * ivec3(uTinte)) >> 7);   // SPRT 0x64: opaco, sin tramado\n  }\n  // ---- VRBG2: zoom hacia el centro (bg2.c 0x800DB74C), POLY_FT4 0x2E semitransparente, modo 1 (fondo + textura)\n  if (uOn2 > 0.5) {\n    int s = int(uS), vR = int(uVR);\n    bool izq = px < 0, arr = py < 0;\n    int x0 = izq ? -160 : 0, y0 = arr ? -112 : 0, u0, u1, v0, v1, cual;\n    if (izq) { cual = 0; u0 = s; u1 = 159; if (arr) { v0 = s; v1 = 111; } else { v0 = 112; v1 = 223 - s; } }\n    else { cual = 1; u0 = 0; u1 = 159 - s; if (arr) { v0 = vR + s; v1 = vR + 111; } else { v0 = 0; v1 = 111 - s; } }   // abajo a la derecha: v absoluta (así está en el original)\n    int u = u0 + int(floor(float((u1 - u0) * (px - x0)) / 160.0));\n    int v = v0 + int(floor(float((v1 - v0) * (py - y0)) / 112.0));\n    if (leer(cual, u, v, t5, stp)) {\n      ivec3 c8 = clamp(((t5 << 3) * ivec3(uCol)) / 128 + TRAMA[(py & 3) * 4 + (px & 3)], 0, 255);\n      ivec3 F = c8 >> 3;\n      B = stp ? min(ivec3(31), B + F) : F;\n    }\n  }\n  color = vec4(vec3(B) / 31.0 * uBrillo, 1.0);\n}`;
 
 function textura(url) {
   return new Promise((ok, mal) => (new THREE.TextureLoader).load(url, t => {
@@ -127,6 +129,28 @@ export class FondoVR {
     this.grupo.add(pant, esf);
     this.modoCasco(false);
     return this;
+  }
+  mallaPanel() {
+    if (this._plano || !this.u.tL.value) return this._plano || null;
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 224 / 240), new THREE.ShaderMaterial({
+      uniforms: this.u,
+      vertexShader: VERT_PLANO,
+      fragmentShader: FRAG,
+      glslVersion: THREE.GLSL3,
+      defines: {
+        PLANO: 1
+      },
+      depthTest: false,
+      depthWrite: false,
+      transparent: true,
+      fog: false,
+      toneMapped: false
+    }));
+    m.name = "fondo_menu_vr";
+    m.frustumCulled = false;
+    m.raycast = () => {};
+    m.userData.sinColision = true;
+    return this._plano = m;
   }
   modoCasco(si) {
     if (this.pantalla) {
@@ -347,7 +371,8 @@ export class FondoVR {
   }
   dispose() {
     this.grupo.removeFromParent();
-    for (const m of [ this.pantalla, this.esfera ]) {
+    this._plano?.removeFromParent();
+    for (const m of [ this.pantalla, this.esfera, this._plano ]) {
       m?.geometry.dispose();
       m?.material.dispose();
     }

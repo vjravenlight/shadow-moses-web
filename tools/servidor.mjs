@@ -3,6 +3,10 @@ import http from "http";
 
 import https from "https";
 
+import net from "net";
+
+import { Duplex } from "stream";
+
 import crypto from "crypto";
 
 import fs from "fs";
@@ -38,7 +42,113 @@ if (SALIR_SOLA) setInterval(() => {
   if (ahora - ultimaNoticia > (ultimoChau > ultimaNoticia ? SIN_VENTANA : SIN_NOTICIAS)) process.exit(0);
 }, 2e3).unref();
 
-const args = process.argv.slice(2).filter((x, i, l) => ![ "--assets", "--red", "--cert", "--salir-sola" ].includes(x) && ![ "--assets", "--cert" ].includes(l[i - 1]));
+const args = process.argv.slice(2).filter((x, i, l) => ![ "--assets", "--red", "--cert", "--salir-sola", "--tele", "--sin-tele" ].includes(x) && ![ "--assets", "--cert" ].includes(l[i - 1]));
+
+const TELE = process.argv.includes("--sin-tele") ? false : process.argv.includes("--tele") || !ASSETS;
+
+const DIR_TELE = path.join(process.env.MGS_PRUEBAS ? path.resolve(process.env.MGS_PRUEBAS) : path.join(path.dirname(new URL(import.meta.url).pathname.replace(/^\/(\w:)/, "$1")), "..", "_pruebas"), "telemetria");
+
+const TELE_MAX_LOTE = 2 * 1024 * 1024, TELE_MAX_DIA = 200 * 1024 * 1024;
+
+const TELE_MAX_FOTOS = 400;
+
+const fotosDia = new Map;
+
+const diaLocal = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const horaLocal = d => `${diaLocal(d)} ${d.toTimeString().slice(0, 8)}.${String(d.getMilliseconds()).padStart(3, "0")}`;
+
+let teleAvisado = false;
+
+function ipDe(req) {
+  const s = req.socket;
+  let ip = "";
+  try {
+    ip = s?.remoteAddress || s?._handle?._parentWrap?.stream?.remoteAddress || "";
+  } catch {}
+  return String(ip).replace(/^::ffff:/, "") || "?";
+}
+
+function recibirTele(req, res) {
+  if (req.method !== "POST") {
+    res.writeHead(204, {
+      "X-MGS-Tele": "1",
+      "Cache-Control": "no-store"
+    });
+    return res.end();
+  }
+  const partes = [];
+  let n = 0, largo = false;
+  req.on("data", c => {
+    n += c.length;
+    if (n > TELE_MAX_LOTE) largo = true; else partes.push(c);
+  });
+  req.on("end", () => {
+    res.writeHead(largo ? 413 : 204, {
+      "Cache-Control": "no-store"
+    });
+    res.end();
+    if (largo) return;
+    let d;
+    try {
+      d = JSON.parse(Buffer.concat(partes).toString("utf8"));
+    } catch {
+      return;
+    }
+    const ahora = new Date, base = {
+      srv: horaLocal(ahora),
+      ip: ipDe(req),
+      sid: String(d?.sid || "?").slice(0, 16)
+    };
+    const evs = Array.isArray(d?.ev) ? d.ev : [];
+    if (!evs.length) return;
+    const tl = +d.tl, hora = e => isFinite(tl) && isFinite(+e.t) ? horaLocal(new Date(ahora.getTime() - Math.max(0, tl - e.t) * 1e3)) : base.srv;
+    let foto;
+    if (typeof d.foto === "string" && d.foto.startsWith("data:image/jpeg;base64,")) {
+      try {
+        const dia = diaLocal(ahora), n = (fotosDia.get(dia) || 0) + 1;
+        if (n <= TELE_MAX_FOTOS) {
+          fotosDia.set(dia, n);
+          const dir = path.join(DIR_TELE, "fotos", dia);
+          fs.mkdirSync(dir, {
+            recursive: true
+          });
+          const ev0 = evs.find(e => e?.tipo === "marca") || {};
+          const motivo = String(ev0.motivo || "marca").normalize("NFD").replace(/[^\w]+/g, "_").slice(0, 24);
+          const nom = `${ahora.toTimeString().slice(0, 8).replace(/:/g, "")}_${base.sid.replace(/\W/g, "")}_${String(+ev0.n || n).padStart(3, "0")}_${motivo}.jpg`;
+          fs.writeFileSync(path.join(dir, nom), Buffer.from(d.foto.slice(23), "base64"));
+          foto = `fotos/${dia}/${nom}`;
+        }
+      } catch {}
+    }
+    const lineas = evs.filter(e => e && typeof e === "object").map(e => JSON.stringify({
+      ...base,
+      srv: hora(e),
+      ...e,
+      ...foto && e.tipo === "marca" ? {
+        foto: foto
+      } : {}
+    })).join("\n") + "\n";
+    try {
+      fs.mkdirSync(DIR_TELE, {
+        recursive: true
+      });
+      const f = path.join(DIR_TELE, diaLocal(ahora) + ".jsonl");
+      let tam = 0;
+      try {
+        tam = fs.statSync(f).size;
+      } catch {}
+      if (tam > TELE_MAX_DIA) {
+        if (!teleAvisado) {
+          teleAvisado = true;
+          console.log(`  telemetría: ${f} pasó los ${TELE_MAX_DIA >> 20} MB, no se guarda más hoy`);
+        }
+        return;
+      }
+      fs.appendFile(f, lineas, () => {});
+    } catch {}
+  });
+}
 
 function certificado() {
   const fClave = path.join(CERT, "red_clave.pem"), fCert = path.join(CERT, "red_certificado.pem");
@@ -127,6 +237,7 @@ const atender = (req, res) => {
     res.writeHead(204);
     return res.end();
   }
+  if (p === "/__tele" && TELE) return recibirTele(req, res);
   if (p.endsWith("/")) p += "index.html";
   const base = ASSETS && p.startsWith("/assets/") ? ASSETS : RAIZ;
   const f = path.join(base, path.normalize(base === RAIZ ? p : p.slice("/assets".length)));
@@ -148,9 +259,51 @@ const atender = (req, res) => {
   });
 };
 
-const srv = RED ? https.createServer(certificado(), atender) : http.createServer(atender);
+function puertaRed(tls) {
+  return net.createServer(s => {
+    s.on("error", () => {});
+    s.once("data", b => {
+      s.pause();
+      if (b[0] === 22) {
+        const d = new Duplex({
+          read() {
+            s.resume();
+          },
+          write(c, e, cb) {
+            s.write(c, e, cb);
+          },
+          final(cb) {
+            s.end();
+            cb();
+          },
+          destroy(err, cb) {
+            s.destroy();
+            cb(err);
+          }
+        });
+        d.remoteAddress = s.remoteAddress;
+        d.remotePort = s.remotePort;
+        s.on("data", x => {
+          if (!d.push(x)) s.pause();
+        });
+        s.on("end", () => d.push(null));
+        s.on("close", () => d.destroy());
+        d.push(b);
+        tls.emit("connection", d);
+        return;
+      }
+      const txt = b.toString("latin1"), host = /\r\nHost:\s*([^\r\n]+)/i.exec(txt)?.[1]?.trim() || `127.0.0.1:${PUERTO}`;
+      const ruta = /^[A-Z]+ (\/[^ ]*) HTTP/.exec(txt)?.[1] || "/";
+      s.end(`HTTP/1.1 301 Moved Permanently\r\nLocation: https://${host}${ruta}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n`);
+    });
+  });
+}
 
-srv.keepAliveTimeout = 5e3;
+const srvTls = RED ? https.createServer(certificado(), atender) : null;
+
+const srv = RED ? puertaRed(srvTls) : http.createServer(atender);
+
+(srvTls || srv).keepAliveTimeout = 5e3;
 
 srv.on("error", e => {
   if (e.code !== "EADDRINUSE") throw e;
@@ -160,6 +313,7 @@ srv.on("error", e => {
 
 srv.listen(PUERTO, RED ? "0.0.0.0" : "127.0.0.1", () => {
   console.log(`Visor en ${RED ? "https" : "http"}://127.0.0.1:${PUERTO}/  (carpeta ${RAIZ}${ASSETS ? ", assets: " + ASSETS : ""})  — cerrá esta ventana para apagarlo`);
+  if (TELE) console.log(`  Telemetría local en ${DIR_TELE} (resumen: python tools/telemetria_resumen.py)`);
   if (!RED) return;
   const ips = Object.values(os.networkInterfaces()).flat().filter(i => i.family === "IPv4" && !i.internal).map(i => i.address);
   console.log("\n  Desde el celular u otra PC, en la misma red / From a phone or another PC, on the same network:");

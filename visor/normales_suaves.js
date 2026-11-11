@@ -118,6 +118,9 @@ export const normalesSuaves = {
       console.warn("normales suaves:", e.message);
     }
   },
+  olvidar(root) {
+    registradas.delete(root);
+  },
   poner(si) {
     si = !!si;
     if (si === suaves) return;

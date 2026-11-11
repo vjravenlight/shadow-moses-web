@@ -1,7 +1,7 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
-import { Jefe, Jefes, Flujo, MM, ANG, FPS, ratan2, dir4096, difS, nearExp4P, nearTimeP, cargarModelo, aplicarPose } from "../jefes/base.js";
+import { Jefe, Jefes, Flujo, MM, ANG, FPS, ratan2, dir4096, difS, nearExp4P, nearTimeP, cargarModelo, aplicarPose, subDeLinea } from "../jefes/base.js";
 
 import { sonido, VIB } from "../juego.js";
 
@@ -690,10 +690,8 @@ export class Sistema {
   }
   subtitulo() {
     const f = this.flujo;
-    if (f.estado !== 2 || !f.listo?.datos?.sub || this.ctx.subtitulos === false) return null;
-    const s = f.segundos();
-    const l = f.listo.datos.sub.find(x => s >= x[0] && s < x[1]);
-    return l ? l[2] : null;
+    if (this.ctx.subtitulos === false) return null;
+    return subDeLinea(f.lineaSub());
   }
   ponerEstado(bits) {
     const a = this.estado;

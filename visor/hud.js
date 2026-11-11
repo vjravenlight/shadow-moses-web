@@ -808,40 +808,42 @@ export class Hud {
     if (n === 4) this.acum = 0;
     disposicion.vidaY = this.barra.y;
     actualizarOrigenJefes(D);
-    const sinRadar = d.camaraFotos || d.sinRadar && rM !== 3 && rM !== 2;
+    const sinRadar = d.camaraFotos || d.radarApagado || d.sinRadar && rM !== 3 && rM !== 2;
     if (!sinRadar) this.dibujarRadar(d, rM, nivel);
-    const cv = this.cv, Wd = Math.round(D.iw * D.dpr), Hd = Math.round(D.ih * D.dpr);
-    const x = this.ctx;
-    x.setTransform(1, 0, 0, 1, 0, 0);
-    if (cv.width !== Wd || cv.height !== Hd || D.clave !== this._claveSucio) {
-      cv.width = Wd;
-      cv.height = Hd;
-      this._claveSucio = D.clave;
-    } else for (const [rx, ry, rw, rh] of this._sucio || []) x.clearRect(Math.floor((rx - 2) * D.kd), Math.floor((ry - 2) * D.kd), Math.ceil((rw + 4) * D.kd), Math.ceil((rh + 4) * D.kd));
-    this._sucio = [];
-    x.imageSmoothingEnabled = false;
-    x.setTransform(D.kd, 0, 0, D.kd, 0, 0);
     const B = this.barra, rojo = this.dañoCuenta > 0;
-    if (B.estado !== BARRA.OCULTA) {
-      const vy = D.vida[1] + (B.y - 16);
-      this._sucio.push([ D.vida[0] - 1, vy, Math.max(max, 1024) / 8 + 2, 26 ]);
-      barraMenu(x, D.vida[0], vy, this.mostrada, vit, max, BARRA_VIDA, rojo);
-      if (B.o2) barraMenu(x, D.vida[0], vy + 12, o2, o2, 1024, BARRA_O2);
-    }
-    if (!sinRadar) {
-      const [rx, ry] = D.radar;
-      this._sucio.push([ rx - 1, ry - 1, 71, 54 ]);
-      x.fillStyle = "#000";
-      x.fillRect(rx - 1, ry - 1, 1, 53);
-      x.fillRect(rx - 1, ry - 1, 70, 1);
-      x.fillRect(rx + 69, ry - 1, 1, 54);
-      x.fillRect(rx - 1, ry + 52, 70, 1);
-      x.drawImage(this.radar, rx, ry);
-    }
-    if (d.arma) {
-      this.recuadroArma(x, D.arma[0], D.arma[1], d.arma);
-      this._sucio.push([ D.arma[0] - 2, D.arma[1] - 1, 56, 32 ]);
-    }
+    if (!d.sinPantalla) {
+      const cv = this.cv, Wd = Math.round(D.iw * D.dpr), Hd = Math.round(D.ih * D.dpr);
+      const x = this.ctx;
+      x.setTransform(1, 0, 0, 1, 0, 0);
+      if (cv.width !== Wd || cv.height !== Hd || D.clave !== this._claveSucio) {
+        cv.width = Wd;
+        cv.height = Hd;
+        this._claveSucio = D.clave;
+      } else for (const [rx, ry, rw, rh] of this._sucio || []) x.clearRect(Math.floor((rx - 2) * D.kd), Math.floor((ry - 2) * D.kd), Math.ceil((rw + 4) * D.kd), Math.ceil((rh + 4) * D.kd));
+      this._sucio = [];
+      x.imageSmoothingEnabled = false;
+      x.setTransform(D.kd, 0, 0, D.kd, 0, 0);
+      if (B.estado !== BARRA.OCULTA) {
+        const vy = D.vida[1] + (B.y - 16);
+        this._sucio.push([ D.vida[0] - 1, vy, Math.max(max, 1024) / 8 + 2, 26 ]);
+        barraMenu(x, D.vida[0], vy, this.mostrada, vit, max, BARRA_VIDA, rojo);
+        if (B.o2) barraMenu(x, D.vida[0], vy + 12, o2, o2, 1024, BARRA_O2);
+      }
+      if (!sinRadar) {
+        const [rx, ry] = D.radar;
+        this._sucio.push([ rx - 1, ry - 1, 71, 54 ]);
+        x.fillStyle = "#000";
+        x.fillRect(rx - 1, ry - 1, 1, 53);
+        x.fillRect(rx - 1, ry - 1, 70, 1);
+        x.fillRect(rx + 69, ry - 1, 1, 54);
+        x.fillRect(rx - 1, ry + 52, 70, 1);
+        x.drawImage(this.radar, rx, ry);
+      }
+      if (d.arma) {
+        this.recuadroArma(x, D.arma[0], D.arma[1], d.arma);
+        this._sucio.push([ D.arma[0] - 2, D.arma[1] - 1, 56, 32 ]);
+      }
+    } else this._claveSucio = null;
     const m = this.muñeca.getContext("2d");
     m.imageSmoothingEnabled = false;
     m.fillStyle = "#000";

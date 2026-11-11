@@ -3,8 +3,10 @@ import os, sys, struct, hashlib
 SS = 2352
 SYNC = b'\x00' + b'\xff' * 10 + b'\x00'
 USA = {'SLUS_005.94': 1, 'SLUS_007.76': 2}
-OTRAS = {'SLPM_861.11': 'japonesa (disco 1)', 'SLPM_861.12': 'japonesa (disco 2)', 'SLES_015.06': 'europea (inglés, disco 1)', 'SLES_115.06': 'europea (inglés, disco 2)', 'SLES_015.07': 'europea (francés)', 'SLES_015.08': 'europea (alemán)', 'SLES_015.09': 'europea (italiano)', 'SLES_015.10': 'europea (castellano)', 'SLPM_862.47': 'Integral (Japón)', 'SLUS_009.57': 'VR Missions (USA)', 'SLPM_861.14': 'Integral (Japón)'}
+OTRAS = {'SLPM_861.11': 'japonesa (disco 1)', 'SLPM_861.12': 'japonesa (disco 2)', 'SLES_015.06': 'europea (inglés, disco 1)', 'SLES_115.06': 'europea (inglés, disco 2)', 'SLES_015.07': 'europea (francés)', 'SLES_015.08': 'europea (alemán)', 'SLES_015.09': 'europea (italiano)', 'SLES_015.10': 'europea (castellano)', 'SLPM_862.47': 'Integral (Japón)', 'SLUS_009.57': 'VR Missions (USA)', 'SLPM_862.49': 'Integral (Japón, disco 3 VR-DISC)', 'SLPM_861.14': 'Integral (Japón)'}
 NO_HACEN_FALTA = {'DUMMY3M.DAT'}
+IDIOMAS_DISCO = {'SLES_017.34': ('es', 1), 'SLES_117.34': ('es', 2), 'SLES_015.07': ('de', 1), 'SLES_115.07': ('de', 2), 'SLES_015.08': ('it', 1), 'SLES_115.08': ('it', 2), 'SLPM_861.11': ('ja', 1), 'SLPM_861.12': ('ja', 2)}
+PREFIJO_IDIOMA = {'es': 'espana', 'de': 'alemania', 'it': 'italia', 'ja': 'japon'}
 TAMANOS_V10 = {1: {'MGS/STAGE.DIR': 71892992, 'MGS/DEMO.DAT': 258603008, 'MGS/VOX.DAT': 196014080}, 2: {'MGS/STAGE.DIR': 71888896, 'MGS/DEMO.DAT': 194002944, 'MGS/VOX.DAT': 188934144}}
 
 class ErrorDisco(Exception):
@@ -127,6 +129,21 @@ class Imagen:
             if (exe in n or 'MGS/' + exe in n) and 'MGS/STAGE.DIR' in n:
                 return d
         return None
+
+    def idioma(self):
+        n = self.nombres()
+        for exe, r in IDIOMAS_DISCO.items():
+            if (exe in n or 'MGS/' + exe in n) and all((x in n for x in ('MGS/STAGE.DIR', 'MGS/RADIO.DAT', 'MGS/VOX.DAT', 'MGS/DEMO.DAT'))):
+                return r
+        return None
+
+    def archivos_idioma(self):
+        n = self.nombres()
+        return {x for x in n if x in ('MGS/STAGE.DIR', 'MGS/RADIO.DAT', 'MGS/VOX.DAT', 'MGS/DEMO.DAT', 'MGS/ZMOVIE.STR') or x.endswith('.EXE') or x.split('/')[-1][:5] in ('SLES_', 'SLPM_')}
+
+    def integral3(self):
+        n = self.nombres()
+        return ('SLPM_862.49' in n or 'MGS/SLPM_862.49' in n) and 'MGS/STAGE.DIR' in n
 
     def vr_missions(self):
         n = self.nombres()

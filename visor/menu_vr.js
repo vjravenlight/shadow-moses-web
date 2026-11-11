@@ -514,10 +514,12 @@ export class MenuVR {
   }
   dibujar(x, margen = 0) {
     if (!this.activo) return;
-    const fondo = this.op.fondo?.lienzo?.(320 + 2 * Math.ceil(margen));
-    if (fondo) x.drawImage(fondo, -Math.ceil(margen), 0); else {
-      x.fillStyle = "#000";
-      x.fillRect(-margen, 0, 320 + 2 * margen, 224);
+    if (this.fondoAparte?.()) x.clearRect(-Math.ceil(margen), 0, 320 + 2 * Math.ceil(margen), 224); else {
+      const fondo = this.op.fondo?.lienzo?.(320 + 2 * Math.ceil(margen));
+      if (fondo) x.drawImage(fondo, -Math.ceil(margen), 0); else {
+        x.fillStyle = "#000";
+        x.fillRect(-margen, 0, 320 + 2 * margen, 224);
+      }
     }
     if (this.estado !== 3) this.dibujarCursor(x);
     const recs = this.it[this.cur].rec >= 0 || this.estado === 1 || this.estado === 2 || this.estado === 4 || this.it[95].estado === 5;
@@ -606,6 +608,17 @@ export class MenuVR {
     if (semi) x.globalCompositeOperation = "lighter";
     x.drawImage(T, 0, 0, Math.max(1, T.width - 1), Math.max(1, T.height - 1), X, Y, W - 1, H - 1);
     x.globalCompositeOperation = "source-over";
+  }
+  get firma() {
+    const L = [ this.pag, this.pagNext, this.estado, this.cur, this.curNext, this.cx, this.cy, this.cw, this.ch, this.fade ? this.fade.n : "", this.fondoAparte?.() ? "g" : this.f ];
+    const vis = this.items(this.pag);
+    if (this.estado === 1) vis.push(...this.items(this.pagNext));
+    for (const it of vis) L.push(`${it.estado}.${it.t}.${it.bloq ? 1 : 0}.${it.x},${it.y}`);
+    for (let k = 95; k < 119; k++) {
+      const d = this.it[k];
+      if (d) L.push(`${d.estado}.${d.t}.${d.tDib ?? ""}.${d.eDib ?? ""}.${d.glifo ?? ""}.${d.col ?? ""}`);
+    }
+    return L.join("|");
   }
   fundirSalida(cuadros) {
     this.fade = {

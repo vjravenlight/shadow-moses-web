@@ -14,14 +14,14 @@ const HUESOS = {
 
 const BASE = (new THREE.Matrix4).makeBasis(new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
 
-function recortar(malla, huesos, origen) {
+function recortar(malla, huesos, origen, minimo = 3) {
   const g0 = malla.geometry, pos = g0.attributes.position, uv = g0.attributes.uv, col = g0.attributes.color, sk = g0.attributes.skinIndex, idx = g0.index;
   if (!pos || !sk) return null;
   const sirve = new Set(huesos), n = idx ? idx.count : pos.count, p = [], t = [], c = [];
   const de = i => idx ? idx.getX(i) : i;
   for (let i = 0; i + 2 < n; i += 3) {
     const a = de(i), b = de(i + 1), d = de(i + 2);
-    if (!sirve.has(sk.getX(a)) || !sirve.has(sk.getX(b)) || !sirve.has(sk.getX(d))) continue;
+    if ((sirve.has(sk.getX(a)) ? 1 : 0) + (sirve.has(sk.getX(b)) ? 1 : 0) + (sirve.has(sk.getX(d)) ? 1 : 0) < minimo) continue;
     for (const v of [ a, b, d ]) {
       p.push(pos.getX(v) - origen.x, pos.getY(v) - origen.y, pos.getZ(v) - origen.z);
       if (uv) t.push(uv.getX(v), uv.getY(v));
@@ -81,6 +81,49 @@ export class ManosSnake {
         grupo.userData.sinColision = true;
         grupo.userData.propio = true;
         out[lado] = grupo;
+      }
+      const CADENA = {
+        right: [ 2, 3, 4 ],
+        left: [ 7, 8, 9 ]
+      }, ARRIBA = new THREE.Vector3(0, 1, 0);
+      out.brazos = {};
+      for (const lado of [ "right", "left" ]) {
+        const hs = CADENA[lado].map(k => o.getObjectByName("hueso_" + k));
+        if (hs.some(h => !h)) {
+          out.brazos = null;
+          break;
+        }
+        const ps = hs.map(h => h.getWorldPosition(new THREE.Vector3));
+        out.brazos[lado] = [ 0, 1 ].map(t => {
+          const dir = ps[t + 1].clone().sub(ps[t]), largo = dir.length();
+          dir.normalize();
+          const q = (new THREE.Quaternion).setFromUnitVectors(dir, ARRIBA), grupo = new THREE.Group;
+          for (const malla of mallas) {
+            const g = recortar(malla, [ CADENA[lado][t] ], ps[t], 2);
+            if (!g) continue;
+            g.applyQuaternion(q);
+            g.computeVertexNormals();
+            const orig = Array.isArray(malla.material) ? malla.material[0] : malla.material;
+            const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+              map: orig.map || null,
+              color: 11579568,
+              side: THREE.DoubleSide
+            }));
+            m.frustumCulled = false;
+            m.userData.sinColision = true;
+            m.userData.propio = true;
+            m.raycast = () => {};
+            grupo.add(m);
+          }
+          grupo.name = `brazo_snake_${lado}_${t}`;
+          grupo.visible = false;
+          grupo.userData.sinColision = true;
+          grupo.userData.propio = true;
+          return {
+            obj: grupo,
+            largo: largo || .25
+          };
+        });
       }
       this.mallas = out;
       return out;

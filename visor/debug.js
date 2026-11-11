@@ -1,4 +1,6 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import * as tele from "./telemetria.js";
+
 const ENDPOINT = "log.php", CLAVE = "sm-vr";
 
 const sid = Math.random().toString(36).slice(2, 10);
@@ -18,6 +20,9 @@ export function log(tipo, msg, extra) {
     msg: String(msg).slice(0, 500)
   };
   if (extra !== undefined) e.x = extra;
+  try {
+    tele.evento(tipo, msg, extra);
+  } catch {}
   logs.push(e);
   if (logs.length > 400) logs.shift();
   if (tipo !== "info") encolar(e);
@@ -29,14 +34,16 @@ window.debugLog = log;
 
 const cErr = console.error.bind(console), cWarn = console.warn.bind(console);
 
+const pila = a => a.find(v => v instanceof Error)?.stack?.slice(0, 800);
+
 console.error = (...a) => {
   cErr(...a);
-  log("error", a.map(fmt).join(" "));
+  log("error", a.map(fmt).join(" "), pila(a));
 };
 
 console.warn = (...a) => {
   cWarn(...a);
-  log("aviso", a.map(fmt).join(" "));
+  log("aviso", a.map(fmt).join(" "), pila(a));
 };
 
 addEventListener("error", e => log("error", `${e.message} @ ${(e.filename || "").split("/").pop()}:${e.lineno}:${e.colno}`, e.error?.stack?.slice(0, 600)));
@@ -67,6 +74,7 @@ setInterval(() => {
 }, 250);
 
 export function cuadro(dt) {
+  tele.cuadro(dt);
   const ms = dt * 1e3;
   fr.n++;
   fr.suma += ms;
@@ -134,6 +142,10 @@ function dispositivo() {
 }
 
 async function enviar(final = false) {
+  if (tele.local) {
+    cola.length = 0;
+    return;
+  }
   if (!activo || !cola.length && !final) return;
   const lote = cola.splice(0, 200);
   const cuerpo = JSON.stringify({
@@ -300,6 +312,10 @@ export function alternar() {
 export function iniciar(opc) {
   R = opc.renderer;
   estadoFn = opc.estado || estadoFn;
+  tele.iniciar({
+    renderer: R,
+    estado: () => estado()
+  });
   log("info", "inicio", dispositivo());
   cola.push({
     t: seg(),

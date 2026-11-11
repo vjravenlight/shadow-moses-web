@@ -184,6 +184,11 @@ export class Tactil {
       this._menu(que === "r2" ? 1 : 0, abajo, t);
       return;
 
+     case "r1":
+     case "l1":
+      inv?.botonVR(que === "r1" ? PAD.R1 : PAD.L1, abajo);
+      return;
+
      case "saltar":
       if (abajo) c.saltar();
       return;
@@ -215,7 +220,7 @@ export class Tactil {
       }
       if (!g.mant) return;
       g.mant = false;
-      if (t - g.t0 < TOQUE_CORTO) {
+      if (t - g.t0 < TOQUE_CORTO && !(inv.mascaraPad & g.bit)) {
         g.fijo = true;
         return;
       }
@@ -266,6 +271,15 @@ export class Tactil {
       cruz.classList.toggle("fijo", p > 0);
       const s = cruz.querySelector("small");
       if (s) s.textContent = p ? "PARAR" : "AGACHAR";
+    }
+    const nj = !!inv?.sinArmas;
+    if (nj !== this._ninja) {
+      this._ninja = nj;
+      this.raiz.classList.toggle("ninja", nj);
+      const cu = this.raiz.querySelector('[data-b="cuadrado"] small');
+      if (cu) cu.textContent = nj ? "ESPADA" : "ARMA";
+      const r2 = this.raiz.querySelector('[data-b="r2"]');
+      if (r2) r2.innerHTML = (nj ? "RAYO" : "ARMAS") + "<i>R2</i>";
     }
     this.ubicar();
   }

@@ -78,6 +78,28 @@ export class VistaAgua {
     R.render(this.escena, this.camQ);
     R.autoClear = prev;
   }
+  sobre(R, origen, zona, dt) {
+    if (!this.rt2 || this.rt2.width !== origen.width || this.rt2.height !== origen.height) {
+      this.rt2?.dispose();
+      this.rt2 = new THREE.WebGLRenderTarget(origen.width, origen.height, {
+        type: origen.texture.type,
+        depthBuffer: false
+      });
+    }
+    this.acum += dt * 30;
+    while (this.acum >= 1) {
+      this.acum -= 1;
+      this.paso = this.paso + 1 & 31;
+    }
+    const xr = R.xr.enabled;
+    R.xr.enabled = false;
+    try {
+      this.aplicar(R, origen.texture, this.rt2, zona);
+    } finally {
+      R.xr.enabled = xr;
+    }
+    return this.rt2.texture;
+  }
   aplicar(R, tex, destino, zona) {
     this.mat.uniforms.tex.value = tex;
     this.mat.uniforms.color.value.copy(zona.color);

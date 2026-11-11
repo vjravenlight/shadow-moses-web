@@ -1,7 +1,9 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
-import { ArcoPlasma } from "../plasma.js";
+import { Plasma } from "../plasma.js";
+
+import { materialKogaku, TINTE } from "../kogaku.js";
 
 import { Jefe, Flujo, MM, ANG, ratan2, randU, randS, nearExp4, nearExp8, nearExp4P, cargarModelo, aplicarPose, rotY } from "./base.js";
 
@@ -169,6 +171,7 @@ export class SalaPsy {
     this.pantalla?.apagar();
     this.mantis = null;
     this.padReleaseMeryl = false;
+    this.mgr.congelar(false);
   }
   async precargar(ctx) {
     if (this.modelos) return this.modelos;
@@ -1317,7 +1320,7 @@ class Sonic extends Jefe {
     seMM(this, id, p, modo);
   }
   destruir(...a) {
-    for (const p of this.plasmas || []) p.arco.quitar();
+    for (const p of this.plasmas || []) p.quitar();
     this.plasmas = [];
     return super.destruir(...a);
   }
@@ -1357,24 +1360,15 @@ class Sonic extends Jefe {
       this.destruir();
       return;
     }
-    if (t % 4 === 0) this.plasmas.push({
-      arco: new ArcoPlasma(this.mgr.mundo, {
-        color: 5263440,
-        tam: .16,
-        ruido: .09
-      }),
-      t: 0,
-      d: (new THREE.Vector3).randomDirection().multiplyScalar(.4)
-    });
-    const c = aV3(this.c.mov);
-    this.plasmas = this.plasmas.filter(p => {
-      if (++p.t > 8) {
-        p.arco.quitar();
-        return false;
-      }
-      p.arco.actualizar(c, c.clone().add(p.d));
-      return true;
-    });
+    if (t % 4 === 0) {
+      const m = this.c.mov;
+      this.plasmas.push(new Plasma(this.mgr.mundo, [ m[0], m[1], m[2] ], [ m[0], m[1], m[2] ], {
+        modo: 5,
+        f3B4: 400,
+        cuadros: 1
+      }));
+    }
+    this.plasmas = this.plasmas.filter(p => p.cuadro());
   }
   fase0(t) {
     if (this.sala.flagsMantis & 4) {
@@ -1660,6 +1654,7 @@ export class Mantis extends Jefe {
     await this.cargarCuerpo("jefes/mantis.glb", "psycho");
     this.motor.accion(0, 0);
     this.materiales = [];
+    this._kogMat = false;
     this.modelo.traverse(m => {
       if (m.isMesh) this.materiales.push([ m, m.material ]);
     });
@@ -2005,22 +2000,18 @@ export class Mantis extends Jefe {
     this.aplicarKogaku(false);
   }
   aplicarKogaku(si) {
-    if (!this.materiales) return;
-    for (const [m, mat] of this.materiales) {
-      if (!si) {
-        m.material = mat;
-        continue;
-      }
-      const k = mat.clone();
-      k.transparent = true;
-      k.opacity = .22;
-      k.depthWrite = false;
-      if (k.color) k.color = k.color.clone().multiplyScalar(.6);
-      m.material = k;
-    }
+    if (!this.materiales || this._kogMat === !!si) return;
+    this._kogMat = !!si;
+    if (this.modelo) this.modelo.userData.kogakuRaiz = true;
+    const k = si ? materialKogaku(TINTE.ninja) : null;
+    for (const [m, mat] of this.materiales) m.material = si ? k : mat;
   }
   visibleConTermicos() {
-    if (this.kogakuMode === 10) this.oculto = this.inv()?.item !== IT.THERMG;
+    if (this.kogakuMode === 10) {
+      const t = this.inv()?.item === IT.THERMG;
+      this.oculto = !t;
+      this.aplicarKogaku(!t);
+    }
   }
   mirarASnake() {
     this.c.turn[1] = vecDir2(sub3(this.snakeMM(), this.c.mov));

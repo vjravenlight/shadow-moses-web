@@ -13,6 +13,8 @@ import { crearTortura, esTortura } from "./tortura.js";
 
 import { crearCelda, esCelda } from "./celda.js";
 
+import { ponerSonrojo } from "../sonrojo.js";
+
 export const TIPOS_MERYL = new Set([ "MERYL3", "MERYL72", "MERYL7" ]);
 
 export const esMeryl = actor => !!actor && (TIPOS_MERYL.has(actor.tipo) || esPerro(actor) || esMuneco(actor) || esTortura(actor) || esCelda(actor));
@@ -310,6 +312,7 @@ export class Meryl3 extends Personaje {
   }
   async iniciar() {
     await Promise.all([ this.cargarCon("personajes/meryl_hei.glb", "melhei03", "armas/famas.glb"), this.sis.flujo.precargar(this.fuga.zakocom.s) ]);
+    if (this.o) this.ctx.luzArma?.(this.o);
     const d = this.actor.d || [ 0, 0, 0 ];
     this.rot = this.turn = d[1] & 4095;
     this.mov.set(8e3, 0, -1e3);
@@ -712,6 +715,7 @@ export class Meryl72 extends Personaje {
     this.stage = num(o.s, 0);
     this.fB96 = num(o.c, 0);
     await this.cargarCon("personajes/meryl.glb", this.stage === 0 ? "mel_07a" : "mel_09a", "personajes/desert.glb");
+    if (this.o) ponerSonrojo(this.o, () => this.vivo ? this.fC0E * 5 : 0);
     const p = this.actor.p || [ 0, 0, 0 ], d = this.actor.d || [ 0, 0, 0 ];
     this.mov.set(p[0], p[1], p[2]);
     this.rot = this.turn = d[1] & 4095;

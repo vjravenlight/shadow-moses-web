@@ -36,6 +36,24 @@ class BlurGuion {
     this._avisar();
     return this.actual;
   }
+  prenderSet(temblor = 1, completa = 0, modo = 0, nombre = "set") {
+    this.actual = {
+      nombre: nombre,
+      temblor: temblor,
+      modo: modo,
+      f64: 0,
+      f68: completa ? 0 : 24,
+      f6C: completa ? 0 : 40,
+      f5C: randU(4096),
+      espera: 4,
+      f70: 0,
+      f74: 0,
+      geo: null,
+      t: null
+    };
+    this._avisar();
+    return this.actual;
+  }
   apagar(nombre) {
     if (!this.actual || nombre != null && this.actual.nombre !== nombre) return false;
     this.actual = null;

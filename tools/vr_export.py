@@ -111,11 +111,11 @@ def memoria_inicial():
         vm.proc(pid, [], 'titulo')
     return (bytes(vm.g), bytes(vm.l))
 
-def exportar_glb(f, dst, esqueleto, luz=None):
+def exportar_glb(f, dst, esqueleto, luz=None, normales_juego=False):
     if os.path.exists(dst) and os.path.getmtime(dst) >= os.path.getmtime(f) and (not FORZAR):
         return True
     try:
-        exportar(f, dst, estatico=not esqueleto, luz=luz)
+        exportar(f, dst, estatico=not esqueleto, luz=luz, normales_juego=normales_juego)
         return True
     except Exception as e:
         print('  no se pudo exportar', f, e)
@@ -378,7 +378,7 @@ def sala(st, modo, base, com, rotulos_ok=True):
     sig = next((o['st'] for o in (clear or {}).get('opciones', []) if o['tipo'] == 'siguiente'), None) or ((clear or {}).get('automatico') or {}).get('st')
     mun = None
     sock, smax = (vm.get('$w:L0022'), vm.get('$w:L0036'))
-    if modo in (3, 4):
+    if modo in (3, 4, 5):
         mun = {'balas': sock, 'max': smax, 'arma': 'SOCOM' if vm.get('$w:L001c') == 0 else None, 'silenciador': vm.get('$w:L0078') >= 0}
         if modo == 4 and st != 'vr01':
             mun['arrastra'] = True
@@ -536,8 +536,15 @@ if __name__ == '__main__':
     etapa = {st: i + 1 for i, st in enumerate(m['orden'])}
     ids_vox = set()
     resumen = []
+    if '--demo' in sys.argv:
+        for st in pedidas:
+            d = sala(st, 5, base, com)
+            d['vr']['etapa'] = etapa.get(st)
+            json.dump(d, open(os.path.join(OUT, f'{st}_5.json'), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+            print(st, 'modo 5:', d['mapas'][0]['piezas'], 'guardias', sum((1 for a in d['actores'] if a['tipo'] == 'WATCHER')), 'meta', d['vr']['meta']['p'])
+        sys.exit(0)
     for st in pedidas:
-        for modo in (0, 1, 2, 3, 4):
+        for modo in (0, 1, 2, 3, 4, 5):
             d = sala(st, modo, base, com)
             d['vr']['etapa'] = etapa.get(st)
             v = d['vr']

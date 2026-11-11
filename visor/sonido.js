@@ -1,4 +1,6 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { monoGuardado, guardarMono } from "./caption.js";
+
 export const SE = {
   SOCOM: 1,
   PASO_I: 2,
@@ -36,6 +38,8 @@ class Sonido {
     this.escenario = null;
     this.cola = [];
     this.volumen = .9;
+    this.mono = monoGuardado();
+    this.nodosMono = new Set;
     this.espacial = false;
     this.fuentes = new Map;
     this.sigFuente = 1;
@@ -96,6 +100,7 @@ class Sonido {
         tipo: "espacial",
         on: this.espacial
       });
+      if (this.mono) this.codigo(4278190085);
       if (this.ctx.state !== "running") await this.ctx.resume();
       const pend = this.escenario;
       this.escenario = null;
@@ -152,6 +157,25 @@ class Sonido {
   }
   cancion(n) {
     if (n) this.codigo(16777216 | n); else this.codigo(33554431);
+  }
+  voz(on) {
+    on = !!on;
+    if (on === this._voz || !this.listo) return;
+    this._voz = on;
+    this.enviar({
+      tipo: "vox",
+      on: on
+    });
+  }
+  primeraPersona(on) {
+    if (on == null || !this.listo) {
+      this._syukan = undefined;
+      return;
+    }
+    on = !!on;
+    if (on === this._syukan) return;
+    this._syukan = on;
+    this.codigo(on ? 33554208 : 33554209);
   }
   se(id, pan = 0, vol = 63) {
     this.enviar({
@@ -233,6 +257,37 @@ class Sonido {
     this.enviar({
       tipo: "callar"
     });
+  }
+  setMono(si) {
+    this.mono = !!si;
+    guardarMono(this.mono);
+    this.codigo(this.mono ? 4278190085 : 4278190086);
+    for (const n of this.nodosMono) this._ponerMono(n);
+    return this.mono;
+  }
+  _ponerMono(n) {
+    try {
+      n.channelCount = this.mono ? 1 : 2;
+      n.channelCountMode = this.mono ? "explicit" : "max";
+      n.channelInterpretation = "speakers";
+    } catch {}
+  }
+  registrarMono(n) {
+    if (!n) return;
+    this.nodosMono.add(n);
+    this._ponerMono(n);
+  }
+  monoElemento(el) {
+    if (!el || el._monoNodo || !this.mono || !this.ctx || this.ctx.state !== "running") return;
+    try {
+      const src = this.ctx.createMediaElementSource(el), g = this.ctx.createGain();
+      src.connect(g);
+      g.connect(this.ctx.destination);
+      el._monoNodo = g;
+      this.registrarMono(g);
+    } catch (e) {
+      console.warn("mono:", e.message);
+    }
   }
   setVolumen(v) {
     this.volumen = v;

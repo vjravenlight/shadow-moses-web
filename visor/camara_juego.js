@@ -163,6 +163,7 @@ export class CamaraJuego {
     this.reset();
   }
   async cargar(st) {
+    if (/^(?:vr|vab|vcd|vefgh|vijkl|photo)_/.test(st)) throw new Error("sin camaras.json para " + st);
     const r = await fetch(`assets/niveles/${st}/camaras.json`);
     if (!r.ok) throw new Error("sin camaras.json para " + st);
     this.usarDatos(await r.json());
@@ -993,7 +994,7 @@ export const asomarse = new Asomarse;
 const _caras = new Map;
 
 export async function carasPS1(root, url) {
-  const m = /^(niveles\/[^/]+)\/([^/]+)\.glb$/.exec(url || "");
+  const m = /^((?:niveles|vr\/disco|vr)\/(?!comun\/)[^/]+)\/([^/]+)\.glb$/.exec(url || "");
   if (!m || !root) return false;
   if (!_caras.has(m[1])) _caras.set(m[1], fetch(`assets/${m[1]}/caras.json`).then(r => r.ok ? r.json() : null).catch(() => null));
   const d = (await _caras.get(m[1]))?.[m[2]];

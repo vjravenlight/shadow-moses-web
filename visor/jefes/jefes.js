@@ -203,12 +203,13 @@ export async function crearJefesEntrada(nv, ctx, guion = null) {
       (mgr.extrasEntrada ||= []).push(x);
     }
   }
+  if (g) g.__jefesCtx = ctx;
   if (g && !g.__jefesReinicio && typeof g.despuesDelMain === "function") {
     g.__jefesReinicio = true;
     const dm = g.despuesDelMain.bind(g);
     g.despuesDelMain = (reinicio, ...r) => {
       if (reinicio) try {
-        const J = (typeof window !== "undefined" ? window.__mgs?.juego : null) || ctx.juego, mgr = J?.__jefes;
+        const J = (typeof window !== "undefined" ? window.__mgs?.juego : null) || g.__jefesCtx?.juego, mgr = J?.__jefes;
         for (const j of (mgr?.lista || []).slice()) if (j.__sinCrear && j.vivo !== false) j.destruir();
         for (const x of (mgr?.extrasEntrada || []).splice(0)) x.destruir?.();
       } catch (e) {

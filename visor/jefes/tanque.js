@@ -1928,6 +1928,14 @@ export class Artillero extends Jefe {
     return this._proxy;
   }
   recibirGolpe(cuanto, modo, origen) {
+    if (origen.ninja && this.blanco && this.vivo && !origen.aturdidora) {
+      this.dañoExplosion = Math.max(this.dañoExplosion || 0, idiv(this.T.D74, this.T.DEC));
+      this.T.log("golpe del Ninja", {
+        arma: origen.ninja,
+        "daño": this.dañoExplosion
+      });
+      return;
+    }
     if (this.blanco && this.vivo && !origen.aturdidora && !origen.explosion && modo === 1) this.golpes.push({
       cuanto: cuanto,
       modo: modo,

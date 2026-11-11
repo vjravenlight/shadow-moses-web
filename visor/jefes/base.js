@@ -9,6 +9,27 @@ import { cargadorCompartido, texturaCompartida } from "../cargador.js";
 
 import { cargarVoz } from "../audio_ps1.js";
 
+import { idioma } from "../idioma.js";
+
+export function subDeLinea(l) {
+  if (!l) return null;
+  if (l[3]?.tj != null) return l;
+  return l[2] || null;
+}
+
+export function lienzoSub(l) {
+  const j = l?.[3];
+  if (!j) return null;
+  if (j._cv) return j._cv;
+  if (!j._pidiendo) j._pidiendo = import("../codec.js").then(m => m.lienzoTexto(j.tj, `${idioma.carpeta(j.i || "ja")}codec/ui/`, {
+    3: j.glifos
+  })).then(cv => {
+    j._cv = cv;
+    return cv;
+  }).catch(() => null);
+  return null;
+}
+
 export const MM = .001, FPS = 30, ANG = Math.PI * 2 / 4096;
 
 const ALT_SNAKE = [ 1100, 496, 136 ];
@@ -537,14 +558,19 @@ export class Balas {
           _rayo.set(p0, b.dir);
           const q = _rayo.intersectBox(_caja, _q3);
           if (q && q.distanceTo(p0) <= (b.vel || PASO_BALA) * MM) {
-            pega = true;
-            b.pos.copy(q).multiplyScalar(1e3);
-            b.hitlen = 0;
-            b.wallflag = 2;
-            J.vida -= J.ctx.inventario ? J.ctx.inventario.dañoBala(b.daño) / J.ctx.inventario.vidaMax : b.daño / 256;
-            J.ctx.daño?.();
-            sonido("daño");
-            this.mgr.alDañarSnake?.(b.daño);
+            const recibe = J.dañoSnake ? J.dañoSnake(b.daño, 1, null, q.clone()) : true;
+            if (recibe) {
+              pega = true;
+              b.pos.copy(q).multiplyScalar(1e3);
+              b.hitlen = 0;
+              b.wallflag = 2;
+              if (!J.dañoSnake) {
+                J.vida -= J.ctx.inventario ? J.ctx.inventario.dañoBala(b.daño) / J.ctx.inventario.vidaMax : b.daño / 256;
+                J.ctx.daño?.();
+                sonido("daño");
+              }
+              this.mgr.alDañarSnake?.(b.daño);
+            }
           }
         }
         if (!pega) b.pos.copy(sig);
@@ -621,12 +647,35 @@ export class Flujo {
     };
   }
   async cargar(id) {
-    if (this.op.voces?.cargar) return this.op.voces.cargar(id);
-    try {
-      return await cargarVoz("assets/codec/vox/", id, this.audio().ctx);
-    } catch (e) {
-      return null;
+    let r = null;
+    if (this.op.voces?.cargar) r = await this.op.voces.cargar(id); else {
+      try {
+        r = await cargarVoz("assets/codec/vox/", id, this.audio().ctx);
+      } catch (e) {
+        return null;
+      }
     }
+    if (r) r = {
+      ...r,
+      subs: await this.subsTexto(id, r)
+    };
+    return r;
+  }
+  async subsTexto(id, r) {
+    const propios = r.datos?.sub || null, T = idioma.texto, conTexto = S => S?.some(q => q[2] || q[3]);
+    if (T === (r.idioma || "en") && conTexto(propios)) return propios;
+    const S = this.op.voces?.subtitulosEn ? await this.op.voces.subtitulosEn(id, T).catch(() => null) : null;
+    if (!S?.length) return propios;
+    const fin = S[S.length - 1][1], mio = propios?.length ? propios[propios.length - 1][1] : r.datos?.seg || fin;
+    const k = fin > 0 ? Math.min(1.5, Math.max(.6, mio / fin)) : 1;
+    return S.map(([a, b, ...resto]) => [ a * k, b * k, ...resto ]);
+  }
+  lineaSub() {
+    if (this.estado !== 2) return null;
+    const S = this.listo?.subs || this.listo?.datos?.sub;
+    if (!S) return null;
+    const s = this.segundos();
+    return S.find(x => s >= x[0] && s < x[1]) || null;
   }
   vox(id) {
     this.parar();
@@ -980,7 +1029,15 @@ export class HudJefes {
       D.jefeHasta = performance.now() + 250;
       b.extra?.(x, this);
     }
-    if (this.sub) {
+    if (Array.isArray(this.sub)) {
+      const cv = lienzoSub(this.sub);
+      if (cv) {
+        const k = Math.max(1, Math.round(s * 10) / 10);
+        x.setTransform(1, 0, 0, 1, 0, 0);
+        x.imageSmoothingEnabled = false;
+        x.drawImage(cv, Math.round(iw / 2 - cv.width * k / 2), Math.round(ih - 24 * s - cv.height * k), cv.width * k, cv.height * k);
+      }
+    } else if (this.sub) {
       x.setTransform(1, 0, 0, 1, 0, 0);
       x.font = `${Math.round(9 * s)}px monospace`;
       x.textAlign = "center";
@@ -1058,10 +1115,15 @@ export class Jefes {
         }
       };
     }
-    J.dañar = (g, cuanto, modo = 1) => g && g.__jefe ? g.__jefe.recibirGolpe(cuanto, modo, {
-      explosion: m.explosionActual,
-      aturdidora: m.aturdiendo
-    }) : dañar(g, cuanto, modo);
+    J.dañar = (g, cuanto, modo = 1) => {
+      if (!(g && g.__jefe)) return dañar(g, cuanto, modo);
+      const nj = m.golpeNinja || null, md = nj === "espada" && g.__jefe.espadaComoGolpe ? 3 : modo;
+      return g.__jefe.recibirGolpe(cuanto, md, {
+        explosion: m.explosionActual,
+        aturdidora: m.aturdiendo,
+        ninja: nj
+      });
+    };
     J.destruir = () => {
       m.destruir();
       destruir();
@@ -1288,10 +1350,8 @@ export class Jefes {
   }
   subtitulo() {
     const f = this.flujo;
-    if (!f || f.estado !== 2 || !f.listo?.datos?.sub || this.ctx.subtitulos === false) return null;
-    const s = f.segundos();
-    const l = f.listo.datos.sub.find(x => s >= x[0] && s < x[1]);
-    return l ? l[2] : null;
+    if (!f || this.ctx.subtitulos === false) return null;
+    return subDeLinea(f.lineaSub());
   }
   cuadro() {
     this.frame++;

@@ -1,4 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { sonido } from "./sonido.js";
+
+import { caption } from "./caption.js";
+
 import * as THREE from "three";
 
 import { cargadorCompartido, texturaCompartida } from "./cargador.js";
@@ -10,6 +14,22 @@ import { MiraScope, FILTRO_ANTIPARRAS, histogramaProfundidad } from "./mira_scop
 import * as ctl from "./controles.js";
 
 import { urlAudio } from "./audio_ps1.js";
+
+import { idioma } from "./idioma.js";
+
+function mapearTiempo(m, s, inversa = false) {
+  const a = inversa ? 1 : 0, b = 1 - a;
+  if (!m?.length) return s;
+  if (s <= m[0][a]) return m[0][b] + (s - m[0][a]);
+  for (let i = 1; i < m.length; i++) {
+    if (s <= m[i][a]) {
+      const p = m[i - 1], q = m[i], k = (s - p[a]) / Math.max(1e-6, q[a] - p[a]);
+      return p[b] + k * (q[b] - p[b]);
+    }
+  }
+  const u = m[m.length - 1];
+  return u[b] + (s - u[a]);
+}
 
 export const FPS = 30;
 
@@ -315,6 +335,34 @@ export class Demo {
     if (info.version !== 2) throw new Error(`demo ${sector}: demo.json viejo (versión ${info.version}); reexportar con tools/demos_export.py`);
     prog.json = 1;
     avisar("datos");
+    let dirAudio = dir;
+    this._mapaAudio = null;
+    {
+      await (idioma.listo || idioma.iniciar());
+      const idT = idioma.texto, idV = idioma.voz, url = k => `${this.base}idiomas/${k}/demos/${sector}.json`;
+      const bajar = k => k === "en" ? Promise.resolve(null) : fetch(url(k)).then(r => r.ok ? r.json() : null, () => null);
+      const pT = bajar(idT), pV = idV === idT ? pT : bajar(idV);
+      const [jT, jV] = await Promise.all([ pT, pV ]);
+      if (jT?.subtitulos?.length && jT.subtitulos.every(l => l.texto != null || l.tj != null)) {
+        const m = jT.mapa_tiempo, dirF = jT.fuente ? `${this.base}idiomas/${idT}/${jT.fuente}` : null;
+        info.subtitulos = jT.subtitulos.map(l => {
+          const t = m ? mapearTiempo(m, l.t) : l.t, f = m ? mapearTiempo(m, l.t + l.d) : l.t + l.d;
+          return {
+            ...l,
+            t: t,
+            d: f - t,
+            dirFuente: dirF
+          };
+        });
+        info.idiomaTexto = idT;
+      }
+      if (jV?.audio?.archivo) {
+        info.audio = jV.audio;
+        dirAudio = `${this.base}idiomas/${idV}/demos/`;
+        info.idiomaVoz = idV;
+        this._mapaAudio = jV.mapa_tiempo || null;
+      }
+    }
     this.info = info;
     this.n = info.n_cuadros;
     this.stride = info.cuadros.stride;
@@ -348,7 +396,7 @@ export class Demo {
       this.datos = d;
       this.tiempos.cuadros = performance.now() - t0;
     });
-    const pAudio = this._prepararAudio(dir, () => {
+    const pAudio = this._prepararAudio(dirAudio, () => {
       prog.audio = 1;
       avisar("audio");
     });
@@ -376,7 +424,16 @@ export class Demo {
       grupo.add(raiz);
       if (!m.glb || !m.visible_cuadros) return;
       let o;
-      try {
+      const otro = this.reemplazoModelo?.(m) || null;
+      if (otro) {
+        try {
+          o = await cargar(otro);
+        } catch (e) {
+          console.warn(`demo ${sector}: no cargó ${otro}`, e.message);
+          o = null;
+        }
+      }
+      if (!o) try {
         o = await cargar(m.glb);
       } catch (e) {
         console.warn(`demo ${sector}: no cargó ${m.glb}`, e.message);
@@ -400,6 +457,10 @@ export class Demo {
       M.huesos = huesos;
       M.obj = o;
       M.esHind = m.nombre === "hind" || m.nombre === "hinddemo";
+      {
+        const c = m.huesos <= 16 ? o.getObjectByName?.("hueso_16") : null;
+        if (c && c.parent?.name === "hueso_5" && huesos[6]) M.cara = c;
+      }
       this.alCrearModelo?.(o, m);
       uno();
     });
@@ -537,6 +598,7 @@ export class Demo {
     a.src = src;
     a.volume = Math.max(0, Math.min(1, this.volumen));
     a.load();
+    sonido.monoElemento(a);
     return new Promise(res => {
       let fin = false;
       const ok = bien => {
@@ -575,7 +637,7 @@ export class Demo {
     this._audioPendiente = false;
     this._sonando = true;
     try {
-      a.currentTime = Math.min(this.tiempo, Math.max(0, (a.duration || 1e9) - .05));
+      a.currentTime = Math.min(this._tAnimAudio(this.tiempo), Math.max(0, (a.duration || 1e9) - .05));
     } catch {}
     a.play().then(() => {
       this._conAudio = true;
@@ -597,7 +659,7 @@ export class Demo {
       a.removeEventListener("canplay", listo);
       if (!this.activa || this._salida || a._dueño !== this) return;
       try {
-        a.currentTime = Math.min(this.tiempo, Math.max(0, (a.duration || 1e9) - .05));
+        a.currentTime = Math.min(this._tAnimAudio(this.tiempo), Math.max(0, (a.duration || 1e9) - .05));
       } catch {}
       this._sonando = true;
       a.play().then(() => {
@@ -764,7 +826,7 @@ export class Demo {
     if (!this.pausada) this._avanzarReloj(dt);
     let c = Math.floor(this.tiempo * FPS) + 1;
     if (c > this.n) {
-      const durAudio = this._conAudio ? this._audio?.duration || 0 : 0;
+      const durAudio = this._conAudio ? this._tAudio(this._audio?.duration || 0) : 0;
       const fin = !this._conAudio || this._audio.ended || this.tiempo >= durAudio - .02 || this.tiempo > this.n / FPS + 1.5;
       c = this.n;
       if (fin && !this.pausada) {
@@ -786,6 +848,12 @@ export class Demo {
     });
     this._dibujarOverlay(c, this.tiempo);
   }
+  _tAudio(s) {
+    return this._mapaAudio ? mapearTiempo(this._mapaAudio, s) : s;
+  }
+  _tAnimAudio(s) {
+    return this._mapaAudio ? mapearTiempo(this._mapaAudio, s, true) : s;
+  }
   _avanzarReloj(dt) {
     const a = this._audio;
     if (this._conAudio && a) {
@@ -793,7 +861,7 @@ export class Demo {
       if (a.ended) {
         this._conAudio = false;
         this._sonando = false;
-        this.tiempo = Math.max(this.tiempo, a.duration || 0) + dt;
+        this.tiempo = Math.max(this.tiempo, this._tAudio(a.duration || 0)) + dt;
         return;
       }
       if (a.paused || a.readyState < 3) {
@@ -818,7 +886,7 @@ export class Demo {
         this._esperando = false;
         this._mostrarCarga(false);
       }
-      const ta = a.currentTime;
+      const ta = this._tAudio(a.currentTime);
       if (ta === this._ultimaTa) this._sinAvance = (this._sinAvance || 0) + dt; else {
         this._sinAvance = 0;
         this._ultimaTa = ta;
@@ -885,6 +953,7 @@ export class Demo {
         const q = p + 7 + j * 3;
         h.rotation.set(d[q] * ANG, d[q + 1] * ANG, d[q + 2] * ANG, ORDEN_HUESO);
       }
+      if (m.cara) m.cara.quaternion.copy(m.huesos[6].quaternion);
       if (m.esHind) {
         if (m.huesos[1]) m.huesos[1].rotation.y = this._hind.a1 * ANG;
         if (m.huesos[2]) m.huesos[2].rotation.x = this._hind.a2 * ANG;
@@ -1611,8 +1680,11 @@ export class Demo {
       u.abajo.style.height = (barras ? Math.round(BARRA_ABAJO * sy) : 0) + "px";
       const fs = cine ? Math.max(14, Math.min(Math.round(9.5 * sy * .8), Math.round(b.w / 34))) : Math.max(11, Math.round(9.5 * sy));
       u.sub.style.fontSize = fs + "px";
-      u.sub.style.bottom = Math.round((cine ? 10 : 4) * sy * (cine ? .6 : 1)) + "px";
-      u.sub.style.minHeight = (cine ? 0 : Math.round(32 * sy)) + "px";
+      u.subBottom = Math.round((cine ? 10 : 4) * sy * (cine ? .6 : 1)) + "px";
+      u.subMin = (cine ? 0 : Math.round(32 * sy)) + "px";
+      if (u.subJa) this._subNormal(u);
+      u.sub.style.bottom = u.subBottom;
+      u.sub.style.minHeight = u.subMin;
       u.sub.style.textShadow = cine ? "0 0 3px #000, 0 0 6px #000, 1px 1px 0 #000" : "";
       u.sub.style.display = "none";
     }
@@ -1684,18 +1756,104 @@ export class Demo {
       cvM.style.display = "none";
       u.firmaM = "";
     }
-    const linea = this._salida ? null : this.subtitulos.find(l => t >= l.t && t < l.t + l.d);
-    if (linea) {
+    const linea = this._salida || !caption.on ? null : this.subtitulos.find(l => t >= l.t && t < l.t + l.d);
+    if (linea && linea.tj != null) {
+      if (u.subLinea !== linea) {
+        u.subLinea = linea;
+        u.sub.textContent = "";
+        if (this.lienzoSubtitulo(linea, cv => {
+          if (u.subLinea === linea) {
+            u.sub.textContent = "";
+            u.sub.appendChild(cv);
+          }
+        })) u.sub.appendChild(linea._cv);
+      }
+      if (linea._cv && !cine) {
+        const cv = linea._cv, w = cv.width * tx, h = cv.height * sy;
+        cv.style.width = Math.round(w) + "px";
+        cv.style.height = Math.round(h) + "px";
+        cv.style.flex = "none";
+        cv.style.display = "block";
+        Object.assign(u.sub.style, {
+          left: Math.round(gx + (320 * tx - w) / 2) + "px",
+          right: "auto",
+          top: Math.round(oy + 204 * sy - h / 2) + "px",
+          bottom: "auto",
+          minHeight: "0px",
+          display: "block"
+        });
+        u.subJa = true;
+      } else {
+        if (u.subJa) this._subNormal(u);
+        if (linea._cv) {
+          const fs = parseFloat(u.sub.style.fontSize) || 14, k = fs / 12, cv = linea._cv;
+          cv.style.height = Math.round(cv.height * k) + "px";
+          cv.style.width = Math.round(cv.width * k) + "px";
+          cv.style.flex = "none";
+        }
+        u.sub.style.display = "flex";
+        u.sub.style.alignItems = "flex-end";
+        u.sub.style.justifyContent = "center";
+      }
+    } else if (linea) {
+      u.subLinea = null;
+      if (u.subJa) this._subNormal(u);
       if (u.sub.textContent !== linea.texto) u.sub.textContent = linea.texto;
       u.sub.style.display = "flex";
       u.sub.style.alignItems = "flex-end";
       u.sub.style.justifyContent = "center";
-    } else if (u.sub.style.display !== "none") u.sub.style.display = "none";
+    } else if (u.sub.style.display !== "none") {
+      u.sub.style.display = "none";
+      u.subLinea = null;
+    }
+  }
+  _subNormal(u) {
+    u.subJa = false;
+    Object.assign(u.sub.style, {
+      left: "4%",
+      right: "4%",
+      top: "auto",
+      bottom: u.subBottom || "0px",
+      minHeight: u.subMin || "0px"
+    });
+  }
+  lienzoSubtitulo(l, listo = null) {
+    if (!l || l.tj == null) return null;
+    if (l._cv) return l._cv;
+    if (!l._pidiendo && l.dirFuente) {
+      l._pidiendo = import("./codec.js").then(m => m.lienzoTexto(l.tj, l.dirFuente, {
+        3: l.glifos
+      }, [ 206, 206, 206 ])).then(cv0 => {
+        if (!cv0) return null;
+        const cv = document.createElement("canvas");
+        cv.width = cv0.width + 2;
+        cv.height = cv0.height + 2;
+        const negro = document.createElement("canvas");
+        negro.width = cv0.width;
+        negro.height = cv0.height;
+        const gn = negro.getContext("2d");
+        gn.drawImage(cv0, 0, 0);
+        gn.globalCompositeOperation = "source-in";
+        gn.fillStyle = "#000";
+        gn.fillRect(0, 0, negro.width, negro.height);
+        const g = cv.getContext("2d");
+        for (const [dx, dy] of [ [ -1, 0 ], [ 1, 0 ], [ 0, 1 ], [ 0, -1 ] ]) g.drawImage(negro, 1 + dx, 1 + dy);
+        g.drawImage(cv0, 1, 1);
+        cv.style.imageRendering = "pixelated";
+        l._cv = cv;
+        return cv;
+      }).catch(() => null);
+    }
+    if (listo && l._pidiendo) l._pidiendo.then(cv => {
+      if (cv) listo(cv);
+    });
+    return null;
   }
   _limpiarOverlay() {
     const u = this._ui;
     if (!u) return;
     u.sub.style.display = "none";
+    u.subLinea = null;
     u.imgs.clear();
     u.firmaT = "";
     u.lienzoT.getContext("2d").clearRect(0, 0, u.lienzoT.width, u.lienzoT.height);

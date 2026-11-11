@@ -1,17 +1,23 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import * as THREE from "three";
 
-import { ArcoPlasma } from "../plasma.js";
+import { Plasma, PlasmaL } from "../plasma.js";
 
 import { Jefe, Flujo, MM, ANG, ratan2, randU, nearExp, nearExp4, nearExp4P, nearTimeP, cargarModelo, cargarAnim, aplicarPose, rotY } from "./base.js";
 
 import { IT, TIPO_ARMA, TIPO_ITEM } from "../inventario.js";
+
+import { materialKogaku, TINTE } from "../kogaku.js";
+
+const _eE = new THREE.Euler, _vE = new THREE.Vector3;
 
 const idiv = (a, b) => Math.trunc(a / b);
 
 const s16 = v => (v + 32768 & 65535) - 32768;
 
 const rsin = a => Math.round(Math.sin((a & 4095) * ANG) * 4096);
+
+const rcos = a => Math.round(Math.cos((a & 4095) * ANG) * 4096);
 
 const vecDir2 = v => ratan2(v[0], v[2]) & 4095;
 
@@ -94,6 +100,9 @@ const BARRA = {
 };
 
 export class Ninja extends Jefe {
+  get espadaComoGolpe() {
+    return true;
+  }
   constructor(actor, mgr) {
     super(actor, mgr);
     this.nombre = "NINJA";
@@ -738,7 +747,7 @@ export class Ninja extends Jefe {
     if (this.gvTime() & 7) return 0;
     const k = randU(8), pares = [ [ 3, 1 ], [ 5, 6 ], [ 7, 8 ], [ 8, 9 ], [ 0, 5 ] ];
     if (k >= 5) return 0;
-    this.vfx.arco(pares[k][0], pares[k][1], 4);
+    this.vfx.arco(pares[k][0], pares[k][1], 4, 1e3);
     return 1;
   }
   ElegirEjecutor() {
@@ -4271,6 +4280,20 @@ D.estadoPrueba = function() {
   };
 };
 
+let texRemolino = null;
+
+function texturaRemolino() {
+  if (texRemolino) return texRemolino;
+  const L = new THREE.TextureLoader;
+  const t = L.load("assets/jefes/hind_wind01.png", undefined, undefined, () => L.load("assets/jefes/rex/anillo_polvo.png", t2 => {
+    t.image = t2.image;
+    t.needsUpdate = true;
+  }));
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.magFilter = THREE.NearestFilter;
+  return texRemolino = t;
+}
+
 let _texGlow = null;
 
 function texGlow() {
@@ -4483,79 +4506,98 @@ class EfectosNinja {
   kogaku(si) {
     if (!!this._kog === !!si) return;
     this._kog = si;
-    for (const [m, mat] of this.n.materiales || []) {
-      if (!si) {
-        m.material = mat;
-        continue;
-      }
-      const k = mat.clone();
-      k.transparent = true;
-      k.opacity = .18;
-      k.depthWrite = false;
-      if (k.color) k.color = k.color.clone().multiplyScalar(.55);
-      m.material = k;
-    }
+    if (this.n.modelo) this.n.modelo.userData.kogakuRaiz = true;
+    const k = materialKogaku(TINTE.ninja);
+    for (const [m, mat] of this.n.materiales || []) m.material = si ? k : mat;
     if (this.n.katana) this.n.katana.traverse(m => {
       if (m.isMesh) {
         if (!m.userData.matOrig) m.userData.matOrig = m.material;
-        if (si) {
-          const k = m.userData.matOrig.clone();
-          k.transparent = true;
-          k.opacity = .18;
-          k.depthWrite = false;
-          m.material = k;
-        } else m.material = m.userData.matOrig;
+        m.material = si ? k : m.userData.matOrig;
       }
     });
   }
-  arco(b1, b2, cuadros = 4) {
+  arco(b1, b2, cuadros = 4, f3B4 = 0) {
     const n = this.n, h1 = n.huesos[b1 % 16], h2 = n.huesos[b2 % 16];
     if (!h1 || !h2) return;
-    const arco = new ArcoPlasma(this.mundo);
-    const act = () => {
-      arco.actualizar((new THREE.Vector3).setFromMatrixPosition(h1.matrixWorld), (new THREE.Vector3).setFromMatrixPosition(h2.matrixWorld));
+    const mm = h => {
+      const e = h.matrixWorld.elements;
+      return [ Math.round(e[12] * 1e3), Math.round(e[13] * 1e3), Math.round(e[14] * 1e3) ];
     };
-    act();
-    this.fx.push({
-      t: 0,
-      dur: cuadros,
-      fn: act,
-      fin: () => arco.quitar()
+    const p = new Plasma(this.mundo, mm(h1), mm(h2), {
+      modo: 0,
+      azul: 0,
+      f3B4: f3B4,
+      cuadros: cuadros + randU(16)
     });
+    const e = {
+      t: 0,
+      dur: Infinity,
+      fn: () => {
+        if (!p.cuadro(mm(h1), mm(h2))) e.dur = 0;
+      },
+      fin: () => p.quitar()
+    };
+    this.fx.push(e);
   }
   chispa(hueso, color = 16777215, escala = .35) {
     const h = this.n.huesos[hueso];
     const p = h ? new THREE.Vector3(0, 0, .1).applyMatrix4(h.matrixWorld) : aV3(this.n.c.mov);
     this.mgr.chispa(p, escala, 4, color);
   }
-  remolino(r1 = 200, r2 = 100) {
-    const n = this.n, p = new THREE.Vector3(n.c.mov[0] * MM, ((n.c.levels[0] || 0) + 20) * MM, n.c.mov[2] * MM);
-    const geo = new THREE.RingGeometry(.6, 1, 24);
-    geo.rotateX(-Math.PI / 2);
-    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({
-      color: 12564648,
+  remolino(a1 = 200, a2 = 100, a3 = a1, tiempo = 10) {
+    const n = this.n, cx = n.c.mov[0], cy = (n.c.levels[0] || 0) + 20, cz = n.c.mov[2];
+    const N = 32, geo = new THREE.BufferGeometry, pos = new Float32Array(N * 6 * 3), uv = [];
+    for (let i = 0; i < N; i++) uv.push(1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1);
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+    const mat = new THREE.MeshBasicMaterial({
+      map: texturaRemolino(),
+      blending: THREE.AdditiveBlending,
       transparent: true,
-      opacity: .5,
       depthWrite: false,
       side: THREE.DoubleSide
-    }));
-    m.position.copy(p);
+    });
+    const m = new THREE.Mesh(geo, mat);
     m.userData.sinColision = true;
+    m.frustumCulled = false;
+    m.visible = false;
     this.mundo.add(m);
-    const r = r1 * MM;
+    const w = {
+      f448: idiv(a1, 2),
+      f450: a2,
+      f44C: a3,
+      f454: 600,
+      time: tiempo
+    };
+    const dibujar = () => {
+      const r0 = w.f448, r1 = w.f448 + idiv(w.f450 * rcos(w.f454), 4096), h = idiv(w.f450 * rsin(w.f454), 4096);
+      const v = (r, i, y) => {
+        const a = i % N * 128;
+        return [ (cx + r * rcos(a) / 4096) * MM, (cy + y) * MM, (cz + r * rsin(a) / 4096) * MM ];
+      };
+      for (let i = 0; i < N; i++) {
+        const A = v(r0, i, 0), B = v(r0, i + 1, 0), C = v(r1, i, h), D = v(r1, i + 1, h);
+        pos.set([ ...C, ...D, ...B, ...C, ...B, ...A ], i * 18);
+      }
+      geo.attributes.position.needsUpdate = true;
+    };
     this.fx.push({
       t: 0,
-      dur: 10,
-      fn: t => {
-        const k = r * (1 + t / 4);
-        m.scale.set(k, 1, k);
-        m.material.opacity = .5 * (1 - t / 10);
-        m.rotation.y += .4;
+      dur: tiempo - 1,
+      fn: () => {
+        w.time--;
+        dibujar();
+        m.visible = true;
+        w.f448 += w.f44C;
+        w.f44C -= idiv(w.f44C, 8);
+        w.f454 = nearExp(w.f454, 0, 8);
+        const c = w.time * 8 / 128;
+        mat.color.setRGB(c, c, c);
       },
       fin: () => {
         m.removeFromParent();
         geo.dispose();
-        m.material.dispose();
+        mat.dispose();
       }
     });
   }
@@ -4616,9 +4658,14 @@ class EfectosNinja {
         rot: [ randU(4096), randU(4096), randU(4096) ]
       });
     }
+    const c = this.centroEsfera();
     this.esfera = {
       bolas: bolas,
-      t: randU(4096)
+      t: randU(4096),
+      arcos: [ 0, 1 ].map(() => ({
+        rot: [ randU(4096), randU(4096), randU(4096) ],
+        antes: c.slice()
+      }))
     };
     this.n.log("esfera");
   }
@@ -4656,11 +4703,39 @@ class EfectosNinja {
         if (m.isMesh) m.material.opacity = (i === 0 ? .45 : .3) + .15 * Math.sin(E.t * .4 + i);
       });
     }
+    this.arcosEsfera(E);
     if (n.esfera === -1 && E.bolas[0].cur < 500) {
       for (const b of E.bolas) b.g.removeFromParent();
       this.esfera = null;
       n.esfera = 0;
       n.log("esfera apagada");
+    }
+  }
+  centroEsfera() {
+    const h = this.n.huesos[0];
+    if (!h) return [ 0, 0, 0 ];
+    const e = h.matrixWorld.elements;
+    return [ Math.round(e[12] * 1e3), Math.round(e[13] * 1e3), Math.round(e[14] * 1e3) ];
+  }
+  arcosEsfera(E) {
+    const t = this.n.gvTime(), c = this.centroEsfera(), r = Math.trunc(E.bolas[0].cur * 1e3 / 4096);
+    for (const [i, A] of E.arcos.entries()) {
+      if ((t + i) % 2 !== i) continue;
+      for (let k = 0; k < 3; k++) A.rot[k] = A.rot[k] + randU(128) + 128 & 65535;
+      _eE.set(A.rot[0] * ANG, A.rot[1] * ANG, A.rot[2] * ANG, "YXZ");
+      _vE.set(0, 0, r).applyEuler(_eE);
+      const q = [ c[0] + Math.trunc(_vE.x), c[1] + Math.trunc(_vE.y), c[2] + Math.trunc(_vE.z) ];
+      const p = new PlasmaL(this.mundo, A.antes, q, 2);
+      const e = {
+        t: 0,
+        dur: Infinity,
+        fn: () => {
+          if (!p.cuadro()) e.dur = 0;
+        },
+        fin: () => p.quitar()
+      };
+      this.fx.push(e);
+      A.antes = q;
     }
   }
   destruir() {

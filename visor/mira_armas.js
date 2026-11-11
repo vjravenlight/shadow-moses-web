@@ -58,6 +58,14 @@ function bordeDifuso(x, v, c, t = [ 0, 0, 0 ]) {
   }
 }
 
+const pedidosRifle = new Set;
+
+export function miraRifleEscena(dueño, si) {
+  if (si) pedidosRifle.add(dueño); else pedidosRifle.delete(dueño);
+}
+
+export const hayMiraRifleEscena = () => pedidosRifle.size > 0;
+
 export class MiraArma {
   constructor({base: base = "assets/", contenedor: contenedor = null, z: z = 3, se: se = null} = {}) {
     this.se = se;
@@ -117,7 +125,7 @@ export class MiraArma {
     this.vr = !!e.vr;
     if (e.tipo !== this.tipo) {
       this.tipo = e.tipo || null;
-      this.t = 0;
+      this.t = e.rapida ? 1e5 : 0;
       this.acum = 0;
       this.despl = [ [ 0, 0 ], [ 0, 0 ], [ 0, 0 ] ];
       this.respiro = 0;
@@ -149,7 +157,73 @@ export class MiraArma {
       }
       this._moverCapas(cuadros);
     }
+    if (this.tipo === "stinger") this._moverStinger(cuadros, e.camara);
     this._medirBlancos(e.camara, e.armas);
+  }
+  _moverStinger(cuadros, cam) {
+    const St = this.stn ||= {
+      pitch: 0,
+      yaw: 0,
+      ant: null,
+      dx: 0,
+      dy: 0,
+      barras: Array.from({
+        length: 32
+      }, () => Math.random() * 512)
+    };
+    if (cam?.getWorldDirection) {
+      const d = cam.getWorldDirection(_v);
+      St.pitch = Math.round(Math.asin(Math.max(-1, Math.min(1, d.y))) / ANG);
+      St.yaw = Math.round(Math.atan2(-d.x, -d.z) / ANG);
+    }
+    const a = St.ant;
+    St.ant = [ St.pitch, St.yaw ];
+    if (!a || !cuadros) return;
+    const dyaw = (St.yaw - a[1] + 6144) % 4096 - 2048, dp = St.pitch - a[0];
+    const sx = dyaw > 1 ? -1 : dyaw < -1 ? 1 : 0, sy = dp > 1 ? -1 : dp < -1 ? 1 : 0;
+    for (let k = 0; k < cuadros; k++) {
+      if (sx && Math.abs(St.dx) < 8) St.dx += sx; else if (!sx && St.dx) St.dx -= Math.sign(St.dx);
+      if (sy && Math.abs(St.dy) < 8 && Math.abs(St.pitch) !== 512) St.dy += sy; else if (!sy && St.dy) St.dy -= Math.sign(St.dy);
+      for (let i = 0; i < St.barras.length; i++) St.barras[i] = Math.max(0, Math.min(511, St.barras[i] + (Math.random() - .5) * 120));
+    }
+  }
+  _rayasStinger(x, ox, oy) {
+    const St = this.stn;
+    if (!St) return;
+    const CIAN = [ 46, 65, 65 ], VERDE = [ 135, 177, 104 ], GRIS = [ 114, 121, 127 ], NUM = [ 104, 111, 116 ];
+    const tr = v => Math.trunc(v), L = (pts, c) => {
+      x.fillStyle = rgb(c);
+      linea(x, pts.map(([a, b]) => [ a + ox, b + oy ]), null);
+    };
+    const v3 = St.pitch;
+    let v4 = 5 * tr(tr(v3 / 32) / 5), v5 = tr(16 * (tr(v3 / 32) % 5) / 5) + 112;
+    while (v5 >= 31) {
+      v5 -= 16;
+      v4 += 5;
+    }
+    for (let v6 = v5 + 16, v7 = v4 - 5; v6 < 210; v6 += 16, v7 -= 5) {
+      const n = Math.abs(v7) < 10 ? v7 < 0 ? "-0" + -v7 : "0" + v7 : String(v7);
+      textoMenu(x, 40 + ox, v6 - 2 + oy, n, NUM);
+      L([ [ 42, v6 - 1 ], [ 42, v6 + 1 ], [ 42, v6 ], [ 45, v6 ] ], CIAN);
+      if (v7 % 10 !== 0) continue;
+      const y = v6 + St.dy;
+      x.fillStyle = rgb(VERDE);
+      x.fillRect(47 + ox, y + oy, 1, 1);
+      L([ [ 18, y - 4 ], [ 41, y - 4 ], [ 41, y + 4 ], [ 18, y + 4 ] ], CIAN);
+      L([ [ 18, y - 4 ], [ 18, y + 4 ] ], CIAN);
+    }
+    const P = [ [ 147, 117 ], [ 147, 104 ], [ 159, 116 ], [ 171, 104 ], [ 171, 117 ], [ 144, 120 ], [ 144, 123 ], [ 174, 123 ], [ 174, 120 ] ];
+    const dx = St.dx, b1 = St.dy < 0 ? St.dy : 0, b2 = St.dy > 0 ? St.dy : 0, m = (p, ax, ay) => [ p[0] + ax, p[1] + ay ];
+    L([ P[0], P[1], P[2], P[3] ].map(p => m(p, dx, b1)), GRIS);
+    L([ P[3], P[4] ].map(p => m(p, dx, b1)), GRIS);
+    L([ P[5], P[6], P[7], P[8] ].map(p => m(p, -dx, b2)), GRIS);
+    x.fillStyle = rgb(CIAN, .5);
+    for (let i = 0, s2 = 24; i < St.barras.length; i++) {
+      const w = tr(St.barras[i] / 10), v1 = s2 + w;
+      if (v1 > 240) break;
+      x.fillRect(s2 + ox, 20 + oy, w, 5);
+      s2 += w + 1;
+    }
   }
   _moverCapas(cuadros) {
     const M = MUEVEN[this.tipo], a = this.ang, p = this.angPrevio;
@@ -247,6 +321,7 @@ export class MiraArma {
       if (p.semi && p.abr === 2 && !carton && !p.gouraud) x.fillStyle = `rgba(0,0,0,${p.color[0] / 255})`; else x.fillStyle = rgb(carton || (p.gouraud ? p.color[0] : p.color), p.semi ? .5 : 1);
       if (p.tipo === "poly") poligono(x, v); else linea(x, v, p.semi ? new Set : null);
     }
+    if (this.tipo === "stinger" && this.t >= 8) this._rayasStinger(x, ox, oy);
     const C = COLORES[this.tipo];
     for (const [nx, ny, nh, fijado] of this.blancos) {
       const cx = Math.round((nx + 1) / 2 * Wu), cy = Math.round((1 - ny) / 2 * Hu), h = Math.max(6, Math.round(nh / 2 * Hu));

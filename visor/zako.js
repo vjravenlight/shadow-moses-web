@@ -13,6 +13,8 @@ import { Rapel, TIPOS_RAPEL } from "./rapel.js";
 
 import { Demo11B } from "./demo11b.js";
 
+import { materialKogaku, TINTE } from "./kogaku.js";
+
 export const MM = .001, FPS = 30, ANG = Math.PI * 2 / 4096;
 
 const NO_POINT = 3e4;
@@ -379,6 +381,18 @@ export class Zakos {
       }
       m.cuadro();
     };
+    if (typeof J.cuadroSnake === "function") {
+      const cSnake = J.cuadroSnake.bind(J);
+      J.cuadroSnake = e => {
+        const ant = m.enCuadro;
+        m.enCuadro = false;
+        try {
+          return cSnake(e);
+        } finally {
+          m.enCuadro = ant;
+        }
+      };
+    }
     J.update = dt => {
       m.porUpdate = true;
       try {
@@ -480,7 +494,7 @@ export class Zakos {
     if (!this.porUpdate) this.animar(1 / FPS);
   }
   animar(dt) {
-    for (const z of this.soldados) z.an?.mx.update(dt);
+    for (const z of this.soldados) if (!z.oculto) z.an?.mx.update(dt);
   }
   granada(o, paso, espoleta) {
     const m = new THREE.Mesh(new THREE.SphereGeometry(.05, 8, 6), new THREE.MeshBasicMaterial({
@@ -570,6 +584,7 @@ export class Zakos {
     this.demo11b = null;
     this.rasen?.destruir();
     this.rasen = null;
+    if (mgrActual === this) mgrActual = null;
     for (const M of this.mapasListos.values()) M.destruir();
     this.mapas.clear();
     this.mapasListos.clear();
@@ -1491,6 +1506,7 @@ class Zako {
     o.traverse(m => {
       if (m.isMesh && m.isSkinnedMesh) m.castShadow = true;
     });
+    if (/^ZAKO11[AEF]$/.test(this.tipo) && !this.def.kogaku) ctx.luzArma?.(o);
     if (this.def.kogaku) this.camuflaje(o);
     this.an = animador(o, datos);
     this.an.tocar("parado", {
@@ -1556,21 +1572,26 @@ class Zako {
     }
   }
   camuflaje(o) {
+    const k = materialKogaku(TINTE.ninja);
+    this.matsKogaku = [];
     o.traverse(m => {
       if (!m.isMesh) return;
-      const k = x => {
-        const c = x.clone();
-        c.transparent = true;
-        c.opacity = .22;
-        c.depthWrite = false;
-        if (c.color) c.color = c.color.clone().multiplyScalar(.6);
-        return c;
-      };
-      m.material = Array.isArray(m.material) ? m.material.map(k) : k(m.material);
+      this.matsKogaku.push([ m, m.material ]);
+      m.material = k;
       m.castShadow = false;
       m.layers.disable(2);
     });
     o.userData.kogaku = true;
+    o.userData.kogakuRaiz = true;
+    this.kogakuVisto = false;
+  }
+  termicasKogaku() {
+    if (!this.matsKogaku) return;
+    const t = this.J.ctx.inventario?.item === 6;
+    if (t === this.kogakuVisto) return;
+    this.kogakuVisto = t;
+    const k = materialKogaku(TINTE.ninja);
+    for (const [m, mat] of this.matsKogaku) m.material = t ? mat : k;
   }
   "revisarDaño"() {
     const g = this.g, com = this.comandante;
@@ -1608,9 +1629,34 @@ class Zako {
       g.o.position.z += Math.cos(g.rot * ANG) * g.vel;
       this.pasos(y0);
     }
-    if (g.accion !== "agarrado") this.chocar(g.o.position, g.rSphere > 0 ? .45 : .25);
+    const sinParedes = this.es14 && (g.empujeVR && g.tAcc < 20 || g.tiroVR && g.tAcc < 22);
+    if (g.accion !== "agarrado" && !sinParedes) this.chocar(g.o.position, g.rSphere > 0 ? .45 : .25);
     const h = this.piso(g.o.position);
+    if (this.es14 && g.accion !== "agarrado") {
+      this.fueraDelPiso14(h);
+      return this.caer14(h);
+    }
     if (h !== null) g.o.position.y += (h - g.o.position.y) * .5; else if (g.accion !== "agarrado") g.o.position.y -= .05;
+  }
+  caer14(h) {
+    const g = this.g, p = g.o.position, piso = h ?? -32;
+    if (g.cae14 && ++g.cae14.t > 90) {
+      p.y = piso;
+    }
+    if (p.y - piso > .3) {
+      g.yCae ??= p.y;
+      g.vyCae = (g.vyCae || 0) + .016;
+      p.y = Math.max(piso, p.y - g.vyCae);
+      if (p.y > piso) return;
+    } else p.y += (piso - p.y) * .5;
+    if (g.yCae == null) return;
+    g.yCae = null;
+    g.vyCae = 0;
+    if (g.cae14) {
+      g.cae14 = null;
+      sonido("cae", p);
+      if (![ "cae", "muerto", "cuelloRoto" ].includes(g.accion)) this.J.morir(g);
+    }
   }
   pasos() {
     const g = this.g, a = g.clipAct;
@@ -1846,6 +1892,7 @@ class Zako {
       this.destruir("kill");
       return;
     }
+    this.termicasKogaku();
     if (g.marcaT > 0 && --g.marcaT === 0 && g.marca) g.marca.visible = g.marcaQ.visible = false;
     if (g.tCombo > 0 && --g.tCombo === 0) g.combo = 0;
     if (this.muerto && this.familia === "celda" && this.comandante?.flag === 13) {
@@ -1857,6 +1904,10 @@ class Zako {
       return;
     }
     if (!this.muerto && (this.familia === "zonas" || this.familia === "pasarela")) this.revisarDaño();
+    if (this.es14 && !this.soltoMunicion && g.accion === "muerto" && g.tAcc >= 4) {
+      this.soltoMunicion = true;
+      this.soltarMunicion14();
+    }
     if (this.muerto) {
       this.esperarRevivir();
       return;
@@ -1888,6 +1939,7 @@ class Zako {
       this.pensar();
     }
     this.cuerpo();
+    if (this.es14 && g.accion === "cae" && !g.cae14 && (g.tiroVR && g.tAcc === 22 || g.empujeVR && !g.tiroVR && g.tAcc === g.caidaImpacto)) this.hueco14();
   }
   pensar() {
     if (this.familia === "escalera") this.pensarEscalera(); else if (this.familia === "celda") this.pensarCelda(); else if (this.familia === "zonas") this.pensarZonas(); else if (this.familia === "pasarela") this.pensarPasarela();
@@ -2668,6 +2720,77 @@ class Zako {
     const gp = GRANADA_ZONAS[Math.max(0, this.indice)] || GRANADA_ZONAS[0];
     this.objGranada = new THREE.Vector3(gp[0] * MM, gp[1] * MM, gp[2] * MM);
     this.t1 = this.t2 = this.t3 = this.c3 = 0;
+    if (this.es14) {
+      this.g.derriba = {
+        base: this.g.vital,
+        umbral: 192
+      };
+      this.soltoMunicion = false;
+    }
+    if (this.es14) this.g.empuje14 = true;
+  }
+  hueco14() {
+    const g = this.g, p = g.o.position, h = this.piso(p) ?? -32;
+    const alto = Math.round((p.y - h) * 1e3) + 1e3, x = Math.round(p.x * 1e3), z = Math.round(p.z * 1e3);
+    if (alto < 2e3) return false;
+    if (!(alto > 3e3 || h < -.001 || z > 2e3 || x < -4e3 || x > 4e3)) return false;
+    g.vital = 0;
+    g.cae14 = {
+      t: 0
+    };
+    sonido("v_tirado", p);
+    this.mgr.log("cae al hueco", {
+      de: this.nombre,
+      alto: alto,
+      p: [ x, Math.round(p.y * 1e3), z ]
+    });
+    return true;
+  }
+  fueraDelPiso14(h) {
+    const g = this.g;
+    if (g.cae14 || ![ "quieto", "camina", "corre", "apunta", "sorpresa" ].includes(g.accion)) return false;
+    if (h !== null && Math.abs(h) <= .02) return false;
+    g.vital = 0;
+    g.cae14 = {
+      t: 0
+    };
+    const p = g.o.position;
+    sonido("v_tirado", p);
+    this.mgr.log("fuera del piso", {
+      de: this.nombre,
+      piso: h === null ? null : Math.round(h * 1e3),
+      p: [ p.x, p.y, p.z ].map(v => Math.round(v * 1e3))
+    });
+    g.caida = 0;
+    g.caidaDur = 30;
+    g.caidaImpacto = -1;
+    g.empujeVR = null;
+    g.tiroVR = null;
+    this.J.cambiar(g, "cae", 39, {
+      loop: false
+    });
+    return true;
+  }
+  soltarMunicion14() {
+    const inv = this.J.ctx.inventario, g = this.g;
+    if (!inv?.soltarItem) return;
+    const famas = (inv.armas?.[1] ?? -1) >= 0;
+    const p = g.o.position.clone();
+    p.y += .5;
+    const it = inv.soltarItem(famas ? {
+      b: 2,
+      id: 1,
+      num: 25
+    } : {
+      b: 2,
+      id: 0,
+      num: 12
+    }, p);
+    if (it?.suelto) it.suelto.vida = 900;
+    this.mgr.log("suelta", {
+      de: this.nombre,
+      arma: famas ? "FAMAS" : "SOCOM"
+    });
   }
   a3(t3) {
     this.t3 = t3;

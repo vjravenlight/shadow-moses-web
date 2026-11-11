@@ -86,6 +86,17 @@ export const LV = Object.freeze({
 
 const IT_TIMERBOMB = 18;
 
+export const VARS_BRIEFING = Object.freeze({
+  l: "$f:G0047.7",
+  z: "$f:G004c.0",
+  f: Object.freeze(Array.from({
+    length: 16
+  }, (_, i) => {
+    const b = 76 * 8 + 1 + i;
+    return `$f:G${(b >> 3).toString(16).padStart(4, "0")}.${b & 7}`;
+  }))
+});
+
 export const AREAS = [ "Dock", "Heliport", "Tank Hangar", "Cell", "Medi room", "Armory", "Armory Sth", "Canyon", "Nuke Bldg 1", "Nuke Bldg. B1", "Cmnder room", "Nuke Bldg. B2", "Lab", "Cave", "U.Grnd Pssge", "Comm Twr A", "Roof/Comm Twr", "Comm Twr B", "Twr Wall A", "Walkway", "Snowfield", "Blast Furnace", "Cargo Elev.", "Warehouse", "Warehouse Nth", "U.Grnd Base 1", "U.Grnd Base 2", "U.Grnd Base 3", "Cmnd room", "Spply Rte.", "Esc Route" ];
 
 export const RANGOS = [ "HOUND", "DOBERMAN", "FOX", "BIG BOSS", "PIGEON", "FALCON", "HAWK", "EAGLE", "PIRANHA", "SHARK", "JAWS", "ORCA", "PIG", "ELEPHANT", "MAMMOTH", "WHALE", "CAT", "DEER", "ZEBRA", "HIPPOPOTAMUS", "KOALA", "CAPYBARA", "SLOTH", "GIANT PANDA", "CHICKEN", "MOUSE", "RABBIT", "OSTRICH", "PUMA", "LEOPARD", "PANTHER", "JAGUAR", "CHAMELEON (?)", "IGUANA", "ALLIGATOR", "CROCODILE", "MONGOOSE", "HYENA", "JACKAL", "TASMANIAN DEVIL", "SPIDER", "TARANTULA", "CENTIPEDE (?)", "SCORPION", "FLYING SQUIRREL", "BAT", "FLYING FOX", "NIGHT OWL (?)" ];
@@ -474,6 +485,22 @@ export class Partida {
   get areaIdx() {
     return this.vars.get("$b:G00aa");
   }
+  get briefing() {
+    const v = n => this.vars.get(n) ? 1 : 0;
+    return {
+      l: v(VARS_BRIEFING.l),
+      z: v(VARS_BRIEFING.z),
+      f: VARS_BRIEFING.f.map(v)
+    };
+  }
+  ponerBriefing(b) {
+    const pares = [ [ VARS_BRIEFING.l, b?.l ], [ VARS_BRIEFING.z, b?.z ], ...VARS_BRIEFING.f.map((n, i) => [ n, b?.f?.[i] ]) ];
+    for (const [n, x] of pares) {
+      const v = x ? 1 : 0;
+      this.vars.set(n, v);
+      ponerEn(this.punto.g, this.punto.l, n, v);
+    }
+  }
   get segundos() {
     return Math.floor(this.frames / 60);
   }
@@ -524,8 +551,10 @@ export class Partida {
     const e = d.niveles[String(Math.max(-1, Math.min(3, (dificultad | 0) - 1)))];
     juntar(e.g, p.vars.g);
     juntar(e.l, p.vars.l);
-    const mf = (dificultad | 0) === 0 ? (await integral.listo)?.muy_facil?.vars : null;
+    await integral.listo;
+    const mf = (dificultad | 0) === 0 ? integral.varsMuyFacil() : null;
     if (mf) for (const [k, v] of Object.entries(mf)) p.vars.set(k, v);
+    p.visor.version = integral.hay ? integral.version : "original";
     p.historial = [ ...d.historial, ...new Array(HISTORIAL).fill(0) ].slice(0, HISTORIAL);
     p.st = d.st;
     p._pend = {

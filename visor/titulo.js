@@ -5,6 +5,14 @@ import { urlVoz } from "./audio_ps1.js";
 
 import { leerFotos } from "./fotos.js";
 
+import { idioma } from "./idioma.js";
+
+import { todoDesbloqueado, ponerTodoDesbloqueado } from "./desbloqueo.js";
+
+import { TRAJES, trajeNinja, ponerPersonaje } from "./ninja_escenarios.js";
+
+import { caption, monoGuardado } from "./caption.js";
+
 const W = 320, H = 224, HT = 240;
 
 const BASE = new URL("./assets/", import.meta.url).href;
@@ -59,6 +67,18 @@ export const ENTRADAS = [ {
   etiqueta: "op_special",
   interna: true,
   extra: "preope"
+}, {
+  id: "cine",
+  texto: "CINEMATICAS"
+}, {
+  id: "musica",
+  texto: "MUSICA"
+}, {
+  id: "desarrollo",
+  texto: "DESARROLLO"
+}, {
+  id: "sin_usar",
+  texto: "SIN USAR"
 } ];
 
 export const NIVELES = [ {
@@ -174,6 +194,36 @@ const FILAS = [ {
   valores: [ true, false ],
   nombres: [ "SI", "NO" ]
 }, {
+  clave: "caption",
+  texto: "SUBTITULOS",
+  valores: [ true, false ],
+  nombres: [ "SI", "NO" ]
+}, {
+  clave: "mono",
+  texto: "SALIDA DE SONIDO",
+  valores: [ false, true ],
+  nombres: [ "ESTEREO", "MONO" ]
+}, {
+  clave: "texto",
+  texto: "TEXTO",
+  idioma: true,
+  get valores() {
+    return idioma.opciones("texto");
+  },
+  get nombres() {
+    return idioma.opciones("texto").map(k => idioma.nombre(k));
+  }
+}, {
+  clave: "voz",
+  texto: "IDIOMA DE VOZ",
+  idioma: true,
+  get valores() {
+    return idioma.opciones("voz");
+  },
+  get nombres() {
+    return idioma.opciones("voz").map(k => idioma.nombre(k));
+  }
+}, {
   clave: "vr",
   texto: "VR",
   valores: [ false, true ],
@@ -193,6 +243,20 @@ const FILAS = [ {
   texto: "ARMAS E ITEMS",
   valores: [ false, true ],
   nombres: [ "NORMAL", "TODAS" ]
+}, {
+  clave: "desbloqueado",
+  texto: "TODO DESBLOQUEADO",
+  valores: [ false, true ],
+  nombres: [ "NO", "SI" ]
+}, {
+  clave: "personaje",
+  texto: "PERSONAJE",
+  get valores() {
+    return [ "snake", ...TRAJES.map(t => t.id) ];
+  },
+  get nombres() {
+    return [ "SNAKE", ...TRAJES.map(t => t.casco.replace("Ñ", "N")) ];
+  }
 }, {
   clave: "vibra",
   texto: "VIBRACION",
@@ -221,7 +285,7 @@ const FILAS = [ {
   clave: "salir"
 } ];
 
-const Y_FILAS = 33, PASO_FILAS = 8, X_ROTULO = 34, X_VALOR = 228, Y_EXIT = 186;
+const Y_FILAS = 31, PASO_FILAS = 7, X_ROTULO = 34, X_VALOR = 228, Y_EXIT = 205;
 
 const leer = k => {
   try {
@@ -247,6 +311,10 @@ export function leerOpciones() {
     vr: leer("sm_vr") === "1",
     pantallaCompleta: !!document.fullscreenElement || leer("sm_pantalla") !== "0",
     todo: leer("sm_todo") === "1",
+    desbloqueado: todoDesbloqueado(),
+    personaje: trajeNinja()?.id || "snake",
+    caption: caption.on,
+    mono: monoGuardado(),
     vibra: leer("sm_vibra") !== "0",
     controles: "configurar",
     debug: leer("sm_debug") === "1",
@@ -256,7 +324,9 @@ export function leerOpciones() {
     contraste: leer("sm_contraste") !== null && +leer("sm_contraste") >= 0 && +leer("sm_contraste") <= 4 ? +leer("sm_contraste") : 2,
     color: leer("sm_color") !== null && +leer("sm_color") >= 0 && +leer("sm_color") <= 4 ? +leer("sm_color") : 2,
     poligonos: leer("sm_poligonos") !== "0",
-    vrcine: leer("sm_vrcine") !== "0"
+    vrcine: leer("sm_vrcine") !== "0",
+    texto: idioma.elegido.texto,
+    voz: idioma.elegido.voz
   };
 }
 
@@ -1152,6 +1222,7 @@ export class Titulo {
       this.cuadroOpciones();
     } else if (E === "opc_cierra") {
       if (++this.f >= 17) {
+        this._releerTodo();
         guardarOpciones(this.opc);
         this.ir("menu");
         this.todoA128();
@@ -1229,6 +1300,7 @@ export class Titulo {
   }
   _finalizar() {
     const el = this.eleccion, ent = this._entradaElegida;
+    this._releerTodo();
     guardarOpciones(this.opc);
     const r = this._resolver;
     this._resolver = null;
@@ -1426,7 +1498,7 @@ export class Titulo {
     this.terminar(e);
   }
   armarEspecial() {
-    const hayFotos = !!this.extras?.camera && (this.fotosAlbum?.() || leerFotos()).length > 0;
+    const hayFotos = !!this.extras?.camera && (todoDesbloqueado() || (this.fotosAlbum?.() || leerFotos()).length > 0);
     this.itemsEsp = hayFotos ? [ {
       id: "preope",
       tex: "sp_pre",
@@ -1516,7 +1588,8 @@ export class Titulo {
     this.ir("extra_carga");
     const modulo = {
       preope: "./preope.js",
-      album: "./album.js"
+      album: "./album.js",
+      brf: "./briefing.js"
     }[cual];
     if (!modulo) {
       this.ir(volver);
@@ -1677,6 +1750,18 @@ export class Titulo {
         this.sonido.setVolumen?.(v ? .9 : 0);
       } catch {}
     }
+    if (fila.clave === "caption") caption.poner(v);
+    if (fila.clave === "mono") {
+      try {
+        if (this.sonido?.setMono) this.sonido.setMono(v); else localStorage.setItem("sm_mono", v ? "1" : "0");
+      } catch {}
+    }
+    if (fila.clave === "caption" || fila.clave === "mono") dispatchEvent(new CustomEvent("mgs:opcion", {
+      detail: {
+        clave: fila.clave,
+        valor: v
+      }
+    }));
     if (fila.clave === "vibra") {
       escribir("sm_vibra", v ? "1" : "0");
       if (v) try {
@@ -1692,6 +1777,12 @@ export class Titulo {
         if (!v && document.fullscreenElement) document.exitFullscreen?.()?.catch?.(() => {});
       } catch {}
     }
+    if (fila.idioma) idioma.poner(fila.clave, v);
+    if (fila.clave === "desbloqueado") {
+      ponerTodoDesbloqueado(v);
+      if (v) this.opc.todo = true;
+    }
+    if (fila.clave === "personaje") ponerPersonaje(v);
     guardarOpciones(this.opc);
     if (fila.clave === "pixel" || fila.clave === "filtro" || fila.clave === "vrcine") dispatchEvent(new CustomEvent("mgs:opcion", {
       detail: {
@@ -1704,11 +1795,19 @@ export class Titulo {
     this.se(33);
     this.ir("opc_cierra");
   }
+  _releerTodo() {
+    if (this.opc) {
+      this.opc.todo = leer("sm_todo") === "1";
+      this.opc.desbloqueado = todoDesbloqueado();
+      this.opc.personaje = trajeNinja()?.id || "snake";
+    }
+  }
   cuadroOpciones() {
     if (this.n - this.tPantalla > 30) this.opc.pantallaCompleta = !!document.fullscreenElement;
     this.opc.vibra = leer("sm_vibra") !== "0";
+    this._releerTodo();
     const enFila = p => {
-      if (p.y >= Y_EXIT - 4 && p.y < Y_EXIT + 16 && p.x >= 110 && p.x < 210) return FILAS.length - 1;
+      if (p.y >= Y_EXIT - 3 && p.y < Y_EXIT + 13 && p.x >= 110 && p.x < 210) return FILAS.length - 1;
       const i = Math.floor((p.y - Y_FILAS + 1) / PASO_FILAS);
       return i >= 0 && i < FILAS.length - 1 && p.x >= 16 && p.x < 312 ? i : -1;
     };

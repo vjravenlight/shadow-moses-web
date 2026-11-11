@@ -126,7 +126,7 @@ if __name__ == '__main__':
     base = ve.memoria_inicial()
     for st in pedidas:
         os.makedirs(os.path.join(OUT, st), exist_ok=True)
-        for modo in range(5):
+        for modo in (5,) if '--demo' in sys.argv else range(6):
             d = sala(st, modo, base)
             json.dump(d, open(os.path.join(OUT, st, 'camaras_%d.json' % modo), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
             cam = [a for a in d['inicial'] if 'camera' in a]

@@ -3,6 +3,8 @@ import * as THREE from "three";
 
 import { dibujarCreditos, dibujarTelop } from "./telops.js";
 
+import { telopsGuion } from "./texturas_idioma.js";
+
 import { ActoresExtra } from "./actores_extra.js";
 
 import * as ctl from "./controles.js";
@@ -732,10 +734,22 @@ export class Dinamicos {
   }
   ponerElevador(E) {
     E.o.position.lerpVectors(E.s, E.e, E.f);
+    E.o.updateMatrixWorld(true);
     if (E.guardia) E.guardia.o.position.set(E.o.position.x, E.o.position.y + (E.alto || 0), E.o.position.z);
   }
   sobreElevador(E, p) {
-    return Math.abs(p.x - E.o.position.x) < 1.2 && Math.abs(p.z - E.o.position.z) < 1.2 && Math.abs(p.y - E.o.position.y) < 1;
+    if (E.area === undefined) {
+      const c = (new THREE.Box3).setFromObject(E.o), q = E.o.position;
+      E.area = c.isEmpty() ? null : {
+        x0: c.min.x - q.x - .1,
+        x1: c.max.x - q.x + .1,
+        z0: c.min.z - q.z - .1,
+        z1: c.max.z - q.z + .1
+      };
+    }
+    const dx = p.x - E.o.position.x, dz = p.z - E.o.position.z, A = E.area;
+    const dentro = A ? dx >= A.x0 && dx <= A.x1 && dz >= A.z0 && dz <= A.z1 : Math.abs(dx) < 1.2 && Math.abs(dz) < 1.2;
+    return dentro && Math.abs(p.y - E.o.position.y) < 1;
   }
   baliza(grupoGiro, conos, son = 181, nombre = null) {
     (this.balizas = this.balizas || []).push({
@@ -923,7 +937,7 @@ export class Dinamicos {
   }
   telop(lineas) {
     if (!this.lineas) this.lineas = [];
-    for (const l of lineas) {
+    for (const l of telopsGuion(lineas)) {
       const img = new Image;
       img.src = "assets/" + l.img;
       this.lineas.push({
@@ -961,7 +975,8 @@ export class Dinamicos {
         kx: K,
         ky: K,
         alfa: a,
-        img: l.img
+        img: l.img,
+        sinIdioma: l.sinIdioma
       })) hay = true;
     }
     this.cvTelop = dibujarCreditos(this.cvTelop, this.lineas);
@@ -1212,7 +1227,12 @@ export class Dinamicos {
     }
     this.cvTelop?.remove();
     this.cvTelop = null;
-    for (const o of this.ondas || []) this.scene.remove(o.m);
+    for (const T of this.temblores || []) for (const {m: m} of T.mallas) m.geometry?.dispose();
+    for (const o of this.ondas || []) {
+      this.scene.remove(o.m);
+      o.m.material.dispose();
+    }
+    this.ondas?.[0]?.m.geometry.dispose();
     this.ondas = null;
     this.goteos = [];
     this.superficies = [];

@@ -219,7 +219,7 @@ class VM:
             nombre = a[1]['id'] if len(a) > 1 and isinstance(a[1], dict) and ('id' in a[1]) else None
             act = {'tipo': tipo, 'nombre': nombre, 'mapa': self.mapa, 't': round(self.t / FPS, 2), 'ctx': ctx, 'opts': {k: self.resolver(v, args) for k, v in o.items()}, '_s': id(s)}
             self.actores.append(act)
-            if tipo == 'COMMANDER':
+            if tipo in ('COMMANDER', 'GODZCOM'):
                 for p in act['opts'].get('n', []):
                     if isinstance(p, dict) and 'proc' in p:
                         self.proc(p['proc'], [], ctx)

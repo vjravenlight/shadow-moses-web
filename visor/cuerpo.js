@@ -468,7 +468,7 @@ function gestoArma(G, at, st, w, cuadros) {
   };
 }
 
-export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachado, postura: postura = null, arma: arma = true, armaId: armaId = null, alerta: alerta = false, pared: pared = null, golpePared: golpePared = null, muerte: muerte = false, atras: atras = false, reversa: reversa = false, forzado: forzado = null, dt: dt, visible: visible, detras: detras = .08, apunta: apunta = false, disparo: disparo = false, recargando: recargando = false, golpe: golpe = false, reaccion: reaccion = null, parpadeo: parpadeo = false, caja: caja = false, armaAnim: armaAnim = null}) {
+export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachado, postura: postura = null, arma: arma = true, armaId: armaId = null, alerta: alerta = false, pared: pared = null, golpePared: golpePared = null, muerte: muerte = false, atras: atras = false, reversa: reversa = false, forzado: forzado = null, dt: dt, visible: visible, detras: detras = .08, apunta: apunta = false, disparo: disparo = false, recargando: recargando = false, golpe: golpe = false, reaccion: reaccion = null, parpadeo: parpadeo = false, caja: caja = false, armaAnim: armaAnim = null, mp5: mp5 = false}) {
   C.obj.position.set(pos.x + Math.sin(yaw) * detras, pos.y, pos.z + Math.cos(yaw) * detras);
   C.obj.rotation.y = yaw + Math.PI;
   if (C.oculto !== !visible) ocultarCuerpo(C, !visible);
@@ -544,11 +544,12 @@ export function animarCuerpo(C, {pos: pos, yaw: yaw, vel: vel, agachado: agachad
     const t = recargando && ok(at[1]) ? at[1] : (disp || C.ataque) && ok(at[4]) ? at[4] : apunta && ok(at[0]) ? at[0] : 0;
     if (t) {
       interp = t === at[4] ? 2 : 4;
+      const cl = mp5 && t === at[1] && t === 52 && C.datos?.clips?.["ve:52"] ? "ve:52" : `anim ${t}`;
       if (quieto) {
-        nombre = `anim ${t}`;
+        nombre = cl;
         unaVez = t !== at[0];
       } else {
-        torso = `anim ${t}`;
+        torso = cl;
         torsoUna = t !== at[0];
       }
     }

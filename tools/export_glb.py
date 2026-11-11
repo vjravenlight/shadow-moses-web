@@ -31,9 +31,9 @@ def indice_texturas(stage_dir):
             _global.setdefault(pcx_hash(p), p)
     return (local, _global)
 
-def exportar(kmd_path, out_path, estatico=False, luz=None):
+def exportar(kmd_path, out_path, estatico=False, luz=None, normales_juego=False):
     mdls = load(kmd_path)
-    normales = normales_kmd(kmd_path) if luz else None
+    normales = normales_kmd(kmd_path) if luz or normales_juego else None
     stage_dir = os.path.dirname(os.path.dirname(os.path.abspath(kmd_path)))
     if os.path.basename(os.path.dirname(stage_dir)) != '01_stages':
         stage_dir = None
@@ -111,7 +111,12 @@ def exportar(kmd_path, out_path, estatico=False, luz=None):
             base = len(P)
             for j in range(4):
                 P.append(ps[j])
-                N.append(n)
+                if normales_juego and normales and (normales[pi] is not None):
+                    q = normales[pi][f * 4 + j]
+                    ql = math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2]) or 1
+                    N.append([-q[0] / ql, -q[1] / ql, -q[2] / ql])
+                else:
+                    N.append(n)
                 if m['uv']:
                     UV.append(((m['uv'][f * 8 + j * 2] + 0.5) / 256, (m['uv'][f * 8 + j * 2 + 1] + 0.5) / 256))
                 else:

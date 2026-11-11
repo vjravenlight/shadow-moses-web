@@ -7,6 +7,8 @@ import { SalaPsy, PSY, U } from "./mantis.js";
 
 import { IT, TIPO_ARMA, TIPO_ITEM } from "../inventario.js";
 
+import { ponerSonrojo } from "../sonrojo.js";
+
 const {idiv: idiv, s16: s16, rsin: rsin, vecDir2: vecDir2, sub3: sub3, add3: add3, len3: len3, lenVec3: lenVec3, difDirS: difDirS, putVec: putVec, aV3: aV3, deV3: deV3, seMM: seMM, varGuion: varGuion, ZERO: ZERO} = U;
 
 const strCode = s => {
@@ -125,7 +127,8 @@ export class PsyMeryl extends Jefe {
         der: [ 31, 191, 95 ]
       }
     } ];
-    await this.cargarCuerpo("personajes/meryl.glb", "mel_07b");
+    const cuerpo = await this.cargarCuerpo("personajes/meryl.glb", "mel_07b");
+    ponerSonrojo(cuerpo, () => this.vivo && this.phase < 2 ? this.f8BE * 5 : 0);
     try {
       const arma = await cargarModelo(this.ctx, "personajes/desert.glb");
       this.huesos[4]?.add(arma);
@@ -218,6 +221,13 @@ export class PsyMeryl extends Jefe {
   }
   primeraPersona() {
     return !!(this.ctx.primeraPersona?.() ?? this.J.ctx.primeraPersona?.() ?? this.ctx.armas?.ctx?.primeraPersona?.());
+  }
+  mirandoPP() {
+    return this.primeraPersona() || !!this.ctx.vistaSubjetiva?.();
+  }
+  rotSnake() {
+    const y = this.J.ctx.yawSnake?.();
+    return typeof y === "number" ? Math.round((y + Math.PI) * 2048 / Math.PI) & 4095 : null;
   }
   padRelease(si) {
     this.sala.padReleaseMeryl = si;
@@ -681,11 +691,13 @@ export class PsyMeryl extends Jefe {
   }
   c53A0() {
     if (this.phase >= 2) return;
-    if (!this.primeraPersona()) {
+    if (!this.mirandoPP()) {
       this.f8C0 = 0;
       return;
     }
     if (this.dist >= 4001) return;
+    const rs = this.rotSnake();
+    if (rs != null && Math.abs(difDirS(vecDir2(this.aSnake), rs)) < 1801) return;
     if (++this.f8C0 < 151) return;
     if (this.f8BE < 4) this.f8BE++;
     this.f8C0 = 0;
@@ -757,7 +769,10 @@ export class PsyMeryl extends Jefe {
       this.ajuste(true);
       this.mgr.hud.cine = 1;
     }
-    if (this.vox.voxcode === this.voces[4] && this.vox.playtime === 1) {
+    if (this.subt === 0 && (this.vox.voxcode === this.voces[4] && this.vox.playtime >= 1 || t >= 300)) {
+      if (t >= 300) this.log("sin la voz: sigue", {
+        t: t
+      });
       this.proc(10);
       this.subt = 1;
     }
@@ -1126,8 +1141,16 @@ export class PsyMeryl extends Jefe {
         if (k === 100) this.se(189, this.c.mov, "bomba");
         if (k === 102) {
           const J = this.J, inv = J.ctx.inventario;
-          J.vida -= 16 / (inv?.vidaMax || 256);
-          J.ctx.daño?.();
+          if (typeof J.dañoSnake === "function") {
+            const s = this.snakeMM(), m = this.c.mov, L = Math.hypot(s[0] - m[0], s[2] - m[2]) || 1;
+            J.dañoSnake(16, 4, {
+              x: (s[0] - m[0]) / L * 60,
+              z: (s[2] - m[2]) / L * 60
+            });
+          } else {
+            J.vida -= 16 / (inv?.vidaMax || 256);
+            J.ctx.daño?.();
+          }
           this.se(176, this.c.mov, "bomba");
           if (J.vida * (inv?.vidaMax || 256) < 17 && !(inv?.items?.[IT.RATION] > 0)) this.proc(9);
           this.log("cachetada");
@@ -1374,15 +1397,20 @@ export function nuevaMeryl(act, mgr) {
 export function entradaS07b(nv, ctx, crear) {
   if (nv?.id !== "s07b" || !ctx?.juego) return null;
   const g = ctx.guion || (typeof window !== "undefined" ? window.__mgs?.guion : null);
+  if (g) {
+    g.__mantisS07bCtx = ctx;
+    g.__mantisS07bCrear = crear;
+  }
   if (g && !g.__mantisS07b && typeof g.correrMain2 === "function") {
     g.__mantisS07b = true;
     const orig = g.correrMain2.bind(g);
     g.correrMain2 = reinicio => {
-      if (reinicio && g.st === "s07b" && ctx.juego.__jefes) SalaPsy.de(ctx.juego.__jefes).reiniciar();
+      const c = g.__mantisS07bCtx || ctx;
+      if (reinicio && g.st === "s07b" && c.juego?.__jefes) SalaPsy.de(c.juego.__jefes).reiniciar();
       orig(reinicio);
-      if (g.st === "s07b") Promise.resolve().then(() => merylS07b(g.nivel || nv, ctx, {
+      if (g.st === "s07b") Promise.resolve().then(() => merylS07b(g.nivel || nv, c, {
         reinicio: reinicio,
-        crear: crear
+        crear: g.__mantisS07bCrear
       }));
     };
   }

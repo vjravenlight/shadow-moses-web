@@ -175,6 +175,14 @@ function cuadroDestello(d) {
   return true;
 }
 
+const BIT_GUARDIAS = (() => {
+  try {
+    return new URLSearchParams(location.search).get("guardiasbit") === "1" ? 1 : 2;
+  } catch {
+    return 2;
+  }
+})();
+
 const A = {
   PARADO: 0,
   CAMINAR: 1,
@@ -214,7 +222,9 @@ const A = {
   LEVANTA_ESPALDA: 43,
   LEVANTA_GOLPE_ABAJO: 44,
   LEVANTA_GOLPE_ESPALDA: 45,
-  ARRASTRADO: 48
+  ARRASTRADO: 48,
+  LEVANTA_MSJ: 49,
+  NODO15: 50
 };
 
 const SUPERPUESTAS = {
@@ -319,7 +329,8 @@ export class Juego {
   }
   preparar() {
     const hz = this.ctx.hz;
-    const posV = [], posC = [];
+    this.paredColG?.removeFromParent();
+    const posV = [], posC = [], posG = [];
     this.segs = [];
     if (hz) for (const g of hz.grupos) for (const w of g.paredes) {
       const a = w.a.map(v => v * MM), b = w.b.map(v => v * MM), h = w.alto * MM;
@@ -332,6 +343,7 @@ export class Juego {
       const quad = [ a[0], a[1], a[2], b[0], b[1], b[2], b[0], b[1] + h, b[2], a[0], a[1], a[2], b[0], b[1] + h, b[2], a[0], a[1] + h, a[2] ];
       if (!(w.flags & 4)) posV.push(...quad);
       if (!(w.flags & 1)) posC.push(...quad);
+      if (!(w.flags & 2)) posG.push(...quad);
     }
     const malla = pos => {
       const geo = new THREE.BufferGeometry;
@@ -346,6 +358,8 @@ export class Juego {
     };
     this.vista = malla(posV);
     this.paredCol = malla(posC);
+    this.paredColG = malla(posG);
+    this.paredColG.removeFromParent();
     this.ray = new THREE.Raycaster;
     this.pisos = [];
     this.grilla = new Map;
@@ -406,7 +420,8 @@ export class Juego {
       resetMax: num("b", [ 5 ])[0],
       resetNum: 0,
       puntosReset: [],
-      danbowl: 0
+      danbowl: 0,
+      reponerSiempre: num("reponer_siempre", [ 0 ])[0] === 1
     };
     const v = Array.isArray(co.v) ? co.v.filter(x => typeof x === "number") : [];
     for (let i = 0; i + 2 < v.length && this.com.puntosReset.length < 4; i += 3) {
@@ -442,6 +457,10 @@ export class Juego {
     g.faint = num("f", 10);
     g.faintMax = g.faint;
     g.tipo = num("b", 65);
+    const ga = g.o.userData.guardia || {};
+    g.escala = ga.escala || 1;
+    g.altCtrl = (ga.alt_ctrl || 0) * MM;
+    g.pasoCaminar = ga.paso_caminar ? ga.paso_caminar * MM : .05;
     const nz = o.n;
     g.zonaAsignada = -1;
     if (Array.isArray(nz) && nz.length >= 3 && typeof nz[1] === "number" && nz[1] < 3e4) g.zonaAsignada = this.zonaDe(new THREE.Vector3(nz[0] * MM, nz[1] * MM, nz[2] * MM));
@@ -575,9 +594,9 @@ export class Juego {
     this.ray.far = L;
     return this.ray.intersectObject(this.vista, false).length === 0;
   }
-  chocar(p, r) {
+  chocar(p, r, bit = 1) {
     for (const s of this.segs) {
-      if (s.flags & 1) continue;
+      if (s.flags & bit) continue;
       const y0 = Math.min(s.a[1], s.b[1]), y1 = Math.max(s.a[1], s.b[1]) + s.h, py = p.y + .75;
       if (py < y0 || py > y1) continue;
       const ax = s.a[0], az = s.a[2], bx = s.b[0], bz = s.b[2];
@@ -947,10 +966,14 @@ export class Juego {
   }
   vision(g, snake, espectador) {
     const c = this.com, gp = g.o.position.clone();
-    gp.y += 1;
+    gp.y += g.altCtrl ? 0 : 1;
     const d = snake.clone().sub(gp);
     g.snDir = dirDe(d.x, d.z);
     g.snDis = Math.round(d.length() * 1e3);
+    if (g.myst && "MCD".includes(g.myst.b)) {
+      g.vision.b92 = 0;
+      return;
+    }
     if (espectador || this.sigilo() && g.tipo !== 83) {
       g.vision.b92 = 0;
       return;
@@ -1017,6 +1040,7 @@ export class Juego {
     const T = g.think, c = this.com;
     g.pad.dir = -1;
     g.pad.press = 0;
+    if ([ "finge", "despierta", "disfraz", "debil", "nodo15" ].includes(g.accion)) return;
     T.c3++;
     if (T.t1 === 0) {
       if (c.modo !== 0 && T.t2 !== 7) {
@@ -1220,7 +1244,29 @@ export class Juego {
   comandoNodo(g, prof = 0) {
     const T = g.think, cmd = g.nodos[T.nodo].cmd;
     const act = cmd & 31, time = cmd >> 5 & 7, dir = cmd >> 8 & 3, con = cmd >> 10 & 7;
-    if (act === 31) return false;
+    if (act === 31) {
+      if (this.reglasVR && this.rutaNodo) this.rutaNodo(g, (cmd >> 10 & 7) + (cmd >> 8 & 3) * 8);
+      return false;
+    }
+    if (act === 10 && g.myst && this.reglasVR) {
+      this.chocarPared(g);
+      this.siguienteNodo(g);
+      return false;
+    }
+    if ((act === 11 || act === 14 || act === 15) && g.myst && this.reglasVR) {
+      if (g.accion !== "quieto" && g.accion !== "camina") return false;
+      const m15 = act === 15 ? this.cuadrosClip(A.NODO15) : 0;
+      this.quitarSuperpuesta(g);
+      this.cambiar(g, act === 11 ? "disfraz" : act === 14 ? "debil" : "nodo15", m15 ? A.NODO15 : A.PARADO, m15 ? {
+        loop: false
+      } : undefined);
+      g.tNodo15 = m15 || 45;
+      g.esperaNodo = time === 6 ? Infinity : g.esperas[time] || 0;
+      g.subMyst = 0;
+      g.tSE = 0;
+      this.siguienteNodo(g);
+      return false;
+    }
     if (time !== 6) {
       const falla = this.gvTime % 100 >= PROB[con & 3];
       if (falla || T.saltar) {
@@ -1231,13 +1277,14 @@ export class Juego {
       if (con & 4) T.saltar = true;
     }
     let boton = act < 16 ? BOTON_NODO[act] : act < 26 ? BOTON_NODO[act - 16] : 0, espera = g.esperas[time];
-    if (this.com.huboAlerta) {
+    if (this.com.huboAlerta && !(g.myst && this.reglasVR)) {
       if (boton & (128 | 512 | 1024 | 2048)) boton = 0;
       if (espera === 450) espera = 90;
     }
     g.pad.time = espera;
     g.pad.tmp = boton;
     if (act === 0 && time === 0) {
+      g.pad.time = 0;
       this.siguienteNodo(g);
       return false;
     }
@@ -1709,6 +1756,10 @@ export class Juego {
     }
     this.prioridadesEvasion(g);
   }
+  cuadrosClip(idx) {
+    const c = this.ctx.anims?.clips, n = c && Object.keys(c)[idx];
+    return n ? c[n].cuadros || 0 : 0;
+  }
   ponerClip(g, idx, opts = {}) {
     const nombres = Object.keys(this.ctx.anims.clips), n = nombres[idx];
     if (!n) return null;
@@ -1755,6 +1806,37 @@ export class Juego {
     g.tAcc = 0;
     g.vel = 0;
     if (idx != null) this.ponerClip(g, idx, opts);
+  }
+  chocarPared(g) {
+    if ([ "muerto", "cuelloRoto", "cae", "piso", "agarrado", "choque" ].includes(g.accion)) return;
+    this.quitarSuperpuesta(g);
+    this.seVR?.(212, g.o.position);
+    if (g.myst) g.myst.k &= ~256;
+    this.cambiar(g, "choque", A.EMPUJADO_ATRAS, {
+      loop: false
+    });
+    this.alChoque?.(g);
+  }
+  distSnake(g) {
+    const r = this.ctx.rig.position;
+    return Math.hypot(r.x - g.o.position.x, r.z - g.o.position.z) * 1e3;
+  }
+  liberarNodo(g) {
+    if (g.pad?.time === 32001) g.pad.time = 1;
+    if ([ "disfraz", "debil", "nodo15" ].includes(g.accion)) g.esperaNodo = 0;
+  }
+  fingirMuerto(g) {
+    this.quitarSuperpuesta(g);
+    this.cambiar(g, "finge", A.PISO_ABAJO, {
+      loop: true
+    });
+  }
+  despertarMystery(g) {
+    if (g.accion !== "finge") return;
+    this.seVR?.(222, g.o.position);
+    this.cambiar(g, "despierta", A.LEVANTA_GOLPE_ABAJO, {
+      loop: false
+    });
   }
   actuar(g) {
     g.actStatus = 0;
@@ -1889,9 +1971,9 @@ export class Juego {
           this.cambiar(g, "quieto", A.PARADO);
           break;
         }
-        const corre = P.mode & 1;
+        const huye = !!(g.myst && g.myst.k & 4), corre = P.mode & 1 || huye;
         if (corre && g.clipIdx !== A.CORRER) this.ponerClip(g, A.CORRER); else if (!corre && g.clipIdx !== A.CAMINAR && g.clipIdx !== A.CORRER) this.ponerClip(g, A.CAMINAR);
-        g.vel = g.clipIdx === A.CORRER ? .1 : .05;
+        g.vel = g.clipIdx === A.CORRER ? huye ? .11 : .1 : g.pasoCaminar ?? .05;
         if (g.tAcc > 1) this.deslizarPared(g, P.dir); else {
           g.turn = P.dir;
           g.rSphere = 1;
@@ -2050,18 +2132,125 @@ export class Juego {
       if (g.tAcc > 22) this.cambiar(g, "quieto", A.PARADO);
       break;
 
+     case "cubrirse":
+      g.actStatus |= 8;
+      g.vision.len = 0;
+      if (g.tAcc >= 10) {
+        this.quitarSuperpuesta(g);
+        g.caida = 1;
+        g.caidaImpacto = 37;
+        g.caidaDur = 66;
+        g.poseMsj = false;
+        this.cambiar(g, "cae", A.CAE, {
+          loop: false
+        });
+        sonido("v_piña", g.o.position);
+      }
+      break;
+
+     case "finge":
+      g.vision.len = 0;
+      g.actStatus |= 32;
+      break;
+
+     case "disfraz":
+      {
+        g.vision.len = eye;
+        const d = this.distSnake(g);
+        if (g.subMyst === 0 && d < 2e3) {
+          g.subMyst = 26;
+          g.tSub = 0;
+          this.ponerClip(g, A.POSE_I2, {
+            loop: false
+          });
+        } else if (g.subMyst === 26) {
+          if (++g.tSub === 10) this.seVR?.(217, g.o.position);
+          if (g.clipAct && g.clipAct.time >= g.clipAct.getClip().duration - 1 / FPS) {
+            g.subMyst = 25;
+            this.ponerClip(g, A.POSE_I, {
+              loop: true
+            });
+          }
+        } else if (g.subMyst === 25 && d >= 2501) {
+          g.subMyst = 0;
+          this.ponerClip(g, A.PARADO);
+        }
+        if (--g.esperaNodo <= 0) this.cambiar(g, "quieto", A.PARADO);
+        break;
+      }
+
+     case "debil":
+      {
+        g.vision.len = eye;
+        if (this.primeraPersonaVR?.() && this.distSnake(g) < 2e3) {
+          const r = this.ctx.rig.position, dir = Math.atan2(r.x - g.o.position.x, r.z - g.o.position.z), rumbo = this.rumboSnakeVR?.() ?? dir + Math.PI;
+          let dif = Math.abs(((dir - rumbo) % (2 * Math.PI) + 3 * Math.PI) % (2 * Math.PI) - Math.PI);
+          const cada = dif * 2048 / Math.PI < 1800 ? 40 : 20;
+          if (++g.tSE > cada) {
+            this.seVR?.(213, g.o.position);
+            g.tSE = 0;
+          }
+        }
+        if (--g.esperaNodo <= 0) this.cambiar(g, "quieto", A.PARADO);
+        break;
+      }
+
+     case "nodo15":
+      g.vision.len = eye;
+      if (g.tAcc > (g.tNodo15 || 45) || --g.esperaNodo <= 0) this.cambiar(g, "quieto", A.PARADO);
+      break;
+
+     case "despierta":
+      {
+        g.vision.len = 0;
+        g.actStatus |= 8;
+        const t = g.tAcc;
+        if (t === 68) this.ponerClip(g, A.ESTIRARSE, {
+          loop: false
+        });
+        if (t === 78) this.seVR?.(146, g.o.position);
+        if (t > 80 && (!g.clipAct || g.clipAct.time >= g.clipAct.getClip().duration - 1 / FPS)) this.cambiar(g, "quieto", A.PARADO);
+        break;
+      }
+
+     case "choque":
+      {
+        g.vision.len = eye;
+        g.actStatus |= 8;
+        const t = g.tAcc;
+        if (t === 17) {
+          this.seVR?.(51, g.o.position);
+          this.setRuido(100, 4, g.o.position.clone());
+        }
+        if (t === 44) this.ponerClip(g, A.PISO_ARRIBA, {
+          loop: true
+        });
+        if (t === 104) this.ponerClip(g, A.LEVANTA_GOLPE_ESPALDA, {
+          loop: false
+        });
+        if (t > 104 && (!g.clipAct || g.clipAct.time >= g.clipAct.getClip().duration - 1 / FPS)) this.cambiar(g, "quieto", A.PARADO);
+        break;
+      }
+
      case "cae":
       {
         g.actStatus |= 8;
         g.rSphere = 1;
+        if (g.tiroVR) this.cuadroTiroVR(g);
+        if (g.empujeVR && (g.tAcc <= 16 || g.yCae != null)) g.o.position.add(g.empujeVR); else if (g.empujeVR && g.tAcc > 16) g.empujeVR = null;
         if (g.tAcc === g.caidaImpacto) {
           sonido("cae", g.o.position);
           this.setRuido(100, 4, g.o.position);
         }
+        if (g.tAcc > g.caidaDur && g.yCae != null) break;
         if (g.tAcc > g.caidaDur) {
+          g.tiroVR = null;
+          g.empujeVR = null;
           if (g.vital <= 0) this.morir(g); else {
             const x = Math.abs(Math.round(g.o.position.x * 1e3));
-            this.cambiar(g, "piso", g.caida === 1 ? A.PISO_CARA : g.caida >= 3 ? A.PISO_ARRIBA : A.PISO_ABAJO);
+            this.cambiar(g, "piso", g.caida === 1 ? g.poseMsj ? A.POSE_I : A.PISO_CARA : g.caida >= 3 ? A.PISO_ARRIBA : A.PISO_ABAJO, g.poseMsj ? {
+              loop: true
+            } : undefined);
             g.tPiso = g.faint <= 0 ? x % 60 + 90 : x % 30 + 10;
           }
         }
@@ -2071,18 +2260,29 @@ export class Juego {
      case "piso":
       g.actStatus |= 32;
       if (g.tAcc > g.tPiso) {
-        const largo = g.tPiso >= 90, boca = g.caida <= 2;
+        const largo = g.tPiso >= 90, boca = g.caida <= 2, msj = g.poseMsj ? this.cuadrosClip(A.LEVANTA_MSJ) : 0;
         g.faint = g.faintMax;
-        this.cambiar(g, "levanta", largo ? boca ? A.LEVANTA_GOLPE_ABAJO : A.LEVANTA_GOLPE_ESPALDA : boca ? A.LEVANTA_CARA : A.LEVANTA_ESPALDA, {
-          loop: false
-        });
-        g.tLevanta = largo ? 70 : 25;
+        g.poseMsj = false;
+        if (msj) {
+          this.cambiar(g, "levanta", A.LEVANTA_MSJ, {
+            loop: false
+          });
+          g.tLevanta = msj;
+        } else {
+          this.cambiar(g, "levanta", largo ? boca ? A.LEVANTA_GOLPE_ABAJO : A.LEVANTA_GOLPE_ESPALDA : boca ? A.LEVANTA_CARA : A.LEVANTA_ESPALDA, {
+            loop: false
+          });
+          g.tLevanta = largo ? 70 : 25;
+        }
       }
       break;
 
      case "levanta":
       g.actStatus |= 8;
-      if (g.tAcc > g.tLevanta) this.cambiar(g, "quieto", A.PARADO);
+      if (g.tAcc > g.tLevanta) {
+        if (g.derriba) g.derriba.base = g.vital;
+        this.cambiar(g, "quieto", A.PARADO);
+      }
       break;
 
      case "agarrado":
@@ -2138,7 +2338,7 @@ export class Juego {
     const d = new THREE.Vector3(Math.sin(dir * ANG), 0, Math.cos(dir * ANG));
     this.ray.set(p, d);
     this.ray.far = .6;
-    const h = this.ray.intersectObject(this.paredCol, false)[0];
+    const h = this.ray.intersectObject(this.reglasVR || BIT_GUARDIAS === 2 ? this.paredColG : this.paredCol, false)[0];
     if (!h) {
       g.turn = dir;
       return;
@@ -2160,9 +2360,26 @@ export class Juego {
       g.o.position.z += Math.cos(g.rot * ANG) * g.vel;
       this.pasosGuardia(g);
     }
-    if (g.accion !== "agarrado") this.chocar(g.o.position, g.rSphere > 0 ? .45 : .25);
-    const h = this.alturaPiso(g.o.position.x, g.o.position.z, g.o.position.y);
-    if (h !== null) g.o.position.y += (h - g.o.position.y) * .5;
+    if (g.accion !== "agarrado" && !(g.tiroVR && g.tAcc < 22) && !(g.empujeVR && g.tAcc < 20) && !(g.yCae != null && g.vital <= 0)) this.chocar(g.o.position, g.rSphere > 0 ? .45 : .25, this.reglasVR ? 2 : BIT_GUARDIAS);
+    const h0 = this.alturaPiso(g.o.position.x, g.o.position.z, g.o.position.y), h = h0 === null ? null : h0 + (g.altCtrl || 0);
+    if (h !== null && this.reglasVR?.caida && g.accion !== "agarrado") this.caerVR(g, h); else if (h !== null) g.o.position.y += (h - g.o.position.y) * .5;
+  }
+  caerVR(g, h) {
+    const p = g.o.position;
+    if (p.y - h > .3) {
+      g.yCae ??= p.y;
+      g.vyCae = (g.vyCae || 0) + .016;
+      p.y = Math.max(h, p.y - g.vyCae);
+      if (p.y > h) return;
+    } else p.y += (h - p.y) * .5;
+    if (g.yCae == null) return;
+    const alto = g.yCae - h;
+    g.yCae = null;
+    g.vyCae = 0;
+    if (alto <= 3) return;
+    g.vital = 0;
+    sonido("cae", p);
+    if (![ "cae", "muerto", "cuelloRoto" ].includes(g.accion)) this.morir(g);
   }
   pasosGuardia(g) {
     const a = g.clipAct;
@@ -2174,7 +2391,13 @@ export class Juego {
     g.cuadroPaso = f;
     const cruza = k => p < 0 ? f === k : p < f ? k > p && k <= f : k > p || k <= f;
     const n = (g.num ?? 0) % 4 * 2;
-    if (cruza(caminar ? 22 : 16)) sonido(161 + n, g.o.position); else if (cruza(caminar ? 11 : 8)) sonido(160 + n, g.o.position);
+    if (cruza(caminar ? 22 : 16)) {
+      sonido(161 + n, g.o.position);
+      if (g.myst && g.myst.k & 1) this.pisadaMystery?.(g, 2);
+    } else if (cruza(caminar ? 11 : 8)) {
+      sonido(160 + n, g.o.position);
+      if (g.myst && g.myst.k & 1) this.pisadaMystery?.(g, 1);
+    }
   }
   apuntarBrazo(g) {
     const A = g.adjust;
@@ -2260,6 +2483,7 @@ export class Juego {
       d: d,
       v: .75,
       recorrido: 0,
+      alcance: 10 * (g.escala || 1),
       "daño": DAÑO_BALA[dif] ?? 96,
       pared: (this.gvTime & 3) !== 0,
       mesh: this.ctx.balaVisual?.(o, d)
@@ -2274,7 +2498,7 @@ export class Juego {
       const p0 = b.p.clone();
       b.p.addScaledVector(b.d, b.v);
       b.recorrido += b.v;
-      let fin = b.recorrido > 10;
+      let fin = b.recorrido > (b.alcance || 10);
       if (b.pared && !fin) {
         this.ray.set(p0, b.d);
         this.ray.far = b.v;
@@ -2467,13 +2691,16 @@ export class Juego {
       if (muerto) this.morir(g);
       return;
     }
-    if (muerto || ko || modo === 4) {
+    const tira = modo === 1 && !!g.derriba && g.derriba.base - g.vital >= g.derriba.umbral;
+    if (muerto || ko || modo === 4 || tira) {
       this.quitarSuperpuesta(g);
       g.durmiendo = false;
       g.caida = modo === 4 ? 0 : 1;
       g.caidaImpacto = modo === 4 ? 17 : 37;
       g.caidaDur = modo === 4 ? 44 : 66;
-      this.cambiar(g, "cae", modo === 4 ? A.CAE_RAPIDO : A.CAE, {
+      g.poseMsj = modo !== 4 && g.faint <= 0 && !!(g.myst && g.myst.k & 2);
+      if (g.poseMsj) g.myst.k &= ~256;
+      this.cambiar(g, "cae", modo === 4 ? A.CAE_RAPIDO : g.poseMsj ? A.POSE_I2 : A.CAE, {
         loop: false
       });
       sonido(muerto ? "v_muere" : "v_piña", g.o.position);
@@ -2494,6 +2721,18 @@ export class Juego {
     sonido(modo === 1 ? "impacto" : "golpe", g.o.position);
     sonido("v_piña", g.o.position);
   }
+  aturdir(g, normal) {
+    if ([ "muerto", "cuelloRoto", "piso", "cae", "soltado", "levanta", "agarrado", "cubrirse" ].includes(g.accion) || g.inactivo) return false;
+    g.dañoFrame = this.frame;
+    if (normal) g.faint = 0; else g.faint -= 5;
+    this.quitarSuperpuesta(g);
+    g.durmiendo = false;
+    this.cambiar(g, "cubrirse", A.CUBRIRSE, {
+      loop: false,
+      fundido: .05
+    });
+    return true;
+  }
   morir(g) {
     if (g.accion === "muerto") return;
     if (!g.gritoMuerte && g.accion !== "cuelloRoto") {
@@ -2501,7 +2740,7 @@ export class Juego {
       g.gritoMuerte = true;
     }
     const idx = g.clipIdx;
-    this.cambiar(g, "muerto", idx === A.CUELLO_ROTO ? null : g.caida === 1 ? A.PISO_CARA : g.caida >= 3 ? A.PISO_ARRIBA : A.PISO_ABAJO);
+    this.cambiar(g, "muerto", idx === A.CUELLO_ROTO ? null : g.caida === 1 ? g.poseMsj ? A.POSE_I : A.PISO_CARA : g.caida >= 3 ? A.PISO_ARRIBA : A.PISO_ABAJO);
     g.alertLevel = 0;
     g.snDis = 3e4;
     if (g.marca) g.marca.visible = g.marcaQ.visible = false;
@@ -2648,11 +2887,13 @@ export class Juego {
       sonido(this.sn.enAgua ? 182 : aire, yo);
       this.setRuido(4, 2, yo.clone());
       const g = this.guardiaGolpe(yo, C.frente, 0, 1.1, .75);
+      this.golpeObjeto?.(yo, C.frente, modo);
       if (g) {
         this.dañar(g, faint, modo);
         sonido(se, g.o.position);
         this.sangre(g.o.position.clone().setY(g.o.position.y + 1.3), 3);
       }
+      if (g && modo === 4 && (this.reglasVR?.tiro || g.empuje14) && g.accion === "cae") g.empujeVR = C.frente.clone().setY(0).normalize().multiplyScalar(.1);
     };
     if (C.t === 4) pega(1, 3, 56, 52);
     if (C.t === 6 && C.nivel < 2) {
@@ -2758,7 +2999,31 @@ export class Juego {
     g.tirado = {
       t: 0
     };
+    if ((this.reglasVR?.tiro || g.empuje14) && g.accion === "cae") {
+      g.tiroVR = {
+        rot: (dirDe(f.x, f.z) + 2048) % 4096
+      };
+      g.caidaImpacto = 22;
+      g.caidaDur = 32;
+      this.ponerClip(g, 31, {
+        loop: false
+      });
+    }
     return true;
+  }
+  cuadroTiroVR(g) {
+    const T = g.tiroVR, c = this.ctx.anims?.clips?.[Object.keys(this.ctx.anims.clips)[31]], i = g.tAcc - 1;
+    if (g.tAcc < 24) {
+      g.rot = g.turn = T.rot;
+      g.o.rotation.y = g.rot * ANG;
+    }
+    const px = c?.paso?.[i * 2] || 0, pz = c?.paso?.[i * 2 + 1] || 0, s = Math.sin(g.rot * ANG), co = Math.cos(g.rot * ANG);
+    g.o.position.x += (px * co + pz * s) * MM;
+    g.o.position.z += (-px * s + pz * co) * MM;
+    if (g.tAcc === 22 && !g.empuje14) {
+      const h = this.alturaPiso(g.o.position.x, g.o.position.z, g.o.position.y);
+      if (h == null || g.o.position.y - h > 3) g.vital = 0;
+    }
   }
   soltar() {
     const g = this.agarrado;
@@ -2823,7 +3088,7 @@ export class Juego {
     return true;
   }
   snakeBloqueado() {
-    return !!this.sn.reac || !!this.com.danbowl && this.com.danbowl.accion === "patea" || this.sn.accion?.dur > 0;
+    return !!this.padVR || !!this.sn.reac || !!this.com.danbowl && this.com.danbowl.accion === "patea" || this.sn.accion?.dur > 0;
   }
   botonSnake() {
     this.sn.boton = true;
@@ -3626,7 +3891,7 @@ export class Juego {
             c.resetNum++;
           } else g.reset = null;
         }
-      } else if (R.estado === 2 && c.modo === 1 && (c.resetNum < c.resetMax + 1 || c.resetMax === 255) && c.puntosReset.length) this.reaparecer(g);
+      } else if (R.estado === 2 && c.modo === 1 && (c.resetNum < c.resetMax + 1 || c.resetMax === 255) && c.puntosReset.length && (!this.reglasVR || g.faseout)) this.reaparecer(g); else if (R.estado === 2 && c.reponerSiempre && g.faseout && c.puntosReset.length) this.reaparecer(g);
     }
   }
   reaparecer(g) {
@@ -3749,5 +4014,6 @@ export class Juego {
     }
     this.vista.removeFromParent();
     this.paredCol.removeFromParent();
+    this.paredColG?.removeFromParent();
   }
 }

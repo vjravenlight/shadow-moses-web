@@ -79,11 +79,21 @@ const escena10A = new Escena10A, despertar = new Despertar;
 
 import { prepararCuerpo, animarCuerpo, velSnake, crearBrillos, actualizarBrillos, sombraU, recibirSombra, Sombras, luzDePersonaje, ocultarCuerpo, precalentar } from "./cuerpo.js";
 
+import { gemelasProfundidad, alfaPorDistancia } from "./cuerpo_cerca.js";
+
+import { primerGolpeCamara } from "./rayos_camara.js";
+
+import { NinjaJugable } from "./ninja_jugable.js";
+
+import { personajeNinja, trajeNinja, nombrePersonaje, rotarPersonaje, modeloDemo, MODELO_NINJA, MASCARA_NINJA, PAD_NINJA, ayudaNinja, ayudaNinjaQuest } from "./ninja_escenarios.js";
+
 import { Codec } from "./codec.js";
 
 import { Guion, HASH } from "./codec_gcl.js";
 
 import { Partida, LV } from "./partida.js";
+
+import { SincEscenarios } from "./sinc_escenarios.js";
 
 import { PartidaUI } from "./partida_ui.js";
 
@@ -96,6 +106,8 @@ import { puntoEnCuadro } from "./fotos.js";
 import { CamaraLibre, sacarFoto, descargar } from "./camara_libre.js";
 
 import { refrescarNormalesUnidas, REND, unirMallas, cullingPersonajes, prepararPersonajes, parcheAtlas, ordenOpaco, unirSiempre, texturasQueCorren } from "./rendimiento.js";
+
+import { instalarCasco, CASCO as REND_CASCO, calidadCasco, frecuenciaCasco } from "./rendimiento_casco.js";
 
 import { registrarCargador } from "./cargador.js";
 
@@ -113,7 +125,7 @@ import { ManosSnake } from "./manos_snake.js";
 
 import { VentanaMiraVR } from "./ventana_mira_vr.js";
 
-import { MiraArma } from "./mira_armas.js";
+import { MiraArma, hayMiraRifleEscena } from "./mira_armas.js";
 
 import { ajustes } from "./ajustes_imagen.js";
 
@@ -126,6 +138,22 @@ import { MiraScope } from "./mira_scope.js";
 import { ESCENARIOS as MAPAS_EXCL, MapasExclusivos, zonasDelMapa } from "./mapas_excl.js";
 
 import { integral } from "./integral.js";
+
+import { idioma } from "./idioma.js";
+
+import { todoDesbloqueado, ponerTodoDesbloqueado } from "./desbloqueo.js";
+
+import { Galeria, Reproductor } from "./galeria.js";
+
+import { SalaDesarrollo } from "./desarrollo.js";
+
+import { Comparador } from "./comparador.js";
+
+import { Grabador } from "./grabador.js";
+
+import { BrazosVR, DosManos } from "./brazos_vr.js";
+
+import { caption, monoGuardado, guardarMono } from "./caption.js";
 
 const pantallaGameOver = new GameOver;
 
@@ -304,9 +332,35 @@ function retenerHastaCreados() {
   });
 }
 
+const menuGuion = {
+  st: null,
+  jam: false,
+  radarOff: false
+};
+
+function menuDesdeGuion(r) {
+  const st = $("#esc-sel").value;
+  if (menuGuion.st !== st) Object.assign(menuGuion, {
+    st: st,
+    jam: false,
+    radarOff: false
+  });
+  if ("j" in r) menuGuion.jam = ((r.j?.[0] | 0) & 1) === 1;
+  if ("r" in r) {
+    const v = r.r?.[0] | 0;
+    if (v === 0 || v === 2) menuGuion.radarOff = true; else if (v === 1 || v === 3) menuGuion.radarOff = false;
+  }
+}
+
+const menuActual = () => menuGuion.st === $("#esc-sel").value ? menuGuion : null;
+
 const guion = new GuionVivo({
   registro: t => debug.log("guion", t),
   reinicio: () => {
+    Object.assign(menuGuion, {
+      jam: false,
+      radarOff: false
+    });
     efectosGuion.limpiar();
     padDemo.cortar();
     demoCancel.cortar();
@@ -315,6 +369,8 @@ const guion = new GuionVivo({
     escenaPendiente.cortar();
     padGuion.suelto = false;
     cortarMotionSnake();
+    soltarSnakeScript();
+    jefesPorReinicio();
   },
   crearActor: a => crearDesdeGuion(a),
   destruirActor: a => destruirDesdeGuion(a),
@@ -363,6 +419,7 @@ const guion = new GuionVivo({
     }
   },
   hzm: archivo => hzmNivel.get(archivo),
+  menu: r => menuDesdeGuion(r),
   pad: r => {
     if ("r" in r) Object.assign(padGuion, {
       suelto: true,
@@ -370,7 +427,10 @@ const guion = new GuionVivo({
       st: $("#esc-sel").value
     }); else if ("s" in r) padGuion.suelto = false;
   },
-  comandante: a => esZako(a) && ctxZako ? crearZako(a, ctxZako) : null
+  comandante: a => esZako(a) && ctxZako ? crearZako(a, ctxZako) : null,
+  rutaGuion: st => integral.urlGuion(st, nivelAlterno === st ? "alterna" : nivelIntegral === st ? "integral" : "usa"),
+  varsEntrada: (st, vars) => integral.varsEntrada(vars, idioma.voz),
+  gameOverEnCurso: () => !!(juego?.muerto || muerteSnake || pantallaGameOver.activo)
 });
 
 const sonidoGuion = sonidoPorDefecto(audioMGS);
@@ -408,6 +468,12 @@ const padGuion = {
   desde: 0,
   st: null
 };
+
+function soltarSnakeScript() {
+  snakeScript.frenado = false;
+  snakeScript.sinPad = false;
+  snakeScript.destino = null;
+}
 
 function mensajeSnake(v, info) {
   if (info?.entrada && v[0] === H_SN.POSITION && v.length >= 4) {
@@ -492,13 +558,17 @@ function mensajeSnake(v, info) {
 
 let animsSnakeDatos = null;
 
-cargarAnims("snake").then(d => animsSnakeDatos = d).catch(() => {});
+cargarAnims("snake").then(d => {
+  animsSnakeDatos = d;
+  integral.sumarRecargaMp5(d);
+}).catch(() => {});
 
 let oarSnake = null;
 
 function ponerOarSnake(id) {
   let n = id != null ? "snake_" + (id & 65535).toString(16).padStart(4, "0") : null;
   if (n === "snake_4ec8" || n === "snake_ee1f") n = null;
+  if (n === "snake_ee04") n = null;
   if (n === oarSnake) return;
   oarSnake = n;
   if (!n) return;
@@ -575,7 +645,9 @@ function armarMotionSnake() {
     piso: pisoBajo
   }) : null;
   if (M.fis) {
+    const y0 = rig.position.y;
     cuadroMotion(M.fis, 0, rig.position);
+    if (M.fis.escalera) compensarOjosVR(rig.position.y - y0);
     const pf = M.fis.posturaFin;
     agachado = pf >= 1;
     reptando = pf >= 2;
@@ -591,12 +663,14 @@ function cortarMotionSnake(terminar = false) {
   const M = snakeScript.motion;
   snakeScript.motion = null;
   if (terminar && M?.fis) {
+    const y0 = rig.position.y;
     cuadroMotion(M.fis, M.dur, rig.position);
     const y = finMotion(M.fis, rig.position, pisoBajo), pf = M.fis.posturaFin;
     rig.position.y = y ?? M.fis.ref + M.fis.aN - ALTO_CONTROL[pf];
     vy = 0;
     agachado = pf >= 1;
     reptando = pf >= 2;
+    if (M.fis.escalera) compensarOjosVR(rig.position.y - y0);
   }
   if (escVista != null) {
     const v = escVista;
@@ -610,6 +684,13 @@ function cortarMotionSnake(terminar = false) {
       if (armaVista) armaVista.visible = v === "primera";
     }
   }
+}
+
+function compensarOjosVR(dy) {
+  if (!R.xr.isPresenting || !(Math.abs(dy) > .05)) return;
+  if (ojosSnake.y != null) ojosSnake.y -= dy;
+  bajaVR.y -= dy;
+  soporteVR.position.y -= dy;
 }
 
 function actualizarSnakeGuion(dt) {
@@ -696,10 +777,13 @@ const codec = new Codec({
     for (const k in teclas) teclas[k] = false;
     tac.x = tac.y = 0;
   },
-  alCerrar: ({tipo: tipo, freq: freq}) => debug.log("códec", `cerrado tipo ${tipo} freq ${freq}`)
+  alCerrar: ({tipo: tipo, freq: freq}) => debug.log("códec", `cerrado tipo ${tipo} freq ${freq}`),
+  llamadaExtra: (freq, st) => integral.llamadaStaff(freq, st)
 });
 
 codec.cargar();
+
+integral.listo.then(() => integral.prepararStaff());
 
 {
   const voz = codec.reproducirVoz.bind(codec);
@@ -760,8 +844,26 @@ Object.defineProperty(codec.op, "textoSalir", {
 
 let partida = null;
 
+const sincEscenarios = new SincEscenarios;
+
+let nivelAlterno = null;
+
+let nivelIntegral = null;
+
+const alternaActiva = () => !!partida?.vars?.get?.("$f:G0435.3");
+
 const partidaUI = new PartidaUI({
-  sonido: audioMGS
+  sonido: audioMGS,
+  alterna: () => ({
+    hay: !!integral.datos?.alterna
+  }),
+  version: async () => {
+    await integral.listo;
+    return {
+      hay: integral.hay,
+      ultima: integral.versionGuardada()
+    };
+  }
 });
 
 PartidaUI.engancharCodec(codec, {
@@ -781,13 +883,17 @@ function usarPartida(p) {
     });
     dificultad = p.dificultad;
   }
+  integral.usarVersion(p ? integral.versionDe(p) : integral.versionGuardada());
 }
 
 function seguirTrasGameOver() {
   if (partida) {
     const c = partida.continuar();
     cargarEscenario(c.st, c.entrada);
-  } else cargarEscenario($("#esc-sel").value, entradaActual);
+  } else cargarEscenario($("#esc-sel").value, entradaActual && {
+    ...entradaActual,
+    sigue: false
+  });
 }
 
 let zonasCodec = [], yCodecAnt = false;
@@ -989,14 +1095,9 @@ R.xr.setFramebufferScaleFactor(1);
 
 R.xr.setFoveation(1);
 
-R.xr.addEventListener("sessionstart", () => {
-  const s = R.xr.getSession();
-  try {
-    if (s?.updateTargetFrameRate && s.supportedFrameRates?.includes(72) && s.frameRate !== 72) s.updateTargetFrameRate(72).catch(() => {});
-  } catch {}
-});
-
 if (REND.activo) R.setOpaqueSort(ordenOpaco);
+
+instalarCasco(R);
 
 document.body.appendChild(R.domElement);
 
@@ -1021,7 +1122,27 @@ debug.iniciar({
 
 const CASCO = /OculusBrowser|Quest|Pico|Wolvic|VR/i.test(navigator.userAgent);
 
-if (CASCO) document.body.appendChild(VRButton.createButton(R));
+if (CASCO) {
+  const bvr = VRButton.createButton(R);
+  bvr.addEventListener("click", ev => {
+    if (R.xr.isPresenting && !/EXIT/i.test(bvr.textContent)) {
+      ev.stopImmediatePropagation();
+      return;
+    }
+    const x = navigator.xr;
+    if (!x?.requestSession) return;
+    const propio = Object.prototype.hasOwnProperty.call(x, "requestSession"), antes = x.requestSession;
+    x.requestSession = (...a) => antes.apply(x, a).catch(e => {
+      if (e?.name !== "InvalidStateError") throw e;
+      debug.log("info", "VR: ya hay una sesión inmersiva, no se pide otra");
+      return new Promise(() => {});
+    });
+    setTimeout(() => {
+      if (propio) x.requestSession = antes; else delete x.requestSession;
+    }, 0);
+  }, true);
+  document.body.appendChild(bvr);
+}
 
 navigator.xr?.isSessionSupported?.("immersive-vr").then(ok => {
   const b = document.getElementById("opt-vr");
@@ -1128,6 +1249,138 @@ let conCuerpo = pref("cuerpo", true), conSombras = pref("sombras", true);
 
 let cuerpo = null, brillos = [];
 
+let ninjaJ = null, ninjaCarga = null;
+
+const botonesVRNinja = {
+  circulo: false,
+  cuadrado: false,
+  cruz: false,
+  r1: false,
+  l1: false,
+  r2: false
+};
+
+const ninjaActivo = () => !!ninjaJ?.activo;
+
+async function activarNinja(cfg = {}) {
+  if (!juego || modo !== "escenarios") return null;
+  if (ninjaJ && cfg?.modelo && ninjaJ.modeloUrl !== cfg.modelo) {
+    const viejo = ninjaJ;
+    ninjaJ = null;
+    viejo.destruir();
+  }
+  if (!ninjaJ) {
+    const nj = new NinjaJugable({
+      mundo: mundo,
+      cargarGlb: u => cargar(u),
+      "teñir": o => teñir(o),
+      se: id => audioMGS.se(id),
+      juego: () => juego,
+      inventario: () => inventario,
+      blancos: () => (misionesVR.activo ? misionesVR.blancos?.vivos.map(b => ({
+        id: b,
+        p: b.p,
+        radio: b.vr3 ? .3 : b.radio,
+        golpe: n => misionesVR.blancos.golpe(b, n)
+      })) : []) || [],
+      vibrar: n => ctl.vibrarCuadros?.(n, {
+        mando: true
+      }),
+      mira: () => miraSnake(),
+      paredRayo: (o, d, lejos) => primerGolpe(o, d, lejos, colParedes ? colParedes.concat(colisiones) : colisiones)?.distance ?? null,
+      rumboMira: () => {
+        if (!terceraPersona()) return null;
+        const m = miraSnake();
+        return Math.atan2(-m.d.x, -m.d.z);
+      },
+      destello: c => destelloNinja(c),
+      bocaPrimera: () => {
+        if (!R.xr.isPresenting || terceraPersona()) return null;
+        const m = miraSnake();
+        return m.o.clone().addScaledVector(m.d, .12);
+      }
+    });
+    const p = ninjaCarga = nj.cargar(typeof cfg === "object" ? cfg : {});
+    try {
+      await p;
+    } catch (e) {
+      debug.log("aviso", "sin el Ninja jugable: " + e.message);
+      ninjaCarga = null;
+      nj.destruir();
+      if (cfg?.modelo && cfg.modelo !== MODELO_NINJA) return activarNinja({
+        ...cfg,
+        modelo: MODELO_NINJA
+      });
+      return null;
+    }
+    if (ninjaCarga !== p) {
+      nj.destruir();
+      return null;
+    }
+    ninjaJ = nj;
+    ninjaCarga = null;
+  }
+  if (!ninjaJ.escenarios) {
+    agachado = false;
+    reptando = false;
+  }
+  ninjaJ.activar(true);
+  if (cuerpo?.obj) cuerpo.obj.visible = false;
+  return ninjaJ;
+}
+
+function desactivarNinja() {
+  ninjaJ?.activar(false);
+  if (cuerpo?.obj) cuerpo.obj.visible = true;
+  if (inventario) {
+    inventario.sinArmas = false;
+    inventario.mascaraPad = 0;
+  }
+}
+
+function ninjaPrestado() {
+  return agachado || reptando || ducto.activo || !!snakeScript.motion || !!snakeScript.destino || !!(armas && inventario.enCaja);
+}
+
+function ninjaCuerpoVR() {
+  if (!ninjaActivo() || !ninjaJ.obj) return null;
+  const C = ninjaJ.cuerpoVR ||= {
+    obj: ninjaJ.obj
+  };
+  torsoVR(C, true);
+  if (!cuerpoVRActivo() || !cuerpo?.obj) return null;
+  ninjaJ.obj.position.copy(cuerpo.obj.position);
+  ninjaJ.obj.rotation.y = cuerpo.obj.rotation.y;
+  ninjaJ.obj.updateMatrixWorld(true);
+  return C;
+}
+
+const cuerpoOjos = () => ninjaActivo() && ninjaJ.obj ? ninjaJ.cuerpoVR ||= {
+  obj: ninjaJ.obj
+} : cuerpo;
+
+function destelloNinja(c) {
+  if (R.xr.isPresenting) return;
+  const d = $("#daño");
+  if (!d) return;
+  d.style.background = "#" + c.toString(16).padStart(6, "0");
+  d.style.opacity = .32;
+  setTimeout(() => {
+    d.style.opacity = 0;
+    d.style.background = "";
+  }, 110);
+}
+
+function gatilloLibreVR() {
+  if (!R.xr.isPresenting) return false;
+  const m = ctl.mapaQuest();
+  for (const src of R.xr.getSession()?.inputSources || []) {
+    const h = src.handedness;
+    if ((h === "left" || h === "right") && m[h]?.[0] == null && src.gamepad?.buttons?.[0]?.pressed) return true;
+  }
+  return false;
+}
+
 sombraU.uSombraOn.value = conSombras ? 1 : 0;
 
 let modo = "museo";
@@ -1176,6 +1429,17 @@ const camCasco = new THREE.PerspectiveCamera;
 camCasco.matrixAutoUpdate = false;
 
 const camApuntar = () => R.xr.isPresenting && vrModo() !== "pantalla" ? camCasco : cam;
+
+const camManoFijado = new THREE.PerspectiveCamera(50, 1, .05, 500);
+
+function camFijado() {
+  if (!R.xr.isPresenting || camaraJuegoActiva() || vrModo() === "pantalla") return camApuntar();
+  const m = miraSnake();
+  camManoFijado.position.copy(m.o);
+  camManoFijado.lookAt(m.o.clone().add(m.d));
+  camManoFijado.updateMatrixWorld();
+  return camManoFijado;
+}
 
 const ventanaMira = new VentanaMiraVR;
 
@@ -1242,6 +1506,8 @@ async function cambiarModeloArma(a) {
   u.modelo = nuevo;
 }
 
+const dosManos = new DosManos;
+
 function miraSnake() {
   const o = new THREE.Vector3, d = new THREE.Vector3;
   if (camaraJuegoActiva() && inventario?.arma === WP.STINGER && teclas.KeyE && camJuego?.primeraPersona) {
@@ -1260,6 +1526,7 @@ function miraSnake() {
       cam.getWorldPosition(o);
       cam.getWorldDirection(d);
     }
+    if (c && dosManos.activa) d.copy(dosManos.dir);
     if (inventario?.arma === WP.PSG1 && armas) {
       const b = armas.balanceo();
       if (b.yaw || b.pitch) d.applyAxisAngle(_ejeY, b.yaw).setY(d.y + b.pitch).normalize();
@@ -1491,8 +1758,8 @@ registrarCargador(cargar);
 
 const demo = new Demo({
   scene: scene,
-  cargar: cargar,
   encuadre: "auto",
+  cargar: u => cargar(personajeNinja() && modo === "escenarios" && !misionesVR.activo ? modeloDemo(u) : u),
   alCrearModelo: o => teñir(o),
   pisoEn: (x, y, z) => {
     if (!colPisos?.length) return null;
@@ -1503,6 +1770,36 @@ const demo = new Demo({
 });
 
 let enDemo = false;
+
+const grabador = new Grabador({
+  lienzo: R.domElement,
+  sonido: audioMGS,
+  demo: demo,
+  movie: movie
+});
+
+let grabarCine = false;
+
+function empezarGrabacion() {
+  return grabarCine && !R.xr.isPresenting && grabador.empezar();
+}
+
+async function guardarGrabacion(nombre) {
+  const b = await grabador.terminar();
+  if (!b) return;
+  const f = new Date, dd = n => String(n).padStart(2, "0");
+  const archivo = `mgs_cinematica_${nombre}_${f.getFullYear()}${dd(f.getMonth() + 1)}${dd(f.getDate())}_${dd(f.getHours())}${dd(f.getMinutes())}${dd(f.getSeconds())}.${grabador.extension}`;
+  descargar(b, archivo);
+  aviso(`Video guardado: ${archivo} (${(b.size / 1e6).toFixed(1)} MB)`);
+}
+
+function ponerGrabarCine(si = !grabarCine) {
+  grabarCine = !!si && grabador.soportado;
+  const b = $("#opt-grabar");
+  if (b) b.textContent = "Grabar cinemáticas: " + (grabarCine ? "sí" : "no");
+  aviso(grabarCine ? "Las cinemáticas se graban en video (se bajan al terminar cada una)" : "Grabar cinemáticas: no");
+  return grabarCine;
+}
 
 let radioCadena = null;
 
@@ -1539,13 +1836,14 @@ function dibujarRadioCadena(dtReal) {
   R.setClearColor(c0, a0);
 }
 
-async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
+async function correrDemos(pasos, {enEscena: enEscena = () => false, galeria: galeria = false} = {}) {
   if (!pasos?.length || enDemo) {
-    guion.demosTerminadas(pasos);
+    if (!galeria) guion.demosTerminadas(pasos);
     return;
   }
   enDemo = true;
   sombraU.uSombraN.value = 0;
+  const grabando = empezarGrabacion();
   const luzAntes = luzOriginal;
   if (!luzOriginal) {
     luzOriginal = true;
@@ -1570,6 +1868,7 @@ async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
   $("#panel").classList.add("oculto");
   rig.visible = false;
   if (cuerpo) cuerpo.obj.visible = false;
+  const ninjaAntes = ninjaJ?.obj ? (ninjaJ.obj.visible = false, ninjaJ) : null;
   rig.userData.antesCine = {
     p: rig.position.clone(),
     yaw: yaw
@@ -1604,6 +1903,7 @@ async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
     }
     rig.visible = true;
     if (cuerpo) cuerpo.obj.visible = antes.cuerpo;
+    if (ninjaAntes && ninjaAntes === ninjaJ && ninjaJ.activo) ninjaJ.obj.visible = true;
     const ac = rig.userData.antesCine;
     if (ac) {
       rig.position.copy(ac.p);
@@ -1629,7 +1929,8 @@ async function correrDemos(pasos, {enEscena: enEscena = () => false} = {}) {
     }
     enDemo = false;
     reloj.getDelta();
-    guion.demosTerminadas(pasos);
+    if (grabando) guardarGrabacion(pasos.map(p => p.demo).filter(x => x != null).join("-") || "cadena");
+    if (!galeria) guion.demosTerminadas(pasos);
   }
 }
 
@@ -1675,6 +1976,107 @@ texturasPixel.alCambiar(() => {
 });
 
 $("#opt-luz").onclick = () => alternarLuz();
+
+const EXPO_NEUTRA = 3 + 2 + 9 * 2 + 81 * 2;
+
+const comparador = new Comparador;
+
+let compLuzAntes = null, ladoPuesto = null;
+
+function luzParaComparar(si) {
+  if (si && compLuzAntes === null) {
+    compLuzAntes = luzOriginal;
+    if (luzOriginal) {
+      luzOriginal = false;
+      aplicarLuz();
+    }
+  } else if (!si && compLuzAntes !== null) {
+    ladoComparador(null);
+    if (luzOriginal !== compLuzAntes) {
+      luzOriginal = compLuzAntes;
+      aplicarLuz();
+    }
+    compLuzAntes = null;
+  }
+}
+
+comparador.alCambiar = si => {
+  luzParaComparar(si || comparador.alterna);
+  const b = $("#opt-comparar");
+  if (b) b.textContent = "Comparar original / mejorado: " + (si ? "sí" : "no");
+};
+
+comparador.alCambiarLado = l => aviso(l === "original" ? "ORIGINAL (LUZ DE LA PS1)" : "MEJORADO (LUZ MODERNA Y AJUSTES)");
+
+function ladoComparador(lado) {
+  const orig = lado === null ? luzOriginal : lado === "original";
+  if (ladoPuesto !== orig) {
+    ladoPuesto = orig;
+    scene.traverse(o => {
+      if (!o.isMesh) return;
+      const std = aStd.get(o.material) || o.material;
+      if (!aBasico.has(std)) return;
+      const m = orig ? aBasico.get(std) : std;
+      if (o.material !== m) {
+        o.material = m;
+        if (!orig) luzMod.malla(o);
+      }
+    });
+  }
+  if (R.toneMapping === THREE.CustomToneMapping && R.toneMappingExposure >= 2.5) R.toneMappingExposure = lado === "original" ? EXPO_NEUTRA : ajustes.exposicion;
+}
+
+function alternarComparadorVR() {
+  const si = comparador.ponerAlterna();
+  luzParaComparar(si || comparador.activo);
+  if (!si) {
+    ladoPuesto = null;
+    ladoComparador(null);
+  }
+  return si;
+}
+
+function rotularOpcionOriginal() {
+  const c = $("#opt-caption"), m = $("#opt-mono");
+  if (c) c.textContent = "Subtítulos (CAPTION): " + (caption.on ? "sí" : "no");
+  if (m) m.textContent = "Sonido: " + (audioMGS.mono ? "mono" : "estéreo");
+}
+
+addEventListener("mgs:opcion", e => {
+  if (e.detail?.clave === "caption" || e.detail?.clave === "mono") rotularOpcionOriginal();
+});
+
+{
+  const c = $("#opt-caption"), m = $("#opt-mono");
+  if (c) c.onclick = () => {
+    caption.poner();
+    rotularOpcionOriginal();
+  };
+  if (m) m.onclick = () => {
+    audioMGS.setMono(!audioMGS.mono);
+    rotularOpcionOriginal();
+  };
+  rotularOpcionOriginal();
+}
+
+{
+  const b = $("#opt-grabar");
+  if (b) {
+    b.hidden = TACTIL || !grabador.soportado;
+    b.onclick = () => ponerGrabarCine();
+  }
+}
+
+{
+  const b = $("#opt-comparar");
+  if (b) b.onclick = () => {
+    if (modo !== "escenarios") {
+      aviso("Comparar: entrá a un escenario");
+      return;
+    }
+    comparador.poner();
+  };
+}
 
 normalesSuaves.alEscribir = refrescarNormalesUnidas;
 
@@ -1869,6 +2271,7 @@ $("#opt-partidas").onclick = async () => {
   usarPartida(Partida.cargar(r.datos));
   if (partida?.visor?.nuevaPartida) {
     delete partida.visor.nuevaPartida;
+    activarSmoking(partida);
     await correrDemos((await cargarCadenas())?.partida_nueva?.pasos);
   }
   cambiarModo("jugar", partida.st);
@@ -1884,12 +2287,17 @@ function limpiar() {
   museoVR.quitar();
   scene.remove(mundo);
   mundo.traverse(o => {
-    if (o.isMesh && o.userData.propio) {
-      o.geometry.dispose();
+    if (o.isSkinnedMesh) o.skeleton?.dispose();
+    if (!o.isMesh || !o.userData.propio) return;
+    o.geometry.dispose();
+    for (const m of [].concat(o.material || [])) if (m?.map?.isCanvasTexture) {
+      m.map.dispose();
+      m.dispose();
     }
   });
   mundo = new THREE.Group;
   scene.add(mundo);
+  guion.__jefesCtx = guion.__mantisS07bCtx = null;
   colisiones = [];
   giran = [];
   colParedes = null;
@@ -1922,6 +2330,9 @@ function limpiar() {
   salidas = [];
   cuerpo = null;
   brillos = [];
+  ninjaJ?.destruir();
+  ninjaJ = null;
+  ninjaCarga = null;
   armaVista?.removeFromParent();
   $("#hud").hidden = true;
   $("#gameover").hidden = true;
@@ -2007,6 +2418,8 @@ const enSmoking = () => !!partida?.vars?.get?.("$f:G0435.0");
 
 const modeloDeSnake = m => enSmoking() && !/nude/.test(m || "") ? MODELO_SMOKING : m;
 
+demo.reemplazoModelo = m => m.nombre === "snake" && enSmoking() ? MODELO_SMOKING : null;
+
 const ANIM_DE = nombre => /ippanhei|lopryhei|out_c_m1|mel_hei/.test(nombre) ? "enemy" : /snake|sne_|tux/.test(nombre) ? "snake" : null;
 
 function animador(obj, datos) {
@@ -2079,6 +2492,41 @@ const texArma = n => {
   t.magFilter = THREE.NearestFilter;
   return t;
 };
+
+let matLuzGuardia;
+
+function luzArmaGuardia(o) {
+  matLuzGuardia ||= new Promise(ok => {
+    const im = new Image;
+    im.onload = () => {
+      const t = new THREE.Texture(im);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.needsUpdate = true;
+      ok(new THREE.SpriteMaterial({
+        map: t,
+        color: (new THREE.Color).setScalar(250 / 255),
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+        fog: false
+      }));
+    };
+    im.onerror = () => ok(null);
+    im.src = "assets/armas/famas_l.png";
+  });
+  matLuzGuardia.then(m => {
+    const h = m && o.getObjectByName("hueso_4");
+    if (!h) return;
+    const s = new THREE.Sprite(m);
+    s.name = "glight";
+    s.scale.set(.08, .08, 1);
+    s.position.set(0, -.4, .06);
+    s.renderOrder = 3;
+    s.userData.propio = s.userData.sinColision = true;
+    s.raycast = () => {};
+    h.add(s);
+  });
+}
 
 async function prepararArma() {
   if (!armaVista) {
@@ -2214,7 +2662,7 @@ function ponerArmaEnMano() {
 function animarArma(dt) {
   if (!armaVista?.userData.base || dt <= 0) return;
   {
-    const equip = (armas ? inventario.arma >= 0 : true) && !miraScope.activo && !miraArma.ocultaArma, fam = equip && inventario?.arma === WP.FAMAS;
+    const equip = (armas ? inventario.arma >= 0 : true) && !miraScope.activo && !miraArma.ocultaArma && !snakeScript.motion?.fis?.escalera, fam = equip && inventario?.arma === WP.FAMAS;
     armaVista.userData.equipada = equip;
     if (pistolaVista && pistolaVista.visible !== (equip && !fam)) pistolaVista.visible = equip && !fam;
     const mp5 = fam && !!mp5Vista && integral.esMp5(inventario?.nivelJuego), rif = fam && !mp5;
@@ -2376,8 +2824,9 @@ function actualizarLaser() {
     a.getWorldPosition(o);
     o.addScaledVector(m.d, .22);
   }
-  const h = primerGolpe(m.o, m.d, 10, colParedes ? colParedes.concat(colisiones) : colisiones);
-  const fin = h?.point || m.o.clone().addScaledVector(m.d, 10);
+  const largo = (terceraPersona() ? 10240 : 10240 + 515) / 1e3;
+  const h = primerGolpe(m.o, m.d, largo, colParedes ? colParedes.concat(colisiones) : colisiones);
+  const fin = h?.point || m.o.clone().addScaledVector(m.d, largo);
   const a = laserSocom.geometry.attributes.position;
   a.setXYZ(0, o.x, o.y, o.z);
   a.setXYZ(1, fin.x, fin.y, fin.z);
@@ -2527,20 +2976,25 @@ function fogonazoTercera() {
 }
 
 function dispararDesdeCamara() {
+  if (ninjaActivo()) {
+    ninjaJ.boton("cuadrado", true);
+    return;
+  }
   const o = new THREE.Vector3, d = new THREE.Vector3;
   if (camaraJuegoActiva()) {
     o.copy(rig.position);
     o.y += agachado ? .7 : 1.25;
     d.set(-Math.sin(rumbo), 0, -Math.cos(rumbo));
-    let mejor = null, md = 18;
-    for (const g of patrullas) {
+    let mejor = null, md = 6.1;
+    const conPunteria = !armas || inventario?.arma === WP.SOCOM || inventario?.arma === WP.FAMAS;
+    for (const g of conPunteria ? patrullas : []) {
       if (g.inactivo || [ "muerto" ].includes(g.estado)) continue;
       const v = g.o.position.clone();
       v.y += 1.1;
       v.sub(o);
       const dist = v.length();
       v.normalize();
-      if (dist < md && v.dot(d) > Math.cos(.6)) {
+      if (dist < md && v.dot(d) > Math.cos(Math.PI / 4)) {
         md = dist;
         mejor = v;
       }
@@ -2859,6 +3313,7 @@ function liberarCache() {
     g?.scene.traverse(o => {
       if (o.isMesh) o.geometry.dispose();
     });
+    if (g) normalesSuaves.olvidar(g.scene);
   }
   for (const [k, t] of texturasCompartidas) if (!usadas.has(t)) {
     t.source?.data?.close?.();
@@ -2883,8 +3338,17 @@ async function cargarEscenario2(id, entrada = null) {
   scene.background = new THREE.Color(329738);
   $("#capas").innerHTML = "";
   $("#nivel-info").textContent = "";
-  const nv = await fetch(`assets/niveles/${id}/nivel.json`).then(r => r.ok ? r.json() : null).catch(() => null);
-  if (nv) return cargarNivel(nv, entrada);
+  await integral.listo;
+  const urlAlt = integral.urlNivel(id, alternaActiva());
+  let nv = urlAlt ? await fetch(urlAlt).then(r => r.ok ? r.json() : null).catch(() => null) : null;
+  if (urlAlt) debug.log("carga", nv ? `${id}: ${nv.alterna ? "Alternate Round" : "nivel"} del Integral` : `${id}: sin el nivel del Integral, va el de siempre`);
+  nv ||= await fetch(`assets/niveles/${id}/nivel.json`).then(r => r.ok ? r.json() : null).catch(() => null);
+  nivelAlterno = nv?.alterna ? id : null;
+  nivelIntegral = nv?.integral ? id : null;
+  if (nv) {
+    integral.sumarActores(id, nv);
+    return cargarNivel(nv, entrada);
+  }
   const e = escenarios.find(x => x.id === id);
   if (!e) return;
   const box = $("#partes");
@@ -2916,6 +3380,10 @@ const _snG = {
   primeraPersona: false
 };
 
+function primeraPersonaMovil() {
+  return !!juego && modo === "escenarios" && !camaraJuegoActiva() && !terceraPersona();
+}
+
 let botonesGuion = 0;
 
 function snakeGuion(consumir = true) {
@@ -2943,7 +3411,16 @@ function snakeGuion(consumir = true) {
 const otrosGuion = () => patrullas.filter(g => g.o.visible && !g.inactivo).map(g => ({
   nombre: g.nombre,
   pos: g.o.position
-}));
+})).concat(jefesConTrampas());
+
+function jefesConTrampas() {
+  const L = juego?.__jefes?.lista;
+  if (!L?.length) return [];
+  return L.filter(j => j.vivo && j.listo && j.o && j.actor?.tipo === "PSYCHOMERYL" && typeof j.actor.nombre === "number").map(j => ({
+    nombre: j.actor.nombre,
+    pos: j.o.position
+  }));
+}
 
 async function crearDesdeGuion(a) {
   if (!crearActorNivel || !mundo) return false;
@@ -3055,7 +3532,7 @@ async function crearDesdeGuion(a) {
   return true;
 }
 
-const TIPOS_ENTRADA_6B = new Set([ ...TIPOS_SENSOR, "FEWDAMAGE", "WT_AREA", "WT_AREA2", "SNEBREATH", "TRUCKTRAP", "ASIOTOKUN", ...TIPOS_GUION ]);
+const TIPOS_ENTRADA_6B = new Set([ ...TIPOS_SENSOR, "FEWDAMAGE", "WT_AREA", "WT_AREA2", "SNEBREATH", "TRUCKTRAP", "ASIOTOKUN", "KEY_ITEM", ...TIPOS_GUION ]);
 
 const mesgEntrada = {
   st: null,
@@ -3130,7 +3607,126 @@ function vaciarNivelPorReinicio() {
   return true;
 }
 
+const JEFE_PROPIO = new Set([ "VOICESYS", "PSYCHOMANTIS", "PSYOBJ", "MEMPSY", "PSYCHOMERYL" ]);
+
+function quitarJefeReinicio(j) {
+  if (!j || j.vivo === false || JEFE_PROPIO.has(j.actor?.tipo)) return;
+  try {
+    j.destruir();
+  } catch (e) {
+    console.warn("[jefes] restart", e);
+  }
+}
+
+function jefesPorReinicio() {
+  const L = juego?.__jefes?.lista;
+  if (!L?.length) return;
+  for (const j of L.slice()) {
+    const a = j.actor;
+    if (!a || !esJefe(a) || j.vivo === false || JEFE_PROPIO.has(a.tipo) || guion.creados?.includes(a)) continue;
+    const B = guion.presupuestoBase;
+    if (!j.__descontado && a._k != null && (B?.get(a._k) || 0) > 0) {
+      j.__descontado = true;
+      B.set(a._k, B.get(a._k) - 1);
+    }
+    quitarJefeReinicio(j);
+  }
+}
+
+const SOBRAN_REINICIO = new Set([ "WALL" ]);
+
+function sobrantesTrasReinicio() {
+  const B = guion.presupuestoBase, P = guion.presupuesto;
+  if (!B || !P || !objsNivel.length) return;
+  let n = 0;
+  for (const o of objsNivel.slice()) {
+    const a = o.userData?.actor;
+    if (!a || !SOBRAN_REINICIO.has(a.tipo) || a._k == null || guion.creados?.includes(a)) continue;
+    const base = B.get(a._k) || 0;
+    if (!(base > 0) || !((P.get(a._k) || 0) > 0)) continue;
+    o.removeFromParent();
+    objsNivel.splice(objsNivel.indexOf(o), 1);
+    const i = colParedes ? colParedes.indexOf(o) : -1;
+    if (i >= 0) colParedes.splice(i, 1);
+    B.set(a._k, base - 1);
+    n++;
+    debug.log("guion", `restart: ${a.tipo} #${((a.nombre ?? 0) & 65535).toString(16)} (k ${a._k}) de la entrada ya no está`);
+  }
+  if (n) {
+    recalcularColisiones();
+    recalcularPisos();
+  }
+}
+
+let mapasPuerta = null;
+
+function armarMapasPuerta(nv, vis, archivos, piezas, entrada) {
+  const deLaPuerta = new Map;
+  for (const a of nv.actores) {
+    if (a.tipo !== "DOOR" || a.evento || !Array.isArray(a.opts?.g)) continue;
+    for (const x of a.opts.g) {
+      const id = typeof x === "object" && x ? x.id : null;
+      if (id == null || id === nv.principal) continue;
+      if (!deLaPuerta.has(id)) deLaPuerta.set(id, new Set);
+      deLaPuerta.get(id).add(a.nombre);
+    }
+  }
+  const mId = typeof entrada?.m === "object" && entrada?.m ? entrada.m.id : entrada?.m;
+  const libres = new Set(vis.filter(m => !deLaPuerta.has(m.id) || m.id === mId).flatMap(m => m.piezas || []));
+  const lista = [];
+  for (const m of vis) {
+    if (!deLaPuerta.has(m.id) || m.id === mId) continue;
+    const objs = (m.piezas || []).filter(f => !libres.has(f)).map(f => piezas[archivos.indexOf(f)]).filter(Boolean);
+    if (!objs.length) continue;
+    const caja = new THREE.Box3;
+    for (const o of objs) caja.expandByObject(o);
+    caja.expandByScalar(1);
+    lista.push({
+      id: m.id,
+      puertas: deLaPuerta.get(m.id),
+      objs: objs,
+      caja: caja,
+      visible: true
+    });
+  }
+  if (!lista.length) return null;
+  debug.log("carga", "cuartos detrás de puertas: " + lista.map(x => "#" + (x.id & 65535).toString(16)).join(" "));
+  const M = {
+    lista: lista
+  };
+  mirarMapasPuerta(M, true);
+  return M;
+}
+
+function mirarMapasPuerta(M = mapasPuerta, forzar = false) {
+  if (!M) return;
+  const P = din?.puertas || [], s = rig.position;
+  let cambio = false;
+  for (const x of M.lista) {
+    const ver = P.some(p => x.puertas.has(p.nombre) && p.abierto > 0) || x.caja.containsPoint(s);
+    if (ver === x.visible && !forzar) continue;
+    x.visible = ver;
+    cambio = true;
+    for (const o of x.objs) o.visible = ver;
+  }
+  if (cambio) recalcularColisiones();
+}
+
+{
+  const dm = guion.despuesDelMain.bind(guion);
+  guion.despuesDelMain = (reinicio, ...r) => {
+    const x = dm(reinicio, ...r);
+    if (reinicio) try {
+      sobrantesTrasReinicio();
+    } catch (e) {
+      console.warn("[guion] sobrantes", e);
+    }
+    return x;
+  };
+}
+
 function destruirDesdeGuion(a) {
+  for (const j of juego?.__jefes?.lista || []) if (j.actor === a) quitarJefeReinicio(j);
   destruirMeryl(a);
   din?.extras?.quitar(a);
   sensores?.quitar?.(a);
@@ -3138,6 +3734,10 @@ function destruirDesdeGuion(a) {
     o.removeFromParent();
     const i = colParedes ? colParedes.indexOf(o) : -1;
     if (i >= 0) colParedes.splice(i, 1);
+    if (o.userData.paredGuion) {
+      o.geometry.dispose();
+      o.material.dispose();
+    }
   }
   for (const g of patrullas) if (g.o.userData.guardia === a) {
     g.inactivo = true;
@@ -3196,7 +3796,8 @@ async function cargarDesdeGuion(st, info) {
       if (c?.destino?.[0] === "s") {
         await cargarEscenario(c.destino, {
           desde: desde,
-          via: st
+          via: st,
+          sigue: true
         });
         return;
       }
@@ -3204,7 +3805,8 @@ async function cargarDesdeGuion(st, info) {
     await cargarEscenario(st, {
       p: info.p?.some(v => v) ? info.p : null,
       rot: info.rot,
-      desde: desde
+      desde: desde,
+      sigue: true
     });
   } finally {
     cambiando = false;
@@ -3250,6 +3852,7 @@ function marcador(texto, color = 16763955) {
 }
 
 async function cargarNivel(nv, entrada = null) {
+  soltarSnakeScript();
   zonasAgua = zonasAguaDe(nv.actores);
   zonaAguaAnt = null;
   if (!/^vr/.test(nv.id)) guion.precargar(nv.id);
@@ -3258,6 +3861,7 @@ async function cargarNivel(nv, entrada = null) {
     ...entrada || {},
     ...pe.entrada
   };
+  const sigueGuion = !pe && !!entrada?.sigue && !/^vr/.test(nv.id) && !!guion.st && !/^vr/.test(guion.st);
   const vivos = pe ? partida.filtrarActores(nv.id, nv.actores) : nv.actores.filter(a => !a.evento);
   luzNivel = nv.luz && (nv.luz.luces.length || nv.luz.amb.some(v => v > 0) || nv.luz.main) ? nv.luz : null;
   dirSombra = new THREE.Vector3(-.3, -.8, -.5).normalize();
@@ -3298,7 +3902,7 @@ async function cargarNivel(nv, entrada = null) {
     const desplaza = false;
     texturasQueCorren(nv.actores.filter(a => a.tipo === "TEXSCROLL").flatMap(a => (a.opts?.t || []).map(x => x && typeof x === "object" ? x.id : x).filter(x => typeof x === "number").map(x => x.toString(16).padStart(4, "0"))));
     for (const a of archivosPiezas) if (!tiemblan.has(a) && !desplaza) piezasMapa.add(a);
-    for (const a of nv.actores) if ([ "WALL", "PUT_OBJECT", "DOOR", "ITEM" ].includes(a.tipo) && /^niveles\//.test(a.modelo || "") && !tiemblan.has(a.modelo) && !desplaza) piezasMapa.add(a.modelo);
+    for (const a of nv.actores) if ([ "WALL", "PUT_OBJECT", "DOOR", "ITEM" ].includes(a.tipo) && /^(niveles|integral\/guion)\//.test(a.modelo || "") && !tiemblan.has(a.modelo) && !desplaza) piezasMapa.add(a.modelo);
   }
   const piezas = await Promise.all(archivosPiezas.map(a => cargar(a)));
   piezas.forEach((o, i) => {
@@ -3360,6 +3964,30 @@ async function cargarNivel(nv, entrada = null) {
     objetoDe: n => (n === 8650 ? cuerpo?.obj : patrullas.find(g => g.nombre === n && !g.borrado)?.o) || null,
     detectorMinas: () => inventario.item === IT.MINED,
     "dañarSnake": n => juego?.dañoSnake?.(n, 3),
+    sangre: p => juego?.sangre?.(v3(p), 1),
+    onda: (x, y, z, s) => din?.onda?.(x * .001, y * .001, z * .001, s),
+    planoCine: ({ojo: ojo, centro: centro, cuadros: cuadros}) => {
+      if (vista !== "arriba" || !camJuego || R.xr.isPresenting) return false;
+      camJuego.corte(ojo, centro, 320, cuadros + 1);
+      efectosGuion.efecto({
+        tipo: "CINEMA",
+        nombre: "raton_llave",
+        opts: {
+          t: [ 3e4 ]
+        }
+      });
+      Object.assign(padGuion, {
+        suelto: true,
+        desde: guion.t,
+        st: $("#esc-sel").value
+      });
+      return true;
+    },
+    finPlano: () => {
+      efectosGuion.mensaje("raton_llave", [ 54304 ]);
+      padGuion.suelto = false;
+      if (camJuego) camJuego.corteActivo = null;
+    },
     explotar: p => armas ? (armas.explosion(p), true) : false
   };
   Object.assign(din.extras.ctx, {
@@ -3388,6 +4016,7 @@ async function cargarNivel(nv, entrada = null) {
       }
     },
     termica: () => inventario.item === IT.THERMG,
+    ruido: () => juego?.ruido?.p || 0,
     primeraPersona: () => !!juego && modo === "escenarios" && !R.xr.isPresenting && (vista === "primera" || camaraJuegoActiva() && !!camJuego?.primeraPersona),
     mirada: () => camaraJuegoActiva() && camJuego?.primeraPersona ? {
       rumbo: rumbo,
@@ -3447,16 +4076,25 @@ async function cargarNivel(nv, entrada = null) {
       const o = await cargar(a.modelo);
       const fa = await cargar("armas/famas.glb");
       o.getObjectByName("hueso_4")?.add(fa);
+      luzArmaGuardia(o);
       const p0 = v3(a.p);
       o.position.copy(p0);
       if (a.puntos.length > 1) {
         const p1 = v3(a.puntos[1].p);
         o.rotation.y = Math.atan2(p1.x - p0.x, p1.z - p0.z);
       }
+      if (a.escala && a.escala !== 1) {
+        const vis = new THREE.Group;
+        vis.name = "gigante";
+        for (const c of [ ...o.children ]) vis.add(c);
+        vis.scale.setScalar(a.escala);
+        vis.position.y = -(a.alt_ctrl || 0) / 1e3;
+        o.add(vis);
+      }
       o.userData.guardia = a;
       mundo.add(o);
       teñir(o);
-      const an = animador(o, anims);
+      const an = animador(o, a.anims ? await cargarAnims(a.anims).catch(() => anims) : anims);
       an.tocar("parado", {
         offset: Math.random()
       });
@@ -3773,6 +4411,7 @@ async function cargarNivel(nv, entrada = null) {
     };
   }
   recalcularPisos();
+  mapasPuerta = MAPAS_EXCL.has(nv.id) ? null : armarMapasPuerta(nv, vis, archivosPiezas, piezas, entrada);
   mapasExcl = MAPAS_EXCL.has(nv.id) ? new MapasExclusivos({
     nv: nv,
     piezas: new Map(archivosPiezas.map((f, i) => [ f, piezas[i] ])),
@@ -3833,6 +4472,7 @@ async function cargarNivel(nv, entrada = null) {
   tAire = 0;
   tNivel = 0;
   await prepararArma();
+  if (armaVista) armaVista.visible = !terceraPersona();
   try {
     const modeloSnake = modeloDeSnake(snake?.modelo || catalogo.find(c => c.nombre === "snake")?.archivo);
     if (modeloSnake) {
@@ -4041,8 +4681,10 @@ async function cargarNivel(nv, entrada = null) {
     congelar: si => {
       congeladoJefe = si;
     },
-    alProc: (a, letra) => typeof guion.eventoActor === "function" && guion.eventoActor(a, letra),
+    vistaSubjetiva: () => camaraJuegoActiva() && !!camJuego?.primeraPersona,
+    alProc: (a, letra) => misionesVR.activo && misionesVR.procActor?.(a, letra) || typeof guion.eventoActor === "function" && guion.eventoActor(a, letra),
     gameOver: () => {
+      if (misionesVR.activo && misionesVR.vr?.disco) return;
       document.exitPointerLock?.();
       audioMGS.gameOver();
       const vozGO = guion.gameOver();
@@ -4066,7 +4708,9 @@ async function cargarNivel(nv, entrada = null) {
     } ], {
       enEscena: s => s === nv.id
     }).then(() => {
-      if (info.siguiente) cargarEscenario(info.siguiente);
+      if (info.siguiente) cargarEscenario(info.siguiente, {
+        sigue: true
+      });
     })
   };
   if (new URLSearchParams(location.search).has("jefes")) forzarJefes(nv, ctxJefes);
@@ -4096,6 +4740,8 @@ async function cargarNivel(nv, entrada = null) {
     congelar: si => {
       congeladoJefe = si;
     },
+    primeraPersonaMovil: () => primeraPersonaMovil(),
+    luzArma: o => luzArmaGuardia(o),
     voz: id => codec.reproducirVoz(id),
     subirSnake: d => {
       rig.position.y += d;
@@ -4133,7 +4779,8 @@ async function cargarNivel(nv, entrada = null) {
       opts: {
         t: [ 3e4 ]
       }
-    }) : efectosGuion.mensaje("personajes", [ 54304 ])
+    }) : efectosGuion.mensaje("personajes", [ 54304 ]),
+    luzArma: o => luzArmaGuardia(o)
   };
   for (const a of vivos) if (esMeryl(a) && !(a.t > 0)) crearMeryl(a, ctxPersonajes);
   camJuego = new CamaraJuego({
@@ -4141,9 +4788,12 @@ async function cargarNivel(nv, entrada = null) {
     ruido: () => juego.ruido,
     alMensaje: (a, v) => sensores?.mensaje(a, v[0])
   });
-  camJuego.cargar(nv.id).catch(() => {
-    camJuego = null;
-  });
+  {
+    const cjN = camJuego;
+    cjN.cargar(nv.id).catch(() => {
+      if (camJuego === cjN && !cjN._vrDatos) camJuego = null;
+    });
+  }
   $("#hud").hidden = false;
   $("#nivel-info").textContent = `Nivel del juego · ${nv.juego?.estado || ""} · progreso ${nv.juego?.progreso ?? "?"} · ${vis.length} mapa(s) · ` + `${patrullas.length} guardias · ${itemsNivel.length} ítems · ${salidas.length} salidas`;
   ayuda();
@@ -4156,11 +4806,18 @@ async function cargarNivel(nv, entrada = null) {
     t: d.t
   }));
   if (!/^vr/.test(nv.id)) {
+    let carga = null;
+    if (sigueGuion && (guion.vars.get("$s:L000c") & 65535) !== (strcode(nv.id) & 65535)) carga = {
+      m: entrada?.m ?? null,
+      p: entrada?.p || null
+    };
     await guion.cargarEscenario(nv.id, {
       nivel: nv,
       demosVisor: pasosEntrada,
-      entrada: pe ? "partida" : "disco"
+      entrada: pe || sigueGuion ? "partida" : "disco",
+      carga: carga
     });
+    integral.cargarStaff(nv.id, guion.vars).catch(() => {});
     if (guion.nivel === nv) din.agenda = din.agenda.filter(x => !x.porGuion);
     if (rotGO && !pe) guion.vars.set("$w:G02be", rotGO);
     await zakosAlEntrar(nv, guion, ctxZako).catch(e => debug.log("aviso", "zako: " + e.message));
@@ -4174,11 +4831,15 @@ async function cargarNivel(nv, entrada = null) {
     }
     crearJefesEntrada(nv, ctxJefes, guion).catch(e => debug.log("aviso", "jefes: " + e.message));
     aplicarTodo();
+    if (personajeNinja() && !misionesVR.activo) await activarNinja({
+      escenarios: true,
+      modelo: trajeNinja().modelo
+    });
   }
   const enEscena = st => st === nv.id;
   const cuenta = new Map;
   for (const p of pasosEntrada) cuenta.set(p.demo, (cuenta.get(p.demo) || 0) + 1);
-  const filtrar = !cadena && pe && guion.nivel === nv && guion.st === nv.id;
+  const filtrar = !cadena && (pe || sigueGuion) && guion.nivel === nv && guion.st === nv.id;
   const pedida = p => !filtrar || (guion.demosVisor.get(p.demo) || 0) < cuenta.get(p.demo);
   const avisar = p => {
     const n = guion.demosVisor.get(p.demo) || 0;
@@ -4198,7 +4859,9 @@ async function cargarNivel(nv, entrada = null) {
   if (ya.length) correrDemos(ya, {
     enEscena: enEscena
   }).then(() => {
-    if (cadena?.destino?.[0] === "s" && $("#esc-sel").value === nv.id) cargarEscenario(cadena.destino);
+    if (cadena?.destino?.[0] === "s" && $("#esc-sel").value === nv.id) cargarEscenario(cadena.destino, sigueGuion ? {
+      sigue: true
+    } : null);
   });
 }
 
@@ -4214,6 +4877,15 @@ let zonasDemo = {
   de: null,
   zonas: []
 };
+
+function zonaAguaDemo(p) {
+  const fuente = demo.aguaNivel || zonasAgua;
+  if (zonasDemo.de !== fuente) zonasDemo = {
+    de: fuente,
+    zonas: demo.aguaNivel ? zonasAguaDe(demo.aguaNivel) : zonasAgua
+  };
+  return p && zonasDemo.zonas.length ? vistaAgua.zonaEn(p, zonasDemo.zonas) : null;
+}
 
 let sensores = null, camJuego = null;
 
@@ -4359,13 +5031,63 @@ function actualizarCuerpoYSombras(dt) {
       reaccion: juego?.reaccionSnake?.() || null,
       parpadeo: !!juego?.sn?.parpadeo,
       caja: !!armas && inventario.enCaja,
-      armaAnim: armas ? armas.estadoAnim() || {} : null
+      armaAnim: armas ? armas.estadoAnim() || {} : null,
+      mp5: integral.esMp5(inventario?.nivelJuego)
     });
+    if (ninjaActivo()) {
+      leerBotonesNinja();
+      cuerpo.obj.visible = false;
+      const esc = ninjaJ.escenarios;
+      if (esc && armaVista?.visible) armaVista.visible = false;
+      ninjaJ.animar(dt, {
+        pos: pos,
+        yaw: tercera ? rumbo : ry,
+        vel: vel > 20 ? 0 : vel,
+        pared: pared,
+        muerte: !!muerteSnake,
+        forzado: esc ? null : snakeScript.motion?.clip || null,
+        visible: (tercera && !ojosJ || R.xr.isPresenting && vrCuerpoVisible) && !(esc && armas && inventario.enCaja),
+        prestado: esc && ninjaPrestado() ? cuerpo.obj : null,
+        sombra: esc && !(armas && inventario.enCaja)
+      });
+    }
+  }
+  {
+    const esc = ninjaActivo() && ninjaJ.escenarios;
+    if (inventario) {
+      inventario.sinArmas = esc;
+      inventario.mascaraPad = esc ? MASCARA_NINJA : 0;
+    }
   }
   ajustarCuerpoVR(dt);
+  const njVR = ninjaCuerpoVR();
   dibujarSombras(dt);
   if (cuerpo?.obj && cuerpoVRActivo()) torsoVR(cuerpo, false);
+  if (njVR) torsoVR(njVR, false);
   actualizarBrillos(brillos, cam);
+}
+
+function leerBotonesNinja() {
+  let g = null;
+  try {
+    g = ctl.mando();
+  } catch {}
+  const bt = i => !!g?.buttons?.[i]?.pressed, V = botonesVRNinja;
+  const est = {
+    circulo: !!teclas.KeyG || V.circulo,
+    cuadrado: cuadradoApretado() || V.cuadrado,
+    cruz: !!teclas.KeyC || V.cruz,
+    r1: !!teclas.Digit2 || bt(ctl.B.R1) || V.r1,
+    l1: !!teclas.Digit1 || bt(ctl.B.L1) || V.l1
+  };
+  if (ninjaJ.escenarios) {
+    const P = inventario?.padCrudo | 0;
+    est.cruz = false;
+    est.r1 ||= !!(P & PAD_NINJA.r1);
+    est.l1 ||= !!(P & PAD_NINJA.l1) || gatilloLibreVR();
+    est.r2 = !!teclas.KeyX || bt(ctl.B.R2) || V.r2 || !!(P & PAD_NINJA.r2);
+  }
+  for (const k in est) ninjaJ.boton(k, est[k]);
 }
 
 function esPisable(m) {
@@ -4392,11 +5114,11 @@ function lamparaTapada(lam, c) {
 }
 
 function dibujarSombras(dt) {
-  if (!conSombras) {
+  if (!conSombras || R.xr.isPresenting && !calidadCasco.sombraSnake()) {
     sombraU.uSombraN.value = 0;
     return;
   }
-  const lista = [];
+  const lista = [], otrosMax = R.xr.isPresenting ? calidadCasco.maxOtrosSombra(otrosSombra) : otrosSombra;
   if (cuerpo && !vuelo) {
     _cs.copy(rig.position);
     _cs.y += .9;
@@ -4406,6 +5128,10 @@ function dibujarSombras(dt) {
       dir: cuerpo.luz.dir,
       fuerza: cuerpo.luz.fuerza
     });
+  }
+  if (REND_CASCO.atajos && lista.length >= 1 + otrosMax) {
+    sombras.render(lista);
+    return;
   }
   const otros = [];
   mundo.traverse(o => {
@@ -4423,7 +5149,7 @@ function dibujarSombras(dt) {
   }).filter(c => c.d < 30).sort((a, b) => b.ve - a.ve || a.d - b.d);
   const cubierto = p => lista.some(l => Math.abs(l.centro.x - p.x) < 4 && Math.abs(l.centro.z - p.z) < 4);
   for (const c of cand) {
-    if (lista.length >= 1 + otrosSombra) break;
+    if (lista.length >= 1 + otrosMax) break;
     if (cubierto(c.p)) continue;
     const ce = c.p.clone();
     ce.y += .9;
@@ -4495,7 +5221,8 @@ function revisarSalidas() {
             p: elegido.info.p,
             rot: elegido.info.rot,
             m: elegido.info.m,
-            desde: desde
+            desde: desde,
+            sigue: true
           });
           return;
         }
@@ -4506,7 +5233,8 @@ function revisarSalidas() {
           rot: s.rot,
           m: s.m,
           via: s.via,
-          desde: desde
+          desde: desde,
+          sigue: true
         });
       } finally {
         cambiando = false;
@@ -4621,7 +5349,7 @@ function ayuda() {
     tactil: TACTIL,
     catalogo: modo === "catalogo",
     escenarios: modo === "escenarios"
-  });
+  }) + (modo === "escenarios" && personajeNinja() ? String.fromCharCode(10) + ayudaNinja(ctl.botonQuestDe, TACTIL) : "");
 }
 
 ctl.alCambiar(() => ayuda());
@@ -4696,8 +5424,8 @@ addEventListener("keydown", e => {
   if (camLibre.activa) {
     teclas[e.code] = true;
     if (e.code === "Tab") e.preventDefault();
-    if (!e.repeat && e.code === "KeyF") fotoModoCamara("plana");
-    if (!e.repeat && e.code === "KeyP") fotoModoCamara("360");
+    if (!e.repeat && e.code === "KeyF") fotoModoCamara("plana", e.shiftKey);
+    if (!e.repeat && e.code === "KeyP") fotoModoCamara("360", e.shiftKey);
     if (!e.repeat && e.code === "KeyB") cambiarBrilloFoto();
     if (!e.repeat && e.code === "KeyT") cambiarSuaveFoto();
     return;
@@ -4762,7 +5490,7 @@ const CODIGO_DIR_REP = {
 
 function mandoCuadro(dt) {
   const g = ctl.mando();
-  if (!g || pantallaControles.abierta || titulo.visible || partidaUI.abierta || codec.abierto || R.xr.isPresenting || camLibre.activa) {
+  if (!g || pantallaControles.abierta || titulo.visible || partidaUI.abierta || codec.abierto || R.xr.isPresenting && !ctl.hayMandoDemo() || camLibre.activa) {
     soltarMando();
     flancosMando.leer(null);
     return;
@@ -4994,32 +5722,67 @@ function primerGolpe(o, d, far, lista) {
 
 const _rC = new THREE.Vector3, _vC = new THREE.Vector3, _X = new THREE.Vector3(1, 0, 0);
 
-let alfaCuerpoAct = 1;
+let alfaCuerpoAct = 1, alfaCuerpoDe = null;
+
+const filtroSnake = m => !!m.userData.cuerpo, filtroNinja = m => !m.isUnidaPersonaje && (!!m.material?.userData?.cercaOrig || !m.material?.transparent);
 
 function alfaCuerpo(d) {
   if (stealthCuerpo && stealthCuerpo === cuerpo) return;
-  const a = d == null ? 1 : Math.max(.25, Math.min(1, (d - .5) / .7 * .75 + .25));
-  if (!cuerpo?.obj || Math.abs(a - alfaCuerpoAct) < .02 && a === 1 === (alfaCuerpoAct === 1)) return;
-  const trans = a < 1, cambia = trans !== alfaCuerpoAct < 1;
+  const C = cuerpoOjos(), ninja = !!C && C !== cuerpo;
+  if (ninja && ninjaJ?.kogaku) d = null;
+  if (alfaCuerpoDe && alfaCuerpoDe.obj !== C?.obj) {
+    aplicarAlfaCuerpo(alfaCuerpoDe, 1, true);
+    alfaCuerpoDe = null;
+    alfaCuerpoAct = 1;
+  }
+  const a = alfaPorDistancia(d);
+  if (!C?.obj || Math.abs(a - alfaCuerpoAct) < .02 && a === 1 === (alfaCuerpoAct === 1) && a === 0 === (alfaCuerpoAct === 0)) return;
+  const B = {
+    obj: C.obj,
+    ninja: ninja,
+    filtro: ninja ? filtroNinja : filtroSnake
+  };
+  aplicarAlfaCuerpo(B, a, a < 1 !== alfaCuerpoAct < 1 || a === 0 !== (alfaCuerpoAct === 0));
   alfaCuerpoAct = a;
-  cuerpo.obj.traverse(m => {
-    if (!m.userData.cuerpo || !m.material) return;
+  alfaCuerpoDe = a < 1 ? B : null;
+}
+
+function aplicarAlfaCuerpo(B, a, cambia) {
+  const trans = a < 1, oculto = B.ninja ? !!ninjaJ?.oculto : !!cuerpo?.oculto;
+  B.obj.traverse(m => {
+    if (!m.isMesh || !m.material || m.userData.gemelaCuerpo || !B.filtro(m)) return;
     for (const mt of Array.isArray(m.material) ? m.material : [ m.material ]) {
-      mt.opacity = 1;
+      if (trans && !mt.userData.cercaOrig) mt.userData.cercaOrig = {
+        transparent: mt.transparent,
+        depthWrite: mt.depthWrite,
+        blending: mt.blending,
+        opacity: mt.opacity
+      };
       mt.blendAlpha = a;
       if (cambia) {
-        mt.transparent = trans;
-        if (!cuerpo.oculto) mt.depthWrite = !trans;
+        const o = mt.userData.cercaOrig;
         if (trans) {
+          mt.opacity = 1;
+          mt.transparent = true;
+          if (!oculto) mt.depthWrite = false;
+          mt.colorWrite = !oculto && a > 0;
           mt.blending = THREE.CustomBlending;
           mt.blendEquation = THREE.AddEquation;
           mt.blendSrc = THREE.ConstantAlphaFactor;
           mt.blendDst = THREE.OneMinusConstantAlphaFactor;
-        } else mt.blending = THREE.NormalBlending;
+        } else {
+          mt.transparent = o ? o.transparent : false;
+          if (!oculto) mt.depthWrite = o ? o.depthWrite : true;
+          mt.colorWrite = !oculto;
+          mt.blending = o ? o.blending : THREE.NormalBlending;
+          mt.opacity = o ? o.opacity : 1;
+          delete mt.userData.cercaOrig;
+        }
         mt.needsUpdate = true;
       }
     }
   });
+  gemelasProfundidad(B.obj, trans && a > 0 && !oculto, B.filtro);
 }
 
 const STEALTH_OPACIDAD = .35, STEALTH_OSCURO = .9;
@@ -5085,17 +5848,50 @@ function actualizarStealth() {
   stealthCuerpo = si ? cuerpo : null;
 }
 
-function distanciaCamara(P, C, lateral, margen, minimo) {
+const RAYOS_CAM = [ [ 0, 0 ], [ -.25, 0 ], [ .25, 0 ], [ 0, .2 ] ], RAYO_CENTRO = [ [ 0, 0 ] ];
+
+function distanciaCamara(P, C, lateral, margen, minimo, soloCentro = false) {
   const lista = colParedes ? colParedes.concat(colisiones) : colisiones;
   let k = 1;
-  for (const s of [ 0, -.25, .25 ]) {
-    _rC.copy(C).addScaledVector(lateral, s).sub(P);
+  for (const [s, u] of soloCentro ? RAYO_CENTRO : RAYOS_CAM) {
+    _rC.copy(C).addScaledVector(lateral, s);
+    _rC.y += u;
+    _rC.sub(P);
     const l = _rC.length();
     if (l < 1e-4) continue;
     _rC.divideScalar(l);
-    const h = primerGolpe(P, _rC, l + margen, lista);
-    if (h) k = Math.min(k, Math.max(minimo, h.distance - margen) / l);
+    const h = primerGolpeCamara(P, _rC, l + margen, lista, esDeSnake);
+    if (!h) continue;
+    let libre = h.distance - margen;
+    if (libre < minimo) libre = Math.max(libre, Math.min(minimo, h.distance * .5));
+    k = Math.min(k, Math.max(0, libre) / l);
   }
+  return k;
+}
+
+const _pvB = new THREE.Vector3;
+
+function pivoteLibre(P, lateral) {
+  _pvB.copy(rig.position);
+  _pvB.y += reptando || agachado ? .25 : .75;
+  if (P.y <= _pvB.y) return P;
+  const k = distanciaCamara(_pvB, P, lateral, .12, 0, true);
+  if (k < 1) P.sub(_pvB).multiplyScalar(k).add(_pvB);
+  return P;
+}
+
+const _vfC = new THREE.Vector3;
+
+const pivoteTercera = new THREE.Vector3;
+
+window.__pivoteTercera = pivoteTercera;
+
+function camaraDelLadoDeSnake(P, lateral, margen) {
+  cam.getWorldPosition(_vfC);
+  const k = distanciaCamara(P, _vfC, lateral, margen, .3, true);
+  if (k >= 1) return 1;
+  _vfC.sub(P).multiplyScalar(k).add(P);
+  cam.position.copy(rig.worldToLocal(_vfC));
   return k;
 }
 
@@ -5142,6 +5938,10 @@ const giroSnake = {
 };
 
 function mover(dt) {
+  if (modo === "galeria") {
+    vy = 0;
+    return;
+  }
   if (misionesVR.bloqueaControl) return;
   if (cargaNivel || cambiando && !esperaSalida) return;
   if (esperaRecarga) {
@@ -5153,6 +5953,7 @@ function mover(dt) {
   if (congeladoJefe) return;
   if (juego?.snakeBloqueado?.()) {
     vy = 0;
+    ninjaJ?.tomarEmpuje();
     return;
   }
   if (armas?.misil && !armas.misil.perdido) {
@@ -5202,8 +6003,13 @@ function mover(dt) {
       const x = gp.axes[2], y = gp.axes[3], Q = ctl.quest;
       if (src.handedness === manoMov()) {
         const p = ctl.palanca(x, y, Q.zonaMuerta);
-        s += p.x;
-        f -= p.y;
+        if (tanqueVR()) {
+          f -= p.y;
+          if (p.x) girarRig(-p.x * 32 * ANG * 30 * dt);
+        } else {
+          s += p.x;
+          f -= p.y;
+        }
       }
       if (src.handedness === manoArma()) {
         if (Q.giro === "suave") {
@@ -5223,7 +6029,10 @@ function mover(dt) {
     const d = dirCabezaVR(new THREE.Vector3);
     dirYaw = Math.atan2(-d.x, -d.z);
     dirPitch = Math.asin(Math.max(-1, Math.min(1, d.y)));
-    if (ctl.quest.dir === "control") {
+    if (tanqueVR()) {
+      dirYaw = yaw;
+      dirPitch = 0;
+    } else if (ctl.quest.dir === "control") {
       const ci = [ 0, 1 ].map(i => R.xr.getController(i)).find(c => c.userData.lado === manoMov());
       if (ci) {
         const v = ci.getWorldDirection(new THREE.Vector3).negate();
@@ -5264,7 +6073,7 @@ function mover(dt) {
     f *= k;
     s *= k;
   }
-  if (agachado && !reptando && !vuelo && !pared && juego && modo === "escenarios" && !R.xr.isPresenting && Math.hypot(f, s) > .2) {
+  if (agachado && !reptando && !vuelo && !pared && juego && modo === "escenarios" && (!R.xr.isPresenting || ctl.hayMandoDemo()) && Math.hypot(f, s) > .2) {
     reptando = true;
     tTransPostura = 12 / 30;
     aviso("Cuerpo a tierra");
@@ -5274,11 +6083,25 @@ function mover(dt) {
     f = 0;
     s = 0;
   }
+  const nj = ninjaActivo() && !vuelo ? ninjaJ : null;
+  const njPropio = nj && !(nj.escenarios && ninjaPrestado());
+  if (nj && !nj.escenarios) {
+    agachado = false;
+    reptando = false;
+  }
+  if (nj) {
+    const c = nj.control(Math.hypot(f, s) > .001);
+    if (njPropio && c.bloqueado) {
+      f = 0;
+      s = 0;
+    }
+  }
   const vAgarre = juego?.velAgarre?.() ?? null;
   if (vAgarre === 0) return;
   const wId = armas ? inventario.arma : 0, quiereMover = Math.hypot(f, s) > .001;
   arranqueCarrera = quiereMover && !agachado && !reptando && !pared && !correr && !R.xr.isPresenting ? arranqueCarrera + dt : 0;
   let vel = vuelo ? vrCamara ? 2.5 : 7 : vAgarre ? vAgarre : reptando ? velSnake(wId, "reptar") : pared ? velSnake(wId, pared.lado < 0 ? "paredI" : "paredD") : agachado ? velSnake(wId, "agachado") : correr ? 1.5 : arranqueCarrera > 0 && arranqueCarrera <= 6 / 30 ? velSnake(wId, "arrancar") : velSnake(wId, "correr");
+  if (nj && (!nj.escenarios || njPropio && !pared)) vel = correr ? 1.5 : nj.vel;
   if (!vuelo && juego?.sn?.enAgua) vel = Math.min(vel, 1.5);
   const fw = new THREE.Vector3(-Math.sin(dirYaw), 0, -Math.cos(dirYaw));
   const rt = new THREE.Vector3(Math.cos(dirYaw), 0, -Math.sin(dirYaw));
@@ -5329,6 +6152,15 @@ function mover(dt) {
     giroSnake.espera = 0;
   }
   const giroJuego = camaraJuegoActiva() && !fpJ && !pared && !vAgarre;
+  if (nj) {
+    const e = nj.tomarEmpuje();
+    if (e) {
+      mov.x += e.x;
+      mov.z += e.z;
+    }
+    const r = nj.tomarRumbo();
+    if (r != null && terceraPersona()) rumbo = r;
+  }
   deslizar(pos, mov);
   if (modo === "escenarios" && juego && !reptando && enSuelo && !R.xr.isPresenting) {
     const q = Math.hypot(quiero.x, quiero.z);
@@ -5530,6 +6362,10 @@ function sePostura() {
 }
 
 function alternarAgachado() {
+  if (ninjaActivo() && (!ninjaJ.escenarios || ninjaJ.mueve && !agachado && !reptando && !ducto.activo && !pared && !snakeScript.motion)) {
+    ninjaJ.boton("cruz", true);
+    return;
+  }
   if (!agachado) {
     agachado = true;
     reptando = false;
@@ -5544,7 +6380,7 @@ function alternarAgachado() {
       aviso("Agachado (no hay lugar para pararse)");
       return;
     }
-    if (juego && modo === "escenarios" && !R.xr.isPresenting) {
+    if (juego && modo === "escenarios" && (!R.xr.isPresenting || ctl.hayMandoDemo())) {
       agachado = false;
       sePostura();
       aviso("De pie");
@@ -5591,6 +6427,11 @@ function pedirMouse() {
 }
 
 function golpearPared() {
+  if (ninjaActivo()) {
+    botonesGuion |= 32;
+    ninjaJ.boton("circulo", true);
+    return;
+  }
   botonesGuion |= 32;
   armas?.detonar();
   if (ducto.activo || snakeScript.motion) return;
@@ -5632,6 +6473,7 @@ function actualizarCamara(dt) {
     rig.rotation.y = yaw;
     return;
   }
+  if (alfaCuerpoAct < 1 && vista !== "hombro") alfaCuerpo(null);
   const e10 = camaraEscena(escena10A, despertar);
   if (e10) {
     rig.rotation.y = 0;
@@ -5713,6 +6555,7 @@ function actualizarCamara(dt) {
     _P.copy(rig.position);
     _P.y += reptando ? .6 : agachado ? 1 : 1.5 + .08 * hombroK;
     const f = new THREE.Vector3(-Math.sin(yaw) * cp, Math.sin(pitch), -Math.cos(yaw) * cp), der = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw));
+    pivoteLibre(_P, der);
     _C.copy(_P).addScaledVector(f, -dist).addScaledVector(der, lado);
     _C.y += .3 * (1 - hombroK) * cp;
     const kc = distanciaCamara(_P, _C, der, .25, .3);
@@ -5720,15 +6563,29 @@ function actualizarCamara(dt) {
     rig.updateMatrixWorld();
     const local = rig.worldToLocal(_C.clone());
     cam.getWorldPosition(_vC);
-    if (kc < 1 && _C.distanceTo(_P) < _vC.distanceTo(_P)) cam.position.copy(local); else cam.position.lerp(local, Math.min(1, dt * 14));
+    if (kc < 1 && _C.distanceTo(_P) < _vC.distanceTo(_P)) cam.position.copy(local); else {
+      cam.position.lerp(local, Math.min(1, dt * 14));
+      camaraDelLadoDeSnake(_P, der, .2);
+    }
     cam.rotation.set(pitch, 0, 0, "YXZ");
     cam.getWorldPosition(_vC);
     alfaCuerpo(_vC.distanceTo(_P));
+    pivoteTercera.copy(_P);
     return;
   }
   alfaCuerpo(null);
   rig.rotation.y = 0;
   rig.updateMatrixWorld();
+  const vf = misionesVR.camaraFoto?.();
+  if (vf) {
+    cam.position.copy(rig.worldToLocal(vf.pos.clone()));
+    cam.lookAt(vf.mira);
+    if (Math.abs(cam.fov - vf.fov) > .01) {
+      cam.fov = vf.fov;
+      cam.updateProjectionMatrix();
+    }
+    return;
+  }
   if (camJuego) {
     const c = camJuego.update(dt, {
       pos: rig.position,
@@ -5760,7 +6617,10 @@ function actualizarCamara(dt) {
   rig.updateMatrixWorld();
   const local = rig.worldToLocal(_C.clone());
   cam.getWorldPosition(_vC);
-  if (kc < 1 && _C.distanceTo(_P) < _vC.distanceTo(_P)) cam.position.copy(local); else cam.position.lerp(local, Math.min(1, dt * 8));
+  if (kc < 1 && _C.distanceTo(_P) < _vC.distanceTo(_P)) cam.position.copy(local); else {
+    cam.position.lerp(local, Math.min(1, dt * 8));
+    camaraDelLadoDeSnake(_P, _X, .25);
+  }
   _P.y += .2;
   cam.lookAt(_P);
 }
@@ -5768,10 +6628,51 @@ function actualizarCamara(dt) {
 const _cabS = new THREE.Vector3;
 
 function cabezaSnake() {
-  if (!cuerpo?.obj?.parent) return null;
-  const h = cuerpo.hueso6 ||= cuerpo.obj.getObjectByName("hueso_6");
+  const C = cuerpoOjos();
+  if (!C?.obj?.parent) return null;
+  const h = C.hueso6 ||= C.obj.getObjectByName("hueso_6");
   if (!h) return null;
   return h.getWorldPosition(_cabS).y;
+}
+
+const ojosSnake = {
+  y: null,
+  crudo: null
+};
+
+function alturaOjosSnake(dt) {
+  let y = null;
+  const C = cuerpoOjos(), o = C?.obj, h = o && (C.hueso6 ||= o.getObjectByName("hueso_6"));
+  if (h) {
+    const t = C.hTorsoVR ||= o.getObjectByName("hueso_1"), e = t ? t.scale.x : 1;
+    if (t && e !== 1) t.scale.setScalar(1);
+    if (REND_CASCO.atajos) {
+      y = h.getWorldPosition(_cabS).y - o.position.y;
+      if (t && e !== 1) {
+        t.scale.setScalar(e);
+        h.updateWorldMatrix(true, false);
+      }
+    } else {
+      o.updateMatrixWorld(true);
+      y = h.getWorldPosition(_cabS).y - o.position.y;
+      if (t && e !== 1) {
+        t.scale.setScalar(e);
+        o.updateMatrixWorld(true);
+      }
+    }
+  }
+  if (snakeScript.motion?.fis?.escalera && y != null && y > -4 && y < 7) {
+    ojosSnake.crudo = y;
+    ojosSnake.y = ojosSnake.y == null ? y : ojosSnake.y + (y - ojosSnake.y) * (1 - Math.exp(-Math.min(dt, .1) * 12));
+    return ojosSnake.y;
+  }
+  const tierra = reptando || ducto.activo;
+  if (y == null || !(y > .02 && y < 2.2)) y = tierra ? .15 : agachado ? .95 : 1.55;
+  if (tierra) y += .32;
+  if (ducto.activo) y = Math.min(.25, Math.max(.15, y));
+  ojosSnake.crudo = y;
+  ojosSnake.y = ojosSnake.y == null ? y : ojosSnake.y + (y - ojosSnake.y) * (1 - Math.exp(-Math.min(dt, .1) * 4));
+  return ojosSnake.y;
 }
 
 let pdMov = {
@@ -5789,8 +6690,9 @@ function actualizarPadDemo(dt) {
     finPadDemo(null);
     return;
   }
-  if (teclas.KeyC && padDemo.cancelable) {
+  if ((teclas.KeyC || R.xr.isPresenting && botonesCineVR & 64) && padDemo.cancelable) {
     teclas.KeyC = false;
+    botonesCineVR &= ~64;
     padDemo.cancelar();
     return;
   }
@@ -5839,9 +6741,10 @@ function actualizarPadDemo(dt) {
 
 let pdRumbo = null;
 
-let cineVista = null, cineSuelto = 0;
+let cineVista = null, cineSuelto = 0, cineArmaVis = null, botonesCineVR = 0;
 
 function actualizarVistaCine() {
+  let padDelGuion = false;
   if (efectosGuion.hayCine()) {
     const T = window.__mgs?.trabas, trabado = padDemo.activo || codec.abierto || enPausa() || demo?.estado === "reproduciendo" || cargaNivel || cambiando || T && (T.padSuelto || T.sinPad || T.frenado || T.motion || T.destino || T.ascensor || T.misiones || T.jefe || T.snakeBloq || T.muerte);
     cineSuelto = trabado ? 0 : cineSuelto + 1;
@@ -5850,24 +6753,32 @@ function actualizarVistaCine() {
       efectosGuion.quitarCine();
       debug.log("guion", "CINEMA sin escena: se sacan las barras");
     }
+    padDelGuion = padDemo.activo || demoCancel.activo || !!(T && (T.padSuelto || T.sinPad));
   } else cineSuelto = 0;
-  const hay = !!juego && modo === "escenarios" && !R.xr.isPresenting && !padDemo.activo && efectosGuion.hayCine();
+  const xr = R.xr.isPresenting;
+  const pdPrimera = padDemo.activo && (inventario.item === IT.SCOPE || !!(padDemo.bits & BOTON.TRI));
+  const vrEsc = xr && (misionesVR.escenaCam || misionesVR.demoActiva) && !ducto.activo && !vrCamara && !camLibre.activa;
+  const hay = !!juego && modo === "escenarios" && (vrEsc || efectosGuion.hayCine() && (xr ? padDelGuion && !pdPrimera && !ducto.activo && !vrCamara && !camLibre.activa : !padDemo.activo));
   if (hay && vista !== "arriba") {
-    if (cineVista == null) cineVista = vista;
-    rumbo = yaw;
+    if (cineVista == null) {
+      cineVista = vista;
+      cineArmaVis = armaVista ? armaVista.visible : null;
+    }
+    rumbo = xr ? yawCabezaVR() : yaw;
     vista = "arriba";
     if (armaVista) armaVista.visible = false;
   } else if (!hay && cineVista != null) {
     const v = cineVista;
     cineVista = null;
-    if (v !== vista && !padDemo.activo) {
-      if (v === "primera") {
+    if (v !== vista && (xr || !padDemo.activo)) {
+      if (v === "primera" && !xr) {
         yaw = rumbo;
         pitch = 0;
       }
       vista = v;
-      if (armaVista) armaVista.visible = v === "primera";
+      if (armaVista) armaVista.visible = xr ? cineArmaVis ?? v === "primera" : v === "primera";
     }
+    cineArmaVis = null;
   }
 }
 
@@ -5907,7 +6818,7 @@ function actualizarDucto() {
       if (v !== "primera") rumbo = yaw;
       vista = v;
     }
-    if (armaVista) armaVista.visible = vista === "primera" && !R.xr.isPresenting;
+    if (armaVista) armaVista.visible = !terceraPersona();
     inventario.ducto = false;
     audioMGS.codigo(33554209);
     debug.log("juego", "sale del ducto");
@@ -5974,9 +6885,11 @@ R.xr.addEventListener("sessionstart", () => {
   aplicar3D();
   espacioBase = R.xr.getReferenceSpace();
   setTimeout(calibrarAltura, 1500);
+  setTimeout(preguntarPosturaVR, 1800);
 });
 
 R.xr.addEventListener("sessionend", () => {
+  if (comparador.alterna) alternarComparadorVR();
   bajaVR.y = 0;
   terceraVR.activo = false;
   terceraVR.aplicado = null;
@@ -6145,7 +7058,7 @@ function alternarModoCamara() {
   fotoOp.pixelPrevio = texturasPixel.pixel;
   if (fotoOp.suave) texturasPixel.poner(false, false);
   pintarFotoOp();
-  $("#cam-aviso").textContent = TACTIL ? "MODO CÁMARA · palanca = mover · arrastrar = mirar · FOTO / 360 = guardar" : "MODO CÁMARA · O = salir · WASD + mouse · Q/E bajar/subir · Shift/Ctrl rápido/lento · rueda = zoom · B = brillo · T = suave · F = foto 4K · P = foto 360";
+  $("#cam-aviso").textContent = TACTIL ? "MODO CÁMARA · palanca = mover · arrastrar = mirar · FOTO / 360 = guardar" : "MODO CÁMARA · O = salir · WASD + mouse · Q/E bajar/subir · Shift/Ctrl rápido/lento · rueda = zoom · B = brillo · T = suave · F = foto 4K · P = foto 360 · Shift+F / Shift+P = 8K";
   document.body.classList.add("modo-camara");
   document.body.classList.toggle("cam-tactil", TACTIL);
 }
@@ -6221,13 +7134,15 @@ function dibujarModoCamara(dtReal) {
 
 let fotoEnCurso = false;
 
-async function fotoModoCamara(tipo) {
+async function fotoModoCamara(tipo, k8 = false) {
   if (!camLibre.activa || fotoEnCurso) return;
   fotoEnCurso = true;
+  if (TACTIL) k8 = false;
+  const ancho = k8 ? tipo === "360" ? 8192 : 7680 : 0;
   const aviso = $("#cam-aviso"), ayuda = aviso.textContent, volver = ms => setTimeout(() => {
     if (camLibre.activa && !fotoEnCurso) aviso.textContent = ayuda;
   }, ms);
-  aviso.textContent = tipo === "360" ? "Sacando la foto 360 (4096×2048)…" : "Sacando la foto (3840×2160)…";
+  aviso.textContent = tipo === "360" ? k8 ? "Sacando la foto 360 en 8K (8192×4096)…" : "Sacando la foto 360 (4096×2048)…" : k8 ? "Sacando la foto 8K (7680×4320)…" : "Sacando la foto (3840×2160)…";
   await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
   try {
     const cine = enDemo || demo.ocupada, zonas = cine ? zonasDemo.zonas : zonasAgua;
@@ -6235,6 +7150,7 @@ async function fotoModoCamara(tipo) {
       escena: cine ? demo.escena : scene,
       camara: camLibre.cam,
       tipo: tipo,
+      ancho: ancho,
       vistaAgua: vistaAgua,
       agua: zonas?.length ? vistaAgua.zonaEn(camLibre.cam.position, zonas) : null,
       filtro: R.domElement.style.filter || "",
@@ -6242,7 +7158,7 @@ async function fotoModoCamara(tipo) {
       caraMax: TACTIL ? 2048 : 0
     });
     const f = new Date, dd = n => String(n).padStart(2, "0");
-    const nombre = `mgs_${tipo === "360" ? "360_" : ""}${(cine ? "cinematica" : $("#esc-sel").value) || "mgs"}_${f.getFullYear()}${dd(f.getMonth() + 1)}${dd(f.getDate())}_${dd(f.getHours())}${dd(f.getMinutes())}${dd(f.getSeconds())}.jpg`;
+    const nombre = `mgs_${tipo === "360" ? "360_" : ""}${k8 ? "8k_" : ""}${(cine ? "cinematica" : $("#esc-sel").value) || "mgs"}_${f.getFullYear()}${dd(f.getMonth() + 1)}${dd(f.getDate())}_${dd(f.getHours())}${dd(f.getMinutes())}${dd(f.getSeconds())}.jpg`;
     descargar(blob, nombre);
     aviso.textContent = `Guardada: ${nombre} (${(blob.size / 1e6).toFixed(1)} MB)`;
   } catch (e) {
@@ -6295,7 +7211,7 @@ $("#esc-camara").onclick = () => alternarModoCamara();
 for (const b of document.querySelectorAll("#cam-botones button")) b.addEventListener("pointerdown", e => {
   e.preventDefault();
   e.stopPropagation();
-  if (b.dataset.c === "salir") alternarModoCamara(); else if (b.dataset.c === "brillo") cambiarBrilloFoto(); else if (b.dataset.c === "suave") cambiarSuaveFoto(); else fotoModoCamara(b.dataset.c);
+  if (b.dataset.c === "salir") alternarModoCamara(); else if (b.dataset.c === "brillo") cambiarBrilloFoto(); else if (b.dataset.c === "suave") cambiarSuaveFoto(); else fotoModoCamara(b.dataset.c.replace("8k", ""), b.dataset.c.endsWith("8k"));
 });
 
 let todoArmas = (() => {
@@ -6336,6 +7252,52 @@ const CONTROLES_QUEST = () => ctl.ayudaQuest();
   }
 }
 
+function rotularDesbloqueo() {
+  const b = document.getElementById("opt-desbloqueado");
+  if (b) b.textContent = "Todo desbloqueado: " + (todoDesbloqueado() ? "sí" : "no");
+  try {
+    todoArmas = localStorage.getItem("sm_todo") === "1";
+  } catch {}
+  const t = document.getElementById("opt-todo");
+  if (t) t.textContent = "Todas las armas e ítems: " + (todoArmas ? "sí" : "no");
+}
+
+function alternarDesbloqueo() {
+  const si = ponerTodoDesbloqueado(!todoDesbloqueado());
+  if (si) aplicarTodo();
+  aviso(si ? "Todo desbloqueado: briefing, smoking, Alternate Round, álbum y VR" : "Todo desbloqueado: no");
+}
+
+{
+  const b = document.getElementById("opt-desbloqueado");
+  if (b) b.onclick = () => alternarDesbloqueo();
+  rotularDesbloqueo();
+}
+
+function rotularPersonaje() {
+  const b = document.getElementById("opt-personaje");
+  if (b) b.textContent = "Personaje: " + nombrePersonaje();
+}
+
+async function alternarPersonaje(d = 1) {
+  const t = rotarPersonaje(d);
+  rotularPersonaje();
+  if (juego && modo === "escenarios" && !misionesVR.activo) {
+    if (t) await activarNinja({
+      escenarios: true,
+      modelo: t.modelo
+    }); else desactivarNinja();
+  }
+  aviso("Personaje: " + nombrePersonaje());
+  ayuda();
+}
+
+{
+  const b = document.getElementById("opt-personaje");
+  if (b) b.onclick = () => alternarPersonaje();
+  rotularPersonaje();
+}
+
 const leerLS = (k, d) => {
   try {
     return localStorage.getItem(k) ?? d;
@@ -6346,19 +7308,56 @@ const leerLS = (k, d) => {
 
 let vrSentado = leerLS("sm_vrsentado", "0") === "1", vrCineInmersivo = leerLS("sm_vrcine", "1") === "1";
 
+let vrCineOjos = leerLS("sm_vrcine_ojos", "0") === "1";
+
+function nombreVrCine() {
+  return vrCineInmersivo ? vrCineOjos ? "OJOS DE SNAKE" : "ADENTRO" : "PANTALLA";
+}
+
 function ponerVrCine(si) {
   vrCineInmersivo = !!si;
   guardarVR();
   const b = document.getElementById("opt-vrcine");
-  if (b) b.textContent = "Cinemáticas VR: " + (vrCineInmersivo ? "adentro" : "pantalla");
+  if (b) b.textContent = "Cinemáticas VR: " + nombreVrCine().toLowerCase();
+}
+
+function rotarVrCine() {
+  if (!vrCineInmersivo) {
+    vrCineOjos = false;
+    ponerVrCine(true);
+  } else if (!vrCineOjos) {
+    vrCineOjos = true;
+    ponerVrCine(true);
+  } else {
+    vrCineOjos = false;
+    ponerVrCine(false);
+  }
+  if (!vrCineOjos) ojosSnakeCine(false);
+  try {
+    localStorage.setItem("sm_vrcine_ojos", vrCineOjos ? "1" : "0");
+  } catch {}
 }
 
 {
   const b = document.getElementById("opt-vrcine");
   if (b) {
-    b.textContent = "Cinemáticas VR: " + (vrCineInmersivo ? "adentro" : "pantalla");
-    b.onclick = () => ponerVrCine(!vrCineInmersivo);
+    b.textContent = "Cinemáticas VR: " + nombreVrCine().toLowerCase();
+    b.onclick = () => rotarVrCine();
   }
+}
+
+function rotularIdioma() {
+  const t = document.getElementById("opt-texto"), v = document.getElementById("opt-voz");
+  if (t) t.textContent = "Texto: " + idioma.nombre(idioma.texto).toLowerCase();
+  if (v) v.textContent = "Voces: " + idioma.nombre(idioma.voz).toLowerCase();
+}
+
+{
+  const t = document.getElementById("opt-texto"), v = document.getElementById("opt-voz");
+  if (t) t.onclick = () => idioma.rotar("texto", 1);
+  if (v) v.onclick = () => idioma.rotar("voz", 1);
+  idioma.iniciar().then(rotularIdioma);
+  addEventListener("mgs:idioma", rotularIdioma);
 }
 
 addEventListener("mgs:opcion", e => {
@@ -6370,10 +7369,16 @@ addEventListener("mgs:opcion", e => {
   } else if (clave === "poligonos") {
     normalesSuaves.poner(valor);
     rotularImagen();
-  }
+  } else if (clave === "desbloqueado") rotularDesbloqueo(); else if (clave === "personaje") rotularPersonaje();
 });
 
 let vrManosSnake = leerLS("sm_vrmanos", "0") === "1", vrCuerpoVisible = leerLS("sm_vrcuerpo", "0") === "1", vrGolpeMano = leerLS("sm_vrgolpe", "0") === "1";
+
+let vrTanque = leerLS("sm_vrtanque", "0") === "1";
+
+function tanqueVR() {
+  return vrTanque && R.xr.isPresenting && vrModo() === "primera" && !vuelo && modo === "escenarios" && !!juego && !vrCamara;
+}
 
 const guardarExtraVR = (k, v) => {
   try {
@@ -6464,6 +7469,35 @@ function actualizarManosVR() {
     if (enMontura) m.position.copy(armaVista.userData.base?.p || armaVista.position); else m.position.set(0, 0, 0);
     m.visible = on && g.visible;
   }
+}
+
+const brazosVR = new BrazosVR(scene), _qDos = new THREE.Quaternion, _vDos = new THREE.Vector3;
+
+dosManos.alCambiar = si => {
+  if (si) ctl.vibrar("leve"); else {
+    const g = monturaVR.parent, i = [ 0, 1 ].find(k => R.xr.getControllerGrip(k) === g);
+    if (i != null) monturaVR.quaternion.copy(g.quaternion).invert().multiply(R.xr.getController(i).quaternion);
+  }
+};
+
+function actualizarDosManosVR(dt) {
+  const enMano = R.xr.isPresenting && !!armaVista?.visible && armaVista.parent === monturaVR && !!monturaVR.parent && monturaVR.userData.alineada;
+  const cs = [ 0, 1 ].map(i => R.xr.getController(i)), lado = manoArma();
+  const puede = enMano && [ WP.FAMAS, WP.PSG1, WP.STINGER ].includes(inventario?.arma) && !paneles.menuAbierto && !inventario.abierto && !codec.abierto && !enDemo && !demo.ocupada;
+  if (dosManos.actualizar({
+    principal: cs.find(c => c.userData.lado === lado),
+    apoyo: cs.find(c => c.userData.lado && c.userData.lado !== lado),
+    puede: puede,
+    dt: dt
+  })) monturaVR.quaternion.copy(monturaVR.parent.getWorldQuaternion(_qDos).invert().multiply(dosManos.q));
+  const M = manosSnake.mallas;
+  brazosVR.actualizar({
+    brazos: M?.brazos,
+    ojos: cam.getWorldPosition(_vDos),
+    yaw: rumboCuerpoVR ?? yawCabezaVR(),
+    manos: M,
+    visible: R.xr.isPresenting && vrManosSnake && !terceraPersona() && !vrCamara && !camLibre.activa && !enDemo && !demo.ocupada
+  });
 }
 
 function torsoVR(C, visible) {
@@ -6677,7 +7711,7 @@ function guardarVR() {
   } catch {}
 }
 
-let espacioBase = null;
+let espacioBase = null, alturaRealVR = 0;
 
 function calibrarAltura() {
   if (!R.xr.isPresenting) return;
@@ -6685,8 +7719,9 @@ function calibrarAltura() {
   if (!base) return;
   R.xr.getSession().requestAnimationFrame((t, cuadro) => {
     let dy = 0;
+    const p = cuadro.getViewerPose(base);
+    if (p && p.transform.position.y > .5) alturaRealVR = p.transform.position.y;
     if (vrSentado) {
-      const p = cuadro.getViewerPose(base);
       if (!p) return;
       dy = ALTURA_OJOS - p.transform.position.y;
     }
@@ -6704,11 +7739,32 @@ function calibrarAltura() {
   aviso(vrSentado ? "Modo sentado: altura ajustada" : "Modo parado");
 }
 
+function preguntarPosturaVR() {
+  if (!R.xr.isPresenting || !paneles) return;
+  if (!paneles.menuAbierto && !paneles.abrirMenu()) return;
+  const elegir = si => {
+    vrSentado = si;
+    guardarVR();
+    calibrarAltura();
+  };
+  paneles.submenu([ {
+    texto: "JUEGO PARADO",
+    accion: () => elegir(false)
+  }, {
+    texto: "JUEGO SENTADO",
+    accion: () => elegir(true)
+  } ]);
+  try {
+    paneles._menu.sel = vrSentado ? 1 : 0;
+    paneles._menu.ver++;
+  } catch {}
+}
+
 const bajaVR = {
   y: 0
 };
 
-const _tvO = new THREE.Vector3, _tvP = new THREE.Vector3, _tvL = new THREE.Vector3, _tvD = new THREE.Vector3;
+const _tvO = new THREE.Vector3, _tvP = new THREE.Vector3, _tvL = new THREE.Vector3, _tvD = new THREE.Vector3, _tvH = new THREE.Vector3;
 
 function seguirTerceraVR(dt) {
   if (!R.xr.isPresenting) return;
@@ -6732,13 +7788,27 @@ function seguirTerceraVR(dt) {
     if (!terceraVR.activo || terceraVR.saltar || S.distanceTo(_tvO) > 6) S.copy(_tvO); else S.lerp(_tvO, 1 - Math.exp(-Math.min(dt, .1) * (k < 1 ? 8 : 3)));
     terceraVR.activo = true;
     terceraVR.saltar = false;
-    alfaCuerpo(_tvL.copy(S).setY(S.y + ALTURA_OJOS).distanceTo(_tvP));
+    _tvH.copy(cam.position).applyAxisAngle(_ejeY, rig.rotation.y).add(S);
+    const kh = distanciaCamara(_tvP, _tvH, _tvD, .25, .3);
+    if (kh < 1) {
+      _tvL.copy(_tvH).sub(_tvP).multiplyScalar(kh).add(_tvP).sub(_tvH);
+      S.add(_tvL);
+      _tvH.add(_tvL);
+    }
+    alfaCuerpo(_tvH.distanceTo(_tvP));
+    pivoteTercera.copy(_tvP);
     V = rig.worldToLocal(_tvL.copy(S));
   } else {
     terceraVR.activo = false;
     if (alfaCuerpoAct < 1) alfaCuerpo(null);
   }
-  const bajar = !V && vrModo() === "primera" && modo === "escenarios" && !!juego && !titulo.visible && !enDemo && !demo.ocupada && !vrCamara ? reptando || ducto.activo ? -1.15 : agachado ? -.6 : 0 : 0;
+  const fpVR = !V && vrModo() === "primera" && modo === "escenarios" && !!juego && !titulo.visible && !enDemo && !demo.ocupada && !vrCamara;
+  let bajar = 0;
+  if (fpVR) {
+    const ojo = alturaOjosSnake(dt);
+    if (vrSentado) bajar = ojo - ALTURA_OJOS; else if (reptando || ducto.activo || snakeScript.motion?.fis?.escalera) bajar = ojo - (alturaRealVR || ALTURA_OJOS); else if (agachado) bajar = Math.min(0, ojo - cam.position.y);
+    if (!vrSentado) bajar = Math.max(bajar, Math.min(0, .12 - cam.position.y));
+  } else ojosSnake.y = null;
   bajaVR.y += (bajar - bajaVR.y) * (1 - Math.exp(-Math.min(dt, .1) * 8));
   if (Math.abs(bajaVR.y) < .002) bajaVR.y = 0;
   if (V) soporteVR.position.copy(V); else {
@@ -6785,12 +7855,47 @@ function seguirCabezaVR() {
 
 const _ciP = new THREE.Vector3, _ciQ = new THREE.Quaternion, _ciO = new THREE.Vector3, _ciE = new THREE.Euler, _ciY = new THREE.Quaternion, _ciEJE = new THREE.Vector3(0, 1, 0);
 
+const _ojP = new THREE.Vector3, _ojF = new THREE.Vector3, _ojQ = new THREE.Quaternion;
+
+function ojosSnakeCine(si) {
+  let hay = null;
+  for (const M of demo.modelos || []) {
+    const h = M?.huesos?.[6];
+    if (!h || !M.raiz) continue;
+    const base = String(M.info?.glb || "").replace(/^.*\//, "").replace(/\.glb$/, "");
+    if (!(M.info?.nombre === "snake" || /^Solid Snake/.test(NOMBRES[base] || ""))) continue;
+    const usar = si && !hay && M.raiz.visible;
+    h.scale.setScalar(usar ? .001 : 1);
+    if (!usar) continue;
+    h.updateWorldMatrix(true, false);
+    h.getWorldPosition(_ojP);
+    h.getWorldQuaternion(_ojQ);
+    _ojF.set(0, 0, 1).applyQuaternion(_ojQ);
+    _ojF.y = 0;
+    if (_ojF.lengthSq() < 1e-6) continue;
+    _ojF.normalize();
+    _ojP.addScaledVector(_ojF, .09);
+    _ojP.y += .03;
+    hay = {
+      p: _ojP,
+      yaw: Math.atan2(-_ojF.x, -_ojF.z)
+    };
+  }
+  return hay;
+}
+
 function dibujarCineInmersivo(dt = 1 / 30) {
   const c = demo.camara;
   if (!c) return false;
-  c.updateMatrixWorld();
-  c.getWorldPosition(_ciP);
-  c.getWorldQuaternion(_ciQ);
+  const ojos = ojosSnakeCine(vrCineOjos);
+  if (ojos) {
+    _ciP.copy(ojos.p);
+    _ciQ.setFromEuler(_ciE.set(0, ojos.yaw, 0, "YXZ"));
+  } else {
+    c.updateMatrixWorld();
+    c.getWorldPosition(_ciP);
+    c.getWorldQuaternion(_ciQ);
+  }
   const u = rig.userData, s = cineVR, nueva = u.cineInfo !== demo.info;
   const corte = nueva || !s.pAnt || s.pAnt.distanceTo(_ciP) > .8 || s.qAnt.angleTo(_ciQ) > 12 * Math.PI / 180;
   const deriva = !corte && s.qPlano.angleTo(_ciQ) > 45 * Math.PI / 180;
@@ -6840,6 +7945,18 @@ const cineVR = {
   cineVR.velo.renderOrder = 1;
   cineVR.velo.visible = false;
   cineVR.ancla.add(cineVR.velo);
+  cineVR.agua = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 8), new THREE.MeshBasicMaterial({
+    side: THREE.BackSide,
+    blending: THREE.MultiplyBlending,
+    premultipliedAlpha: true,
+    transparent: true,
+    depthTest: false,
+    depthWrite: false,
+    fog: false
+  }));
+  cineVR.agua.renderOrder = 0;
+  cineVR.agua.visible = false;
+  cineVR.ancla.add(cineVR.agua);
   cineVR.cv = document.createElement("canvas");
   cineVR.cv.width = 1024;
   cineVR.cv.height = 128;
@@ -6870,11 +7987,17 @@ function capaCineVR(dt) {
   m.color.setScalar(blanco > negro ? 1 : 0);
   m.opacity = Math.max(negro, blanco);
   cineVR.velo.visible = m.opacity > .01;
-  const t = demo.tiempo || 0, l = demo._salida ? null : (demo.subtitulos || []).find(x => t >= x.t && t < x.t + x.d), texto = l ? String(l.texto) : "";
+  const t = demo.tiempo || 0, l = demo._salida || !caption.on ? null : (demo.subtitulos || []).find(x => t >= x.t && t < x.t + x.d);
+  const cvJ = l?.tj != null ? demo.lienzoSubtitulo?.(l) : null;
+  const texto = l ? l.tj != null ? cvJ ? "" + l.t : "" : String(l.texto) : "";
   if (texto !== cineVR.texto) {
     const x = cineVR.cv.getContext("2d");
     x.clearRect(0, 0, 1024, 128);
-    if (texto) {
+    if (cvJ) {
+      const k = Math.max(1, Math.floor(Math.min(1e3 / cvJ.width, 124 / cvJ.height)));
+      x.imageSmoothingEnabled = false;
+      x.drawImage(cvJ, 512 - cvJ.width * k / 2, 64 - cvJ.height * k / 2, cvJ.width * k, cvJ.height * k);
+    } else if (texto) {
       const filas = texto.split(/\r?\n/);
       x.font = '38px "Trebuchet MS", Verdana, Arial, sans-serif';
       x.textAlign = "center";
@@ -6892,7 +8015,11 @@ function capaCineVR(dt) {
     cineVR.subs.visible = !!texto;
     cineVR.texto = texto;
   }
-  if (!cineVR.velo.visible && !cineVR.subs.visible) return;
+  cam.updateMatrixWorld();
+  const za = demo.activa ? zonaAguaDemo(cam.getWorldPosition(_ojo)) : null;
+  if (za) cineVR.agua.material.color.setRGB(Math.min(1, za.color.x), Math.min(1, za.color.y), Math.min(1, za.color.z));
+  cineVR.agua.visible = !!za && !(aguaVR.malla?.visible && demo.escena === scene);
+  if (!cineVR.velo.visible && !cineVR.subs.visible && !cineVR.agua.visible) return;
   cam.updateMatrixWorld();
   cineVR.ancla.matrix.copy(cam.matrixWorld);
   cineVR.ancla.matrixWorldNeedsUpdate = true;
@@ -7014,6 +8141,7 @@ const filtroPantalla = new FiltroPantalla(R, {
       }
     } finally {
       filtroPantalla.terminar();
+      if (grabador.activo) grabador.cuadro(R);
     }
   }));
 }
@@ -7057,17 +8185,22 @@ R.setAnimationLoop(() => {
     miraScope.dibujar();
   }
   {
-    const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && !misionesVR.activo && !muerteSnake;
+    const ok = !!juego && modo === "escenarios" && !titulo.visible && !enDemo && !demo.ocupada && !camLibre.activa && (!misionesVR.activo || misionesVR.conCamara) && !muerteSnake;
     const xrPrimera = R.xr.isPresenting && vrModo() === "primera";
     const enPrimera = !terceraPersona() || camaraJuegoActiva() && !!teclas.KeyE;
-    const tipo = !ok ? null : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (enPrimera || apuntaHombro()) ? "stinger" : inventario.arma === WP.PSG1 && !R.xr.isPresenting && !terceraPersona() && (armas?.zoom ?? 0) > 330 ? "rifle" : inventario.item >= IT.BOX1 && inventario.item <= IT.BOX3 && enPrimera ? "caja" : inventario.item === IT.CAMERA && !terceraPersona() ? "camara" : enPrimera && inventario.item === IT.NVG ? "nvg" : enPrimera && inventario.item === IT.THERMG ? "termica" : enPrimera && inventario.item === IT.GASMASK && inventario.arma !== WP.PSG1 ? "mascara" : null;
+    const rifleEscena = ok && hayMiraRifleEscena();
+    const tipo = !ok ? null : rifleEscena ? "rifle" : camaraEnMisil() || xrPrimera && armas?.misil ? "nikita" : inventario.arma === WP.STINGER && (enPrimera || apuntaHombro()) ? "stinger" : inventario.arma === WP.PSG1 && !R.xr.isPresenting && !terceraPersona() && (armas?.zoom ?? 0) > 330 ? "rifle" : inventario.item >= IT.BOX1 && inventario.item <= IT.BOX3 && enPrimera ? "caja" : inventario.item === IT.CAMERA && !terceraPersona() ? "camara" : enPrimera && !R.xr.isPresenting && inventario.item === IT.NVG ? "nvg" : enPrimera && !R.xr.isPresenting && inventario.item === IT.THERMG ? "termica" : enPrimera && inventario.item === IT.GASMASK && inventario.arma !== WP.PSG1 ? "mascara" : null;
     miraArma.actualizar(enPausa() || codec.abierto || inventario.abierto ? 0 : dtReal, {
       tipo: tipo,
       camara: tipo === "nikita" && R.xr.isPresenting ? ventanaMira.cam : camApuntar(),
       armas: tipo === "stinger" || tipo === "nikita" ? armas : null,
       vr: R.xr.isPresenting,
-      zoom: armas?.zoomItem
+      zoom: armas?.zoomItem,
+      rapida: rifleEscena
     });
+    const fpArma = !terceraPersona() || xrPrimera;
+    audioMGS.primeraPersona(codec.abierto || ducto.activo ? null : ok && (miraScope.activo || tipo === "stinger" || tipo === "rifle" && !rifleEscena || tipo === "camara" || fpArma && (inventario.arma === WP.STINGER || inventario.arma === WP.PSG1) || camaraJuegoActiva() && !!camJuego?.primeraPersona));
+    audioMGS.voz(codec.voz?.estado === 2 || !!codec.vozJuego);
     let vm = null;
     if (ok && xrPrimera && armas && !inventario.abierto && !codec.abierto && !enPausa()) {
       if (armas.misil) {
@@ -7107,7 +8240,7 @@ R.setAnimationLoop(() => {
   actualizarRadarVR();
   paneles.update(dtReal);
   seguirTerceraVR(dtReal);
-  if (titulo.visible) {
+  if (titulo.visible && !titulo.demoAtraccion) {
     paneles.dibujarSolo(R, cam);
     return;
   }
@@ -7151,11 +8284,7 @@ R.setAnimationLoop(() => {
     actualizarTintes();
     if (R.xr.isPresenting && vrCineInmersivo && demo.activa && demo.escena && dibujarCineInmersivo(Math.min(dtReal, .1))) return;
     if (!paneles.dibujarCine(R, cam, demo)) {
-      if (zonasDemo.de !== demo.aguaNivel) zonasDemo = {
-        de: demo.aguaNivel,
-        zonas: demo.aguaNivel ? zonasAguaDe(demo.aguaNivel) : zonasAgua
-      };
-      const z = demo.activa && demo.camara ? vistaAgua.zonaEn(demo.camara.getWorldPosition(_ojo), zonasDemo.zonas) : null;
+      const z = demo.activa && demo.camara ? zonaAguaDemo(demo.camara.getWorldPosition(_ojo)) : null;
       if (z) {
         demo._destino = vistaAgua.preparar(R);
         demo.render(R);
@@ -7168,7 +8297,10 @@ R.setAnimationLoop(() => {
   let dt = Math.min(dtReal, .1);
   pantallaGameOver.dibujar(Math.min(dtReal, .2));
   const pausa = enPausa() || pantallaGameOver.activo;
-  if (partida && juego && modo === "escenarios") partida.tick(enPausa() ? 0 : dtReal);
+  if (partida && juego && modo === "escenarios") partida.tick(enPausa() ? 0 : dtReal); else if (juego && modo === "escenarios" && !misionesVR.activo) {
+    if (!cargandoNivel) sincEscenarios.tick(enPausa() ? 0 : dtReal, inventario, guion?.vars, juego);
+  } else sincEscenarios.olvidar();
+  if (mapasPuerta && juego) mirarMapasPuerta();
   $("#pausa").hidden = !pausa || TACTIL;
   if (pausa) dt = 0;
   if (juego && modo === "escenarios" && !titulo.visible && (!misionesVR.activo || misionesVR.conInventario)) inventario.update(dtReal, pausa);
@@ -7184,10 +8316,14 @@ R.setAnimationLoop(() => {
   if (codec.abierto) {
     dt = 0;
     if (R.xr.isPresenting) codec.leerXR(fuentesCodecXR());
-  } else if (juego && modo === "escenarios" && !pausa) guion.actualizar(dt, snakeGuion(), otrosGuion());
+  } else if (juego && modo === "escenarios" && !pausa) {
+    const sn = snakeGuion();
+    guion.actualizar(dt, sn, otrosGuion());
+    integral.actualizarStaff(sn);
+  }
   if (pausa && !R.xr.isPresenting && modo === "escenarios" && (++cuadroPausa & 3) !== 0) return;
   actualizarSnakeGuion(dt);
-  demoCancel.actualizar(pausa || codec.abierto ? 0 : dtReal, (teclas.KeyC ? 64 : 0) | (teclas.KeyG ? 32 : 0) | (teclas.Enter ? 2048 : 0));
+  demoCancel.actualizar(pausa || codec.abierto ? 0 : dtReal, (teclas.KeyC ? 64 : 0) | (teclas.KeyG ? 32 : 0) | (teclas.Enter ? 2048 : 0) | (R.xr.isPresenting ? botonesCineVR : 0));
   lifeUp.actualizar(pausa || codec.abierto ? 0 : dtReal);
   movie.actualizar(pausa ? 0 : dtReal);
   escenaPendiente.actualizar(pausa || codec.abierto ? 0 : dtReal);
@@ -7199,6 +8335,7 @@ R.setAnimationLoop(() => {
   actualizarDucto();
   mover(vrCamara ? Math.min(dtReal, .1) : codec.padTrabado || din?.bloqueaControl ? 0 : dt);
   actualizarCamara(dt);
+  misionesVR.mezclarSalida(cam, camaraJuegoActiva(), dt);
   if (audioMGS.espacial) {
     if (R.xr.isPresenting) {
       _oido.setFromMatrixPosition(_mCabeza);
@@ -7231,7 +8368,7 @@ R.setAnimationLoop(() => {
     if (armas && modo === "escenarios") {
       armas.holguraFijado = R.xr.isPresenting ? AJ.stinger : 1;
       armas.update(dt);
-      armas.actualizarFijado(camApuntar());
+      armas.actualizarFijado(camFijado());
       actualizarStealth();
       pistaMeryl.cuadro(dtReal, !enPausa() && !codec.abierto && !enDemo && !demo.ocupada);
       if (!enPausa() && !codec.abierto) retruco.cuadro(dtReal, {
@@ -7260,7 +8397,9 @@ R.setAnimationLoop(() => {
   if (juego && modo === "escenarios") {
     let ry = yaw;
     if (R.xr.isPresenting) ry = yawCabezaVR();
-    if (misionesVR.ocultaHud) hud.ctx?.clearRect(0, 0, hud.cv.width, hud.cv.height); else hud.dibujar({
+    const dtHud = R.xr.isPresenting ? calidadCasco.dtHud(dt) : dt;
+    inventario.jamming = !!menuActual()?.jam;
+    if (misionesVR.ocultaHud) hud.ctx?.clearRect(0, 0, hud.cv.width, hud.cv.height); else if (dtHud !== null) hud.dibujar({
       modo: juego.modo,
       tiempo: juego.tiempo,
       vida: juego.vida,
@@ -7285,14 +8424,17 @@ R.setAnimationLoop(() => {
       chaff: !!armas && armas.chaff > 0,
       o2: juego.o2Hud?.() ?? null,
       sinRadar: dificultad >= 3 || ducto.activo,
+      jamming: !!menuActual()?.jam,
+      radarApagado: !!menuActual()?.radarOff,
       camaraFotos: miraArma.tipo === "camara",
       vidaMax: inventario.vidaMax,
       menuAbierto: inventario.abierto,
       primeraPersona: !terceraPersona(),
       nivelAlerta: juego.com ? juego.modo === 2 ? Math.min(256, juego.com.evasion) : juego.modo === 1 ? juego.com.alerta : 0 : undefined,
-      sonar: id => seEn(id)
-    }, dt);
-    radarTex.needsUpdate = true;
+      sonar: id => seEn(id),
+      sinPantalla: CASCO && R.xr.isPresenting && REND_CASCO.atajos
+    }, dtHud);
+    if (dtHud !== null) radarTex.needsUpdate = true;
     $("#mira").style.display = (TACTIL || document.pointerLockElement === R.domElement) && vista !== "arriba" && !miraScope.visible && miraArma.tipo !== "camara" && miraArma.tipo !== "rifle" ? "block" : "none";
   }
   {}
@@ -7305,6 +8447,7 @@ R.setAnimationLoop(() => {
     if (g.userData.modelo) g.userData.modelo.visible = !vrManosSnake && !(armaVista?.visible && armaVista.userData.equipada && armaVista.parent === monturaVR && monturaVR.parent === g);
   }
   if (R.xr.isPresenting) alinearArmaVR();
+  actualizarDosManosVR(dt);
   for (const mx of mezcladores) mx.update(dt);
   if (modo === "catalogo" && !R.xr.isPresenting) {
     orbita.update();
@@ -7322,9 +8465,12 @@ R.setAnimationLoop(() => {
       R.setRenderTarget(vistaAgua.preparar(R));
       R.render(scene, cam);
       vistaAgua.mostrar(R, dt || Math.min(dtReal, .1), z);
-    } else if (!(pantallaVR && paneles.dibujarPantalla(R, cam, scene, {
+    } else if (comparador.activo && !R.xr.isPresenting && modo === "escenarios") comparador.dibujar(R, scene, cam, ladoComparador); else if (!(pantallaVR && paneles.dibujarPantalla(R, cam, scene, {
       radar: juego && !misionesVR.ocultaHud ? radarTex : null
-    }))) R.render(scene, cam);
+    }))) {
+      if (comparador.alterna) ladoComparador(comparador.alternar(Math.min(dtReal, .1)));
+      R.render(scene, cam);
+    }
     if (R.xr.isPresenting && !pantallaVR) {
       camCasco.matrixWorld.copy(cam.matrixWorld);
       camCasco.matrixWorldInverse.copy(cam.matrixWorldInverse);
@@ -7361,9 +8507,20 @@ const misionesVR = new VRMisiones({
   },
   juego: () => juego,
   cargarGlb: u => cargar(u),
-  cuerpo: () => terceraPersona() || misionesVR.camaraEspecial()?.verSnake ? cuerpo?.obj : null,
+  ponerCamJuego: c => {
+    if (!camJuego) camJuego = c;
+  },
+  cuerpo: () => terceraPersona() || misionesVR.camaraEspecial()?.verSnake ? ninjaActivo() ? ninjaJ.obj : cuerpo?.obj : null,
+  ninja: {
+    activar: cfg => activarNinja(cfg),
+    desactivar: () => desactivarNinja(),
+    get actual() {
+      return ninjaJ;
+    }
+  },
   camJuego: () => camJuego,
   hud: hud,
+  movie: movie,
   mostrarArma: si => {
     if (armaVista) armaVista.visible = si && !terceraPersona();
   },
@@ -7407,6 +8564,16 @@ const paneles = new VRPaneles({
   renderer: R,
   camara: cam
 });
+
+{
+  let tAnt = 0;
+  paneles.aguaCine = (R, rt, d) => {
+    const ahora = performance.now(), dt = tAnt ? Math.min(.1, (ahora - tAnt) / 1e3) : 1 / 30;
+    tAnt = ahora;
+    const z = d.activa && d.camara ? zonaAguaDemo(d.camara.getWorldPosition(_ojo)) : null;
+    return z ? vistaAgua.sobre(R, rt, z, dt) : null;
+  };
+}
 
 aplicarZurdo();
 
@@ -7462,6 +8629,21 @@ function soltarVR() {
 
 paneles.on("boton", (b, abajo) => {
   botonMandoVR(b, abajo);
+  {
+    const bit = {
+      cruz: 64,
+      circulo: 32,
+      start: 2048
+    }[b] || 0;
+    if (bit) botonesCineVR = abajo ? botonesCineVR | bit : botonesCineVR & ~bit;
+    if (bit && demoCancel.activo && demoCancel.fase === "espera" && demoCancel.mascara & bit) return;
+    if (bit === 64 && padDemo.activo && padDemo.cancelable) return;
+  }
+  if (ninjaActivo() && [ "circulo", "cuadrado", "cruz", "R1", "L1", "R2" ].includes(b) && !(b === "cruz" && ninjaJ.escenarios)) {
+    botonesVRNinja[b.toLowerCase()] = abajo;
+    if (b === "circulo" && abajo) botonesGuion |= 32;
+    return;
+  }
   if (R.xr.isPresenting && armas && (inventario.item === IT.SCOPE || inventario.item === IT.CAMERA) && (b === "circulo" || b === "cruz")) {
     armas.zoomPedido = abajo ? b === "circulo" ? 3200 : 320 : armas.zoomItem;
     return;
@@ -7529,7 +8711,10 @@ paneles.on("boton", (b, abajo) => {
         paneles.submenu([ ...CONTROLES_QUEST().map(t => ({
           texto: t,
           cierra: false
-        })), volverControles ]);
+        })), ...personajeNinja() ? ayudaNinjaQuest(ctl.botonQuestDe).map(t => ({
+          texto: t,
+          cierra: false
+        })) : [], volverControles ]);
       },
       cierra: false
     }, {
@@ -7552,6 +8737,9 @@ paneles.on("boton", (b, abajo) => {
     }), opcion(() => "GOLPE CON LA MANO: " + (vrGolpeMano ? "SI" : "NO"), () => {
       vrGolpeMano = !vrGolpeMano;
       guardarExtraVR("sm_vrgolpe", vrGolpeMano);
+    }), opcion(() => "CONTROLES DE TANQUE: " + (vrTanque ? "SI" : "NO"), () => {
+      vrTanque = !vrTanque;
+      guardarExtraVR("sm_vrtanque", vrTanque);
     }), opcion(() => "MANDO: PUERTO " + (puerto2Activo() ? 2 : 1), () => ponerPuerto2(!puerto2Activo())), opcion(() => "MOVERSE HACIA: " + (Q.dir === "control" ? "EL CONTROL" : "LA MIRADA"), () => ctl.ponerQuest("dir", Q.dir === "control" ? "mirada" : "control")), opcion(() => "VIBRACION: " + (Q.vibra > 0 ? pct(Q.vibra) : "NO"), d => {
       ctl.ponerQuest("vibra", ctl.pasoLista(ctl.VIBRAS_QUEST, Q.vibra, d, true));
       ctl.vibrar("leve");
@@ -7650,6 +8838,10 @@ paneles.on("boton", (b, abajo) => {
         texto: () => "LUZ: " + (luzOriginal ? "ORIGINAL" : "MODERNA"),
         accion: () => alternarLuz(),
         cierra: false
+      } : null, enEscenario ? {
+        texto: () => "COMPARAR ORIGINAL/MEJORADO: " + (comparador.alterna ? "ALTERNANDO" : "NO"),
+        accion: () => alternarComparadorVR(),
+        cierra: false
       } : null, !menuMisiones ? {
         texto: () => "TEXTURAS: " + (texturasPixel.pixel ? "PIXELADAS (ORIGINAL)" : "SUAVIZADAS"),
         accion: () => texturasPixel.alternar(),
@@ -7670,6 +8862,16 @@ paneles.on("boton", (b, abajo) => {
       })), hayJuego ? {
         texto: () => "TODAS LAS ARMAS E ITEMS: " + (todoArmas ? "SI" : "NO"),
         accion: () => alternarTodo(),
+        cierra: false
+      } : null, {
+        texto: () => "TODO DESBLOQUEADO: " + (todoDesbloqueado() ? "SI" : "NO"),
+        accion: () => alternarDesbloqueo(),
+        cierra: false
+      }, !menuMisiones ? {
+        texto: () => "PERSONAJE: " + nombrePersonaje(true),
+        izq: () => alternarPersonaje(-1),
+        der: () => alternarPersonaje(1),
+        accion: () => alternarPersonaje(1),
         cierra: false
       } : null, hayJuego ? {
         texto: () => "RADAR: " + (vrRadarGira ? "GIRA CONMIGO" : "NORTE ARRIBA"),
@@ -7694,8 +8896,46 @@ paneles.on("boton", (b, abajo) => {
         texto: () => vrCamara ? "SALIR DEL MODO CAMARA" : "MODO CAMARA (VOLAR LIBRE)",
         accion: () => alternarCamaraVR()
       } : null, {
-        texto: () => "CINEMATICAS VR: " + (vrCineInmersivo ? "ADENTRO" : "PANTALLA"),
-        accion: () => ponerVrCine(!vrCineInmersivo),
+        texto: () => "CINEMATICAS VR: " + nombreVrCine(),
+        accion: () => rotarVrCine(),
+        cierra: false
+      }, {
+        texto: () => "CALIDAD DEL CASCO: " + calidadCasco.nombre(),
+        izq: () => calidadCasco.rotar(-1),
+        der: () => calidadCasco.rotar(1),
+        accion: () => calidadCasco.rotar(1),
+        cierra: false
+      }, {
+        texto: () => "FRECUENCIA DEL CASCO: " + frecuenciaCasco.nombre(),
+        izq: () => frecuenciaCasco.rotar(-1),
+        der: () => frecuenciaCasco.rotar(1),
+        accion: () => frecuenciaCasco.rotar(1),
+        cierra: false
+      }, {
+        texto: () => "TEXTO: " + idioma.nombre(idioma.texto),
+        izq: () => idioma.rotar("texto", -1),
+        der: () => idioma.rotar("texto", 1),
+        accion: () => idioma.rotar("texto", 1),
+        cierra: false
+      }, {
+        texto: () => "IDIOMA DE VOZ: " + idioma.nombre(idioma.voz),
+        izq: () => idioma.rotar("voz", -1),
+        der: () => idioma.rotar("voz", 1),
+        accion: () => idioma.rotar("voz", 1),
+        cierra: false
+      }, {
+        texto: () => "SUBTITULOS (CAPTION): " + (caption.on ? "SI" : "NO"),
+        accion: () => {
+          caption.poner();
+          rotularOpcionOriginal();
+        },
+        cierra: false
+      }, {
+        texto: () => "SONIDO: " + (audioMGS.mono ? "MONO" : "ESTEREO"),
+        accion: () => {
+          audioMGS.setMono(!audioMGS.mono);
+          rotularOpcionOriginal();
+        },
         cierra: false
       }, {
         texto: "CONTROLES (BOTONES, GIRO, MANO...)",
@@ -7749,7 +8989,185 @@ function activarSmoking(p) {
   return true;
 }
 
+function simularClearSmoking(p) {
+  for (const [n, x] of [ [ "$w:L0006", 3 ], [ "$w:L0060", 1 ], [ "$w:L005e", 1 ] ]) p.vars.set(n, x);
+  activarSmoking(p);
+  for (const n of [ "$w:L0006", "$w:L0060", "$w:L005e", "$w:L0004", "$f:G0435.0" ]) p._varsaveValor?.(n, p.vars.get(n));
+}
+
 titulo.fotosAlbum = () => inventario.fotos;
+
+titulo.alDemo = fin => {
+  let cortada = false, mirar = null;
+  titulo.demoAtraccion = true;
+  (async () => {
+    const pasos = (await cargarCadenas())?.apertura?.pasos || [];
+    for (const p of pasos) {
+      if (cortada || !titulo.visible) break;
+      await correrDemos([ p ], {
+        galeria: true
+      });
+    }
+  })().catch(e => console.warn("demo del título", e)).finally(() => {
+    clearInterval(mirar);
+    titulo.demoAtraccion = false;
+    if (!cortada) fin(false);
+  });
+  mirar = setInterval(() => {
+    if (cortada && demo.activa && !demo._salida) demo.saltear();
+  }, 100);
+  return () => {
+    cortada = true;
+    if (demo.activa) demo.saltear();
+  };
+};
+
+const galeria = new Galeria({
+  jugar: it => verDeGaleria(it),
+  enVR: () => R.xr.isPresenting,
+  reabrirVR: () => abrirListaVR(galeria),
+  grabar: !TACTIL && grabador.soportado ? {
+    get: () => grabarCine,
+    poner: () => ponerGrabarCine()
+  } : null
+});
+
+const reproductor = new Reproductor({
+  sonido: audioMGS
+});
+
+const desarrollo = new SalaDesarrollo({
+  demo: d => correrDemos([ {
+    st: d.st,
+    demo: d.id,
+    pasada: 0,
+    t: 0
+  } ], {
+    galeria: true
+  }),
+  voz: id => codec.reproducirVoz(id),
+  pararVoz: () => codec.pararVozJuego(),
+  vibrar: p => ctl.vibrar(p),
+  enVR: () => R.xr.isPresenting,
+  reabrirVR: () => abrirListaVR(desarrollo)
+});
+
+async function abrirDesarrollo() {
+  usarPartida(null);
+  if (misionesVR.activo) misionesVR.cerrar();
+  modo = "galeria";
+  audioMGS.callar();
+  $("#panel").classList.add("oculto");
+  $("#mostrar").hidden = true;
+  $("#tactil").hidden = true;
+  await desarrollo.cargar();
+  const fin = desarrollo.abrir();
+  const vigilar = setInterval(() => {
+    if (!desarrollo.activa || desarrollo.jugando || enDemo || movie.activo) return;
+    if (R.xr.isPresenting) {
+      if (desarrollo.visible) desarrollo.ocultar();
+      if (!paneles.menuAbierto) abrirListaVR(desarrollo);
+    } else if (!desarrollo.visible) desarrollo.mostrar();
+  }, 300);
+  const r = await fin;
+  clearInterval(vigilar);
+  if (paneles.menuAbierto) paneles.cerrarMenu();
+  if (r?.carga) return entrarDesarrollo(r.carga);
+  mostrarTitulo("menu", "desarrollo");
+}
+
+async function entrarDesarrollo(n) {
+  const p = await Partida.nueva(dificultad);
+  p.vars.g.fill(0);
+  p.vars.l.fill(0);
+  for (const [o, b] of n.g || []) if (o < p.vars.g.length) p.vars.g[o] = b;
+  for (const [o, b] of n.l || []) if (o < p.vars.l.length) p.vars.l[o] = b;
+  p.vars.set("$w:L0002", dificultad - 1);
+  if (!(p.vars.get("$w:L0018") > 0)) p.vars.set("$w:L0018", 256);
+  if (!(p.vars.get("$w:L0016") > 0)) p.vars.set("$w:L0016", p.vars.get("$w:L0018"));
+  p._pend = {
+    tipo: "carga",
+    st: n.st,
+    opts: {
+      m: n.m?.length ? [ n.m[0] ] : [],
+      ...n.p?.length ? {
+        p: n.p
+      } : {}
+    }
+  };
+  usarPartida(p);
+  cambiarModo("jugar", n.st);
+}
+
+function verDeGaleria(it) {
+  if (it.tipo !== "video") return correrDemos([ {
+    st: it.st,
+    demo: it.id,
+    pasada: 0,
+    t: 0
+  } ], {
+    galeria: true
+  });
+  return new Promise(fin => {
+    const grabando = empezarGrabacion();
+    let listo = false;
+    const terminar = () => {
+      if (!listo) {
+        listo = true;
+        if (grabando) guardarGrabacion("video_" + it.id);
+        fin();
+      }
+    };
+    movie.iniciar({
+      tipo: "MOVIE",
+      nombre: parseInt(it.id, 16),
+      opts: {}
+    }, {
+      negro: si => {
+        const f = $("#fundido");
+        if (f) f.style.opacity = si ? 1 : 0;
+      },
+      alTerminar: terminar
+    });
+    const mirar = () => {
+      if (listo) return;
+      if (!movie.activo || movie.estado === "sin-video") {
+        movie.cortar();
+        terminar();
+      } else setTimeout(mirar, 400);
+    };
+    setTimeout(mirar, 1500);
+  });
+}
+
+function abrirListaVR(lista) {
+  if (!R.xr.isPresenting) return;
+  if (!paneles.menuAbierto && !paneles.abrirMenu()) return;
+  paneles.submenu(lista.entradasVR());
+}
+
+async function abrirExtraTitulo(lista, cursor) {
+  usarPartida(null);
+  if (misionesVR.activo) misionesVR.cerrar();
+  modo = "galeria";
+  audioMGS.callar();
+  $("#panel").classList.add("oculto");
+  $("#mostrar").hidden = true;
+  $("#tactil").hidden = true;
+  await lista.cargar();
+  const fin = lista.abrir();
+  const vigilar = setInterval(() => {
+    if (!lista.activa || lista.jugando || enDemo || movie.activo) return;
+    if (R.xr.isPresenting) {
+      if (lista.pant?.abierta) lista.pant.cerrar();
+      if (!paneles.menuAbierto) abrirListaVR(lista);
+    } else if (!lista.pant?.abierta) lista.pant?.abrir(lista.sel);
+  }, 300);
+  await fin;
+  clearInterval(vigilar);
+  if (paneles.menuAbierto) paneles.cerrarMenu();
+  mostrarTitulo("menu", cursor);
+}
 
 async function mostrarTitulo(desde = "titulo", cursor = null) {
   document.exitPointerLock?.();
@@ -7768,12 +9186,22 @@ async function mostrarTitulo(desde = "titulo", cursor = null) {
       dificultad: el.dificultad
     });
     if (!r) return mostrarTitulo("menu", "jugar");
+    if (r.accion === "nueva") integral.elegirVersion(r.version);
     usarPartida(r.accion === "nueva" ? await Partida.nueva(r.dificultad) : Partida.cargar(r.datos));
+    if (r.accion === "nueva" && r.alterna) partida.vars.set("$f:G0435.3", 1);
     const clear = r.accion !== "nueva" && !!partida?.visor?.nuevaPartida;
     if (clear) delete partida.visor.nuevaPartida;
     if (clear) activarSmoking(partida);
+    if (r.accion === "nueva" && r.smoking) simularClearSmoking(partida);
     if (r.accion === "nueva" || clear) await correrDemos((await cargarCadenas())?.partida_nueva?.pasos);
     return cambiarModo("jugar", partida.st);
+  }
+  if (el.entrada === "cine") return abrirExtraTitulo(galeria, "cine");
+  if (el.entrada === "musica") return abrirExtraTitulo(reproductor, "musica");
+  if (el.entrada === "desarrollo") return abrirDesarrollo();
+  if (el.entrada === "sin_usar") {
+    location.href = "sin_usar.html";
+    return;
   }
   if (el.entrada === "vr") return cambiarModo("vr");
   cambiarModo({
@@ -7896,16 +9324,45 @@ window.__mgs = {
     return reptando;
   },
   golpe: golpe,
-  disparar: () => dispararDesdeCamara(),
+  disparar: () => {
+    dispararDesdeCamara();
+    if (armas && inventario.arma === WP.SOCOM) {
+      const m = miraSnake();
+      armas.soltar(m.o, m.d);
+    }
+  },
   get arma() {
     return armaVista;
   },
   get patrullas() {
     return patrullas;
+  },
+  ninjaJugable: {
+    activar: cfg => activarNinja(cfg),
+    desactivar: () => desactivarNinja(),
+    get actual() {
+      return ninjaJ;
+    },
+    get rumbo() {
+      return rumbo;
+    },
+    set rumbo(v) {
+      rumbo = v;
+    }
   }
 };
 
 window.__mgs.vr = misionesVR;
+
+window.__mgs.integral = integral;
+
+Object.defineProperty(window.__mgs, "nivelAlterno", {
+  get: () => nivelAlterno
+});
+
+Object.defineProperty(window.__mgs, "nivelIntegral", {
+  get: () => nivelIntegral
+});
 
 Object.defineProperty(window.__mgs, "partida", {
   get: () => partida
@@ -7922,6 +9379,27 @@ Object.defineProperty(window.__mgs, "enVR", {
 });
 
 window.__mgs.paneles = paneles;
+
+window.__mgs.desarrollo = desarrollo;
+
+Object.assign(window.__mgs, {
+  efectosGuion: efectosGuion,
+  demoCancel: demoCancel,
+  padDemo: padDemo,
+  ducto: ducto
+});
+
+Object.assign(window.__mgs, {
+  movie: movie,
+  galeria: galeria,
+  reproductor: reproductor,
+  comparador: comparador,
+  grabador: grabador,
+  grabadorClase: Grabador,
+  dosManos: dosManos,
+  brazosVR: brazosVR,
+  miraSnakeVR: () => miraSnake()
+});
 
 window.__mgs.extrasVR = {
   ajustes: AJ,
@@ -7945,3 +9423,33 @@ Object.assign(window.__mgs, {
     return hombroK;
   }
 });
+
+window.__mgs.ojosVR = () => ({
+  ojos: ojosSnake.y,
+  crudo: ojosSnake.crudo,
+  baja: bajaVR.y,
+  camY: cam.position.y,
+  soporteY: soporteVR.position.y,
+  sentado: vrSentado,
+  alturaReal: alturaRealVR,
+  reptando: reptando,
+  agachado: agachado,
+  ducto: ducto.activo,
+  vista: (() => {
+    cam.updateMatrixWorld(true);
+    return cam.getWorldPosition(new THREE.Vector3).y - rig.position.y;
+  })()
+});
+
+window.__mgs.ponerSentadoVR = si => {
+  vrSentado = !!si;
+  guardarVR();
+  calibrarAltura();
+  return vrSentado;
+};
+
+window.__mgs.ponerTanqueVR = si => {
+  vrTanque = !!si;
+  guardarExtraVR("sm_vrtanque", vrTanque);
+  return tanqueVR();
+};

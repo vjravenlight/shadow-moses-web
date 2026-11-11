@@ -1080,7 +1080,7 @@ export class RasenEl {
     switch (this.f2D0) {
      case 0:
       if (this.f2D4 === 0) {
-        if (cam?.G.fp === 1 && !this.vista) {
+        if (cam?.G.fp === 1 && !this.vista && !this.ctx.primeraPersonaMovil?.()) {
           this.f2D8 = -1;
           this.f2D0 = 2;
           this.log("cancel");

@@ -7,6 +7,8 @@ const FPS = 30;
 
 let SIN_DISCO2 = false;
 
+const SALA_DISCO_VR = /^(?:vab|vcd|vefgh|vijkl|photo)_/;
+
 fetch("assets/discos.json", {
   cache: "no-cache"
 }).then(r => r.ok ? r.json() : null).then(d => {
@@ -150,13 +152,14 @@ export class GuionVivo extends Guion {
   }
   async cargarEscenario(st, {nivel: nivel = null, entrada: entrada = "disco", usarEstadoDeEntrada: usarEstadoDeEntrada, carga: carga = null, demosVisor: demosVisor = []} = {}) {
     if (usarEstadoDeEntrada === false) entrada = "partida";
-    const pre = this._pre?.st === st ? this._pre.p : null;
+    const url = this.urlGuion(st);
+    const pre = this._pre?.st === st && this._pre.url === url ? this._pre.p : null;
     this._pre = null;
     this.script = null;
     this.st = st;
     this.zonasMapa = null;
     try {
-      this.script = await (pre || this.leerJSON(`${this.base}st/${st}.json`));
+      this.script = await (pre || (SALA_DISCO_VR.test(st) ? null : this.leerJSON(url)));
       if (!this.script) throw new Error("escenario sin guion (null)");
     } catch (e) {
       this.log("guion: sin script para", st, e.message);
@@ -170,6 +173,7 @@ export class GuionVivo extends Guion {
       if (carga) this.aplicarCarga(st, carga);
       if (!carga?.n) this.guardarPunto();
     }
+    this.op.varsEntrada?.(st, this.vars);
     const h = strcode(st);
     if (this.historial[0] !== h) {
       this.historial.unshift(h);
@@ -206,14 +210,19 @@ export class GuionVivo extends Guion {
     return true;
   }
   precargar(st) {
-    if (this._pre?.st !== st) {
+    const url = this.urlGuion(st);
+    if (this._pre?.st !== st || this._pre.url !== url) {
       this._pre = {
         st: st,
-        p: this.leerJSON(`${this.base}st/${st}.json`)
+        url: url,
+        p: SALA_DISCO_VR.test(st) ? Promise.resolve(null) : this.leerJSON(url)
       };
       this._pre.p.catch(() => {});
     }
     return this._pre.p;
+  }
+  urlGuion(st) {
+    return this.op.rutaGuion?.(st) || `${this.base}st/${st}.json`;
   }
   aplicarCarga(st, c) {
     this.vars.set("$s:L0094", this.vars.get("$s:L000c"));
@@ -248,7 +257,8 @@ export class GuionVivo extends Guion {
     }
     for (const s of nv.salidas || []) this.zonasSalida.add(s.zona);
     const ks = this.script?.nivel;
-    if (!Array.isArray(ks) || ks.length !== nv.actores.length) {
+    const acts = nv.actores.filter(a => !a.integral);
+    if (!Array.isArray(ks) || ks.length !== acts.length) {
       this.anotar("aviso", {
         motivo: "nivel.json no coincide con el guion: se crea todo lo que pida el script"
       });
@@ -257,7 +267,7 @@ export class GuionVivo extends Guion {
     }
     for (let i = 0; i < ks.length; i++) {
       const s = this.nodos.get(ks[i]);
-      if (!s || s.tipo !== nv.actores[i].tipo) {
+      if (!s || s.tipo !== acts[i].tipo) {
         this.anotar("aviso", {
           motivo: "actor " + i + " no coincide"
         });
@@ -272,7 +282,7 @@ export class GuionVivo extends Guion {
     const procsCom = new Set;
     for (const c of nv.actores.filter(a => a.tipo === "COMMANDER")) for (const k of "cnms") for (const v of c.opts?.[k] || []) if (v && typeof v === "object" && "proc" in v) procsCom.add("proc_" + v.proc.toString(16).padStart(4, "0"));
     const vistosSensor = new Set;
-    nv.actores.forEach((a, i) => {
+    acts.forEach((a, i) => {
       const k = ks[i];
       Object.defineProperty(a, "_k", {
         value: k,
@@ -394,6 +404,13 @@ export class GuionVivo extends Guion {
       this.acum -= 1;
       this.t++;
       this.reinicioDiferido = true;
+      if (this.op.gameOverEnCurso?.() && this.cola.some(c => c.delay && !c.g)) {
+        const n = this.cola.length;
+        this.cola = this.cola.filter(c => !c.delay || c.g);
+        this.anotar("delay-game-over", {
+          cortados: n - this.cola.length
+        });
+      }
       try {
         for (;;) {
           let k = -1;
@@ -576,7 +593,9 @@ export class GuionVivo extends Guion {
           k: k,
           o: obj,
           a: [],
-          origen: this.origen
+          origen: this.origen,
+          delay: true,
+          g: t < 0
         });
         return null;
       }
@@ -1171,7 +1190,19 @@ export class GuionVivo extends Guion {
         origen: this.origen
       });
     }
-    if (this.fase === "entrada") return null;
+    if (this.fase === "entrada") {
+      if (o.b) {
+        const fondo = ints("b").slice(0, 3);
+        this.anotar("map", {
+          fondo: fondo,
+          entrada: true
+        });
+        this.op.mapa?.({
+          fondo: fondo
+        });
+      }
+      return null;
+    }
     const c = {};
     if (o.p) c.agregar = ints("p");
     if (o.m) c.quitar = ints("m");

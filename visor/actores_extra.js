@@ -200,7 +200,7 @@ export class ActoresExtra {
     if (this._guionSt !== st) {
       this._guionSt = st;
       this._usados = new Set;
-      this._guion = fetch(`assets/guion/st/${st}.json`).then(r => r.json()).then(sc => {
+      this._guion = (/^(?:vr|vab|vcd|vefgh|vijkl|photo)_/.test(st) ? Promise.reject(new Error("sala de VR")) : fetch(`assets/guion/st/${st}.json`).then(r => r.json())).then(sc => {
         const idx = new Map;
         const ver = (x, prof = 0) => {
           if (!x || typeof x !== "object" || prof > 60) return;
@@ -1799,7 +1799,7 @@ class VaporesDelScript {
     E._vapores = st;
     let sc = null;
     try {
-      sc = await fetch(`assets/guion/st/${st}.json`).then(r => r.json());
+      if (!/^(?:vr|vab|vcd|vefgh|vijkl|photo)_/.test(st)) sc = await fetch(`assets/guion/st/${st}.json`).then(r => r.json());
     } catch {}
     const pos = [], vistos = new Set;
     const buscar = (x, prof = 0) => {
@@ -2599,7 +2599,7 @@ class Pegado {
     }
     let mod = null;
     try {
-      mod = await this.E.ctx.cargar(`niveles/${this.E.ctx.st?.()}/${m.toString(16).padStart(4, "0")}.glb`);
+      mod = await this.E.ctx.cargar(a.modelo || `niveles/${this.E.ctx.st?.()}/${m.toString(16).padStart(4, "0")}.glb`);
     } catch {}
     if (!mod) {
       this.muerto = true;
@@ -2703,17 +2703,31 @@ class ReparteItems {
   }
   async iniciar() {
     const a = this.a, modo = num(a, "m", 0), c = vecs(a, "c").slice(0, 16), pr = k => procDe(a, k);
-    if (modo === 1) {
-      const pts = await (this.E.ctx.ruta?.(a.mapa, num(a, "r", 0))) || [];
-      const q = pts[0]?.p || pts[0];
-      if (q) this.E.proc(pr("h"), [ q[0], q[1], q[2], 500 ]);
-      this.muerto = true;
-      return;
-    }
     const orden = c.map((_, i) => i);
     for (let i = 0; i < orden.length; i++) {
       const k = randU(4096) % orden.length;
       [orden[i], orden[k]] = [ orden[k], orden[i] ];
+    }
+    if (modo === 1) {
+      orden.forEach((ix, i) => {
+        if (i === 0) return;
+        const v = c[ix].slice(), proc = i === 1 ? pr("i") : i === 2 ? pr("j") : randU(2) === 0 ? pr("k") : pr("l");
+        this.E.proc(proc, [ v[0], v[1], v[2], 500 ]);
+      });
+      const r = new RatonLlave(this.E, a, {
+        vel: num(a, "s", 100),
+        veces: num(a, "f", 3),
+        proc: pr("h")
+      });
+      await r.iniciar();
+      if (r.muerto) {
+        this.muerto = true;
+        return;
+      }
+      this.raton = r;
+      this.objs = r.objs;
+      this.blancos = r.blancos;
+      return;
     }
     orden.forEach((ix, i) => {
       const v = c[ix].slice();
@@ -2726,6 +2740,260 @@ class ReparteItems {
       this.E.proc(proc, [ v[0], v[1], v[2], alto ]);
     });
     this.muerto = true;
+  }
+  cuadro() {
+    if (!this.raton) return;
+    this.raton.cuadro();
+    if (this.raton.muerto) this.E.matar(this);
+  }
+  dibujar() {
+    this.raton?.dibujar();
+  }
+  morir() {
+    this.raton?.cortar();
+  }
+}
+
+const zonaRaton = p => p[1] > -10 && p[2] > -18010 || p[2] >= 5991 || p[0] > 11990 && p[2] > -4010;
+
+const ojoRaton = p => p[1] > -10 && p[2] > -18010 ? [ -12021, 5304, -7665 ] : p[2] > 5990 ? [ -1149, -348, 9080 ] : p[0] > 11990 && p[2] > -4010 ? [ 13633, 824, 7871 ] : null;
+
+class RatonLlave {
+  constructor(E, a, {vel: vel, veces: veces, proc: proc}) {
+    this.E = E;
+    this.a = a;
+    this.vel = vel;
+    this.veces = veces;
+    this.procH = proc;
+    this.objs = [];
+    this.rot = new THREE.Vector3;
+    this.turn = new THREE.Vector3;
+    this.f1CC = 0;
+    this.f1D0 = randU(32) + 16;
+    this.f1D4 = 0;
+    this.f1D8 = 0;
+    this.f1FC = 0;
+    this.f200 = 0;
+    this.f204 = 0;
+    this.f208 = 0;
+    this.f628 = 0;
+    this.golpe = false;
+    this.visible = false;
+    this.f614 = [ 0, 0, 0 ];
+    this.mueve = [ 0, 1, 2, 1, 0, -1, -2, -1 ];
+    this.f68C = 0;
+    this.tiempo = 0;
+  }
+  plano(p, cuadros) {
+    if (this.f68C !== 0 || this.E.ctx.enGameOver?.()) return;
+    this.f68C = cuadros;
+    const ojo0 = ojoRaton(p);
+    if (!ojo0) {
+      this.f68C = 1;
+      return;
+    }
+    const c = this.pos.slice(), vx = c[0] - ojo0[0], vy = c[1] - ojo0[1], vz = c[2] - ojo0[2];
+    const ry = Math.round(Math.atan2(vx, vz) / ANG) & 4095, rx = Math.round(Math.atan2(Math.hypot(vx, vy, vz), ry) / ANG) & 4095;
+    const d = new THREE.Vector3(0, 0, -6e3).applyEuler(new THREE.Euler(rx * ANG, ry * ANG, 0, "YXZ"));
+    this.planoActivo = !!this.E.ctx.planoCine?.({
+      ojo: [ c[0] + d.x, c[1] + d.y, c[2] + d.z ],
+      centro: c,
+      cuadros: cuadros
+    });
+  }
+  async iniciar() {
+    let pts = [];
+    try {
+      pts = await (this.E.ctx.ruta?.(this.a.mapa, num(this.a, "r", 0))) || [];
+    } catch {}
+    this.pts = pts.map(q => (q.p || q).slice(0, 3));
+    if (this.pts.length < 2) {
+      const q = this.pts[0];
+      if (q) this.E.proc(this.procH, [ q[0], q[1], q[2], 500 ]);
+      this.muerto = true;
+      return;
+    }
+    const n = this.pts.length, ini = randU(4096) % (n - 1);
+    this.idx = ini + 1;
+    this.pos = this.pts[ini].slice();
+    const o = await this.E.ctx.cargar("actores/raton.glb");
+    o.traverse(m => {
+      if (m.isMesh) m.userData.sinColision = m.userData.extra = true;
+    });
+    this.E.ctx.teñir?.(o);
+    this.o = o;
+    this.sombra = mallaQuads(1, materialPS1(this.E.tex("shadow"), 2, [ 80, 80, 80 ], {
+      subir: 4
+    }));
+    this.E.agregar(o);
+    this.E.agregar(this.sombra);
+    this.objs = [ o, this.sombra ];
+    this.b = this.E.blanco(this, v3(this.pos), new THREE.Vector3(.035, .4, .035), () => {
+      if (this.visible) this.golpe = true;
+    });
+    this.blancos = [ this.b ];
+    this.dibujar();
+  }
+  hacia(de, a) {
+    const dx = a[0] - de[0], dy = a[1] - de[1], dz = a[2] - de[2];
+    const r = new THREE.Vector3;
+    r.y = Math.round(Math.atan2(dx, dz) / ANG) & 4095;
+    r.x = (Math.round(Math.atan2(Math.hypot(dx, dz), dy) / ANG) & 4095) - 1024;
+    return r;
+  }
+  avanzar(p, rot, d) {
+    const v = new THREE.Vector3(0, 0, d).applyEuler(new THREE.Euler(rot.x * ANG, rot.y * ANG, 0, "YXZ"));
+    return [ p[0] + v.x, p[1] + v.y, p[2] + v.z ];
+  }
+  calcularTiro() {
+    const p = this.pos;
+    const d = p[1] > -10 && p[2] > -18010 ? [ -8e3, 0, -14500 ] : p[2] > 5990 ? [ 7e3, -2e3, 9e3 ] : p[0] > 11990 && p[2] > -4010 ? [ 12500, -2e3, -1500 ] : null;
+    if (!d) {
+      this.f614 = [ 0, 0, 0 ];
+      return;
+    }
+    const largo = Math.hypot(d[0] - p[0], d[1] - p[1], d[2] - p[2]) / 30;
+    this.f614 = this.avanzar([ 0, 0, 0 ], this.hacia(p, d), largo);
+  }
+  soltar(p) {
+    this.f208 = 1;
+    this.calcularTiro();
+    const q = [ p[0] + this.f614[0] / 2, p[1], p[2] + this.f614[2] / 2 ];
+    let alto = 500;
+    if (q[1] > -10 && q[2] > -18010) {
+      q[1] = 0;
+      this.plano(q, 120);
+    } else if (q[2] > 5990) {
+      if (q[2] >= 7001) {
+        q[1] = -3e3;
+        alto = 1e3;
+        this.E.sonido(187, v3([ q[0], -2e3, q[2] ]));
+      } else q[1] = -2e3;
+      this.plano(q, 120);
+    } else if (q[0] > 11990 && q[2] > -4010) {
+      q[1] = -3e3;
+      this.plano(q, 120);
+      alto = 1e3;
+      this.E.sonido(176, v3([ q[0], -2e3, q[2] ]));
+    }
+    this.E.sonido(13, null);
+    this.E.proc(this.procH, [ Math.round(q[0]), Math.round(q[1]), Math.round(q[2]), alto ]);
+  }
+  mover() {
+    const pos = this.pos, dest = this.pts[this.idx], n = this.pts.length;
+    let paso;
+    if (!zonaRaton(pos)) {
+      this.golpe = false;
+      this.f628 = 0;
+      this.visible = false;
+      if (randU(2) > 0) return;
+      paso = this.vel;
+    } else {
+      this.f1D8++;
+      this.visible = true;
+      if (this.f204 !== 1 && this.golpe) {
+        this.E.sonido(185, v3(pos));
+        this.f204 = 1;
+        this.f1CC = 0;
+        this.vuelo = pos.slice();
+        this.calcularTiro();
+        return;
+      }
+      this.golpe = false;
+      if (this.f1FC > 0) {
+        this.f1FC--;
+        return;
+      }
+      const j = this.E.jugador(), sn = j ? [ j.x * 1e3, j.y * 1e3, j.z * 1e3 ] : [ 1e9, 0, 0 ];
+      const dist = Math.hypot(pos[0] - sn[0], pos[1] - sn[1], pos[2] - sn[2]), ruido = this.E.ctx.ruido?.() || 0;
+      if (this.f628 === 0) {
+        if (dist < 2e3 || ruido > 0) {
+          this.E.sonido(184, v3(pos));
+          this.f628 = 1;
+          this.f1FC = 15;
+          let i = this.idx;
+          for (let k = 0; k < n && zonaRaton(this.pts[i]); k++) if (++i >= n) i = 0;
+          if (--i < 0) i = n - 1;
+          this.idx = i;
+          if (this.f208 === 0 && ruido === 0 && this.veces < ++this.f200 && dist > 1e3) {
+            this.calcularTiro();
+            this.soltar([ pos[0] + this.f614[0], pos[1], pos[2] + this.f614[2] ]);
+          }
+        }
+        if (--this.f1D0 < 0) {
+          this.f1D4 = 1 - this.f1D4;
+          this.f1D0 = this.f1D4 === 0 ? randU(64) + 64 : randU(32) + 32;
+        }
+        if (this.f1D4 === 0) return;
+        paso = Math.trunc(this.vel / 4);
+        if (pos[0] > 11990 && pos[2] > -4010) this.f628 = 1;
+      } else {
+        paso = Math.trunc(this.vel / 3);
+        this.rot.copy(this.turn);
+        if (this.tiempo % 3 === 0 && pos[0] > 11990 && pos[2] > -4010) this.E.ctx.onda?.(pos[0] + randS(64), -2e3, pos[2] + randU(64), 1500);
+      }
+    }
+    const d = this.pts[this.idx] || dest;
+    if (Math.hypot(pos[0] - d[0], pos[1] - d[1], pos[2] - d[2]) < paso) {
+      this.pos = d.slice();
+      if (++this.idx >= n) this.idx = 0;
+    } else {
+      const r = this.hacia(pos, d);
+      this.pos = this.avanzar(pos, r, paso);
+      this.turn.copy(r);
+      this.rot.copy(r);
+    }
+    this.rot.y += this.mueve[this.f1D8 % 8] * 64;
+  }
+  cuadro() {
+    this.tiempo++;
+    if (this.f68C > 0 && --this.f68C === 0) {
+      if (this.planoActivo) this.E.ctx.finPlano?.();
+      this.planoActivo = false;
+      this.visible = false;
+      this.muerto = true;
+      return;
+    }
+    if (this.f1CC < 0) {
+      this.visible = false;
+      return;
+    }
+    this.mover();
+    if (this.f204 === 1) {
+      this.visible = false;
+      if (this.f1CC > 30) {
+        if (this.f208 === 0) {
+          this.f1CC = -1e4;
+          this.soltar(this.vuelo);
+        }
+        return;
+      }
+      this.rot.y += 128;
+      this.rot.x += 128;
+      this.turn.copy(this.rot);
+      const f = ++this.f1CC, t1 = 21 - f, t2 = 20 - f;
+      this.vuelo = [ this.vuelo[0] + this.f614[0], this.vuelo[1] + (t1 * t1 - t2 * t2) * 4, this.vuelo[2] + this.f614[2] ];
+      this.pos = this.vuelo.slice();
+      if ((f & 1) === 0) this.E.ctx.sangre?.(this.pos.slice());
+    }
+  }
+  cortar() {
+    if (this.planoActivo) this.E.ctx.finPlano?.();
+    this.planoActivo = false;
+    this.f68C = 0;
+  }
+  dibujar() {
+    if (!this.o) return;
+    const p = v3(this.pos), e = new THREE.Euler(this.rot.x * ANG, this.rot.y * ANG, 0, "YXZ");
+    this.o.visible = this.sombra.visible = this.visible;
+    this.o.position.copy(p);
+    this.o.rotation.copy(e);
+    this.o.scale.setScalar(this.f208 === 0 ? 1.5 : 1);
+    this.b.centro.set(p.x, p.y + .4, p.z);
+    const at = this.sombra.geometry.attributes.position, s = Math.sin(this.rot.y * ANG), c = Math.cos(this.rot.y * ANG);
+    const r = (x, z) => [ p.x + (x * c + z * s) * MM, p.y + .002, p.z + (-x * s + z * c) * MM ];
+    [ r(48, 96), r(-48, 96), r(48, -96), r(-48, -96) ].forEach((q, k) => at.setXYZ(k, ...q));
+    at.needsUpdate = true;
   }
 }
 

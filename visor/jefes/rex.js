@@ -535,7 +535,15 @@ export class MetalGearRex extends Jefe {
       alPegar: (i, p) => this.log("stinger", {
         i: i,
         p: [ p.x | 0, p.y | 0, p.z | 0 ]
-      })
+      }),
+      golpeNinja: (i, p, daño) => {
+        const t = this.blancosStinger()[i];
+        if (!t) return false;
+        const clase = t.cual === "radomo" ? this.radomoClase : this.liquidClase;
+        if (!(clase & CLASE.POWER)) return false;
+        this.golpeBlanco(t.cual, daño);
+        return true;
+      }
     });
     this.blanco = false;
     this.A.escuchar(18260, v => {

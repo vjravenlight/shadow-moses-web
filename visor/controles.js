@@ -471,7 +471,7 @@ const QUEST_MAPA = {
 };
 
 export const QUEST_FABRICA = Object.freeze({
-  giro: "saltos",
+  giro: "suave",
   angulo: 30,
   velGiro: 90,
   zonaMuerta: .15,
@@ -510,6 +510,7 @@ function cargarQuest() {
   try {
     const g = JSON.parse(leerLS(CLAVE_QUEST) || "null");
     if (g) for (const k of [ "giro", "angulo", "velGiro", "zonaMuerta", "vibra" ]) if (typeof g[k] === typeof c[k]) c[k] = g[k];
+    if (g && g.giroElegido !== true) c.giro = QUEST_FABRICA.giro; else if (g) c.giroElegido = true;
     const ids = new Set(ACCIONES_QUEST.map(a => a.id));
     if (g?.mapa) for (const b of BOTONES_QUEST) {
       const v = g.mapa[b.lado]?.[b.i];
@@ -524,14 +525,15 @@ function cargarQuest() {
 export const quest = cargarQuest();
 
 function guardarQuest() {
-  const {mapa: mapa, giro: giro, angulo: angulo, velGiro: velGiro, zonaMuerta: zonaMuerta, vibra: vibra} = quest;
+  const {mapa: mapa, giro: giro, angulo: angulo, velGiro: velGiro, zonaMuerta: zonaMuerta, vibra: vibra, giroElegido: giroElegido} = quest;
   escribirLS(CLAVE_QUEST, JSON.stringify({
     mapa: mapa,
     giro: giro,
     angulo: angulo,
     velGiro: velGiro,
     zonaMuerta: zonaMuerta,
-    vibra: vibra
+    vibra: vibra,
+    giroElegido: !!giroElegido
   }));
   escribirLS("sm_vrzurdo", quest.zurdo ? "1" : "0");
   escribirLS("sm_vrdir", quest.dir);
@@ -543,6 +545,7 @@ export function ponerQuest(k, v) {
   if (k === "giro" && v !== "saltos" && v !== "suave") return false;
   if (k === "dir" && v !== "control" && v !== "mirada") return false;
   quest[k] = v;
+  if (k === "giro") quest.giroElegido = true;
   guardarQuest();
   return true;
 }
@@ -564,7 +567,8 @@ export function asignarQuest(lado, i, accion) {
 
 export function restaurarQuest() {
   Object.assign(quest, QUEST_FABRICA, {
-    mapa: copiaMapa(QUEST_MAPA)
+    mapa: copiaMapa(QUEST_MAPA),
+    giroElegido: false
   });
   guardarQuest();
 }
@@ -724,12 +728,57 @@ function virtual(g, neutro) {
   };
 }
 
+let fnDemo = null;
+
+export function mandoDemo(fn) {
+  fnDemo = typeof fn === "function" ? fn : null;
+}
+
+export const hayMandoDemo = () => {
+  try {
+    return fnDemo != null && fnDemo() != null;
+  } catch {
+    return false;
+  }
+};
+
+const BIT_BOTON = [ [ 64, 0 ], [ 32, 1 ], [ 128, 2 ], [ 16, 3 ], [ 4, 4 ], [ 8, 5 ], [ 1, 6 ], [ 2, 7 ], [ 4096, 12 ], [ 16384, 13 ], [ 32768, 14 ], [ 8192, 15 ] ];
+
+function padDeDemo(bits) {
+  const buttons = Array.from({
+    length: 17
+  }, () => SUELTO);
+  for (const [m, i] of BIT_BOTON) if (bits & m) buttons[i] = {
+    pressed: true,
+    touched: true,
+    value: 1
+  };
+  return {
+    id: "PADDEMO (demo de mando)",
+    index: 0,
+    connected: true,
+    mapping: "standard",
+    timestamp: performance.now(),
+    axes: [ 0, 0, 0, 0 ],
+    buttons: buttons,
+    vibrationActuator: null,
+    hapticActuators: []
+  };
+}
+
 if (nav?.getGamepads) {
   try {
     Object.defineProperty(nav, "getGamepads", {
       configurable: true,
       writable: true,
       value: function getGamepads() {
+        if (fnDemo) {
+          let b = null;
+          try {
+            b = fnDemo();
+          } catch {}
+          if (b != null) return [ padDeDemo(b | 0) ];
+        }
         let l = getOriginal();
         if (primero != null && l?.[primero]?.connected) {
           const t = [ ...l ];

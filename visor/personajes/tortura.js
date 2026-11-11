@@ -11,6 +11,12 @@ import { vibrar, vibrarCuadro } from "../controles.js";
 
 import { desvestirEnLaCelda } from "./celda.js";
 
+import { Plasma } from "../plasma.js";
+
+import { reemplazo } from "../texturas_idioma.js";
+
+import { blurGuion } from "../blur_guion.js";
+
 const N = {
   SNAKE: 8650,
   OCELOT: 2555,
@@ -89,22 +95,14 @@ const REV_LIT = [ "v0", "v1", "v2", "v24", "v17", "v18", "v19", "v20", "v23", "v
 const imgs = {};
 
 function imagen(nombre) {
+  const rl = reemplazo(nombre);
+  if (rl?.img) return rl.img;
   if (!imgs[nombre] && typeof Image !== "undefined") {
     const i = new Image;
     i.src = `assets/personajes/${nombre}.png`;
     imgs[nombre] = i;
   }
   return imgs[nombre];
-}
-
-let texPlasma = null;
-
-function texturaPlasma() {
-  if (!texPlasma) {
-    texPlasma = (new THREE.TextureLoader).load("assets/personajes/plasma.png");
-    texPlasma.colorSpace = THREE.SRGBColorSpace;
-  }
-  return texPlasma;
 }
 
 function camEventos(sis) {
@@ -207,58 +205,23 @@ class Rayo {
     this.p = p;
     this.j1 = j1;
     this.j2 = j2;
-    this.t = 0;
-    this.dur = cuadros + randU(16);
-    this.g = new THREE.Group;
-    this.g.userData.sinColision = true;
-    const mat = new THREE.SpriteMaterial({
-      map: texturaPlasma(),
-      color: 9869050,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true
+    const a = p.puntoHuesoMM(j1), b = p.puntoHuesoMM(j2);
+    this.pl = new Plasma(p.mgr.mundo, [ a.x, a.y, a.z ], [ b.x, b.y, b.z ], {
+      modo: 0,
+      f3B4: 1e3,
+      cuadros: cuadros + randU(16)
     });
-    this.sp = [];
-    for (let i = 0; i < 7; i++) {
-      const s = new THREE.Sprite(mat);
-      s.scale.setScalar(.09);
-      this.g.add(s);
-      this.sp.push(s);
-    }
-    const geo = new THREE.BufferGeometry;
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(21), 3));
-    this.linea = new THREE.Line(geo, new THREE.LineBasicMaterial({
-      color: 13158655,
-      blending: THREE.AdditiveBlending,
-      transparent: true,
-      depthWrite: false
-    }));
-    this.g.add(this.linea);
-    p.mgr.mundo.add(this.g);
   }
   cuadro() {
-    if (++this.t > this.dur || !this.p.o) {
+    if (!this.p.o) {
       this.quitar();
       return false;
     }
-    const a = this.p.puntoHueso(this.j1), b = this.p.puntoHueso(this.j2), pos = this.linea.geometry.attributes.position;
-    for (let i = 0; i < 7; i++) {
-      const k = i / 6, q = a.clone().lerp(b, k);
-      if (i > 0 && i < 6) {
-        q.x += randS(48) * MM;
-        q.y += randS(48) * MM;
-        q.z += randS(48) * MM;
-      }
-      this.sp[i].position.copy(q);
-      this.sp[i].scale.setScalar((60 + randU(60)) * MM);
-      pos.setXYZ(i, q.x, q.y, q.z);
-    }
-    pos.needsUpdate = true;
-    return true;
+    const a = this.p.puntoHuesoMM(this.j1), b = this.p.puntoHuesoMM(this.j2);
+    return this.pl.cuadro([ a.x, a.y, a.z ], [ b.x, b.y, b.z ]);
   }
   quitar() {
-    this.g.removeFromParent();
-    this.linea.geometry.dispose();
+    this.pl.quitar();
   }
 }
 
@@ -278,7 +241,7 @@ class Cartel {
   }
   cuadro() {
     if (!this.vivo) return;
-    const f24 = this.f24++, W0 = 112, H0 = 30;
+    const f24 = this.f24++, W0 = this.fg?.naturalWidth || 112, H0 = 30;
     if (this.f20 === 0) {
       let w = f24 * 8;
       if (W0 < w) {
@@ -1241,9 +1204,8 @@ class Tortura extends Personaje {
     if (this.o) this.rayos.push(new Rayo(this, j1, j2, 16));
   }
   blur(si) {
-    const cv = typeof window !== "undefined" ? window.__mgs?.R?.domElement : null;
+    if (si && !this.f8FC) blurGuion.prenderSet(1, 0, 0, "tortura"); else if (!si && this.f8FC) blurGuion.apagar("tortura");
     this.f8FC = si ? true : null;
-    if (cv) cv.style.filter = si ? "blur(1.6px)" : "";
   }
   dibujar() {
     if (!this.o) return;

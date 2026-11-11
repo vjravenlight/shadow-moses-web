@@ -176,7 +176,7 @@ def leer_subtitulos(mm, off):
         q = p + 16
         e = mm.find(b'\x00', q, fin)
         txt = bytes(mm[q:e if e >= 0 else fin])
-        lineas.append({'inicio': t0, 'duracion': dur, 'extra': extra, 'inicio_seg': round(t0 * TICK_SUBT_SEG, 3), 'duracion_seg': round(dur * TICK_SUBT_SEG, 3), 'texto': texto_subt(txt)})
+        lineas.append({'inicio': t0, 'duracion': dur, 'extra': extra, 'inicio_seg': round(t0 * TICK_SUBT_SEG, 3), 'duracion_seg': round(dur * TICK_SUBT_SEG, 3), 'texto': texto_subt(txt), 'crudo_hex': txt.hex()})
         if salto == 0:
             break
         p += salto

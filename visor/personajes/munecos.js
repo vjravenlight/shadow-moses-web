@@ -61,7 +61,7 @@ class Muneco extends Personaje {
   async iniciar() {
     const o = this.opts, a = this.actor;
     const w = Array.isArray(o.w) ? o.w[0] : null, arma = w && (w.n === "famas" || w.id === 18213) ? "armas/famas.glb" : null;
-    await this.cargarCon(a.modelo, "doll_" + hex4(idDe(o.o)), arma);
+    await this.cargarCon(a.modelo, a.anim_doll || "doll_" + hex4(idDe(o.o)), arma);
     if (!this.vivo) return;
     this.o.userData.actor = a;
     this.o.userData.muñeco = true;

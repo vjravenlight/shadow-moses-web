@@ -91,9 +91,32 @@ function manifiesto(nuevo = false) {
       manifiestoP = null;
       manifiestoFallo = Date.now();
     }
-    return m;
+    return m && soloIdiomasElegidos(m);
   });
   return manifiestoP;
+}
+
+function soloIdiomasElegidos(m) {
+  const quiero = new Set([ leerLS("sm_idioma_texto") || "en", leerLS("sm_idioma_voz") || "en" ]);
+  const sirve = p => {
+    const k = /^assets\/idiomas\/([^/]+)\//.exec(p);
+    return !k || quiero.has(k[1]);
+  };
+  const assets = m.assets.filter(([p]) => sirve(p));
+  if (assets.length === m.assets.length) return m;
+  const idi = assets.filter(([p]) => p.startsWith("assets/idiomas/")), grupos = {
+    ...m.grupos
+  };
+  if (grupos.idiomas) grupos.idiomas = {
+    archivos: idi.length,
+    bytes: idi.reduce((s, [, t]) => s + t, 0)
+  };
+  return {
+    ...m,
+    assets: assets,
+    grupos: grupos,
+    total: assets.reduce((s, [, t]) => s + t, 0)
+  };
 }
 
 async function clavesGuardadas() {
@@ -523,7 +546,8 @@ function pintarDialogo() {
       hud: "HUD",
       jefes: "JEFES",
       vr: "VR MISSIONS",
-      xr: "VR (CASCO)"
+      xr: "VR (CASCO)",
+      idiomas: "IDIOMAS ELEGIDOS"
     };
     const filas = Object.entries(mm.grupos).sort((a, b) => b[1].bytes - a[1].bytes);
     const grandes = filas.filter(([, x]) => x.bytes >= 3e6), resto = filas.filter(([, x]) => x.bytes < 3e6).reduce((s, [, x]) => s + x.bytes, 0);

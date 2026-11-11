@@ -5,6 +5,8 @@ import { PAD } from "./inventario.js";
 
 import { ASPECTO as ASPECTO_DEMO } from "./demo.js";
 
+import { reemplazo, hashDeRuta, desplazamiento } from "./texturas_idioma.js";
+
 const GRADO = Math.PI / 180;
 
 const ANCHO_REF = 1.1, DIST_REF = 1.3;
@@ -305,6 +307,7 @@ export class VRPaneles {
     this._armarVelos();
     this._armarCine();
     this._armarPantalla();
+    this._armarBarras();
   }
   on(n, f) {
     if (!this._ev.has(n)) this._ev.set(n, []);
@@ -900,7 +903,7 @@ export class VRPaneles {
       const cv = document.createElement("canvas");
       cv.width = 640;
       cv.height = 72;
-      let txt = "";
+      let txt = "", cvJ = null, nJ = 0;
       this.agregar({
         id: "voz_sub",
         tipo: "subtitulo",
@@ -912,13 +915,22 @@ export class VRPaneles {
         },
         visible: () => {
           txt = codec.textoVozJuego?.() || "";
-          return !!txt;
+          cvJ = codec.lienzoVozJuego?.() || null;
+          return !!txt || !!cvJ;
         },
         lienzo: () => cv,
-        firma: () => txt,
+        firma: () => cvJ ? "ja:" + (cvJ._n ||= ++nJ) : txt,
         preparar: () => {
           const x = cv.getContext("2d"), filas = txt.split("\n").slice(0, 3), alto = 22;
           x.clearRect(0, 0, cv.width, cv.height);
+          if (cvJ) {
+            const k = Math.max(1, Math.floor(Math.min((cv.width - 8) / cvJ.width, (cv.height - 6) / cvJ.height)));
+            x.fillStyle = "rgba(0,0,0,0.35)";
+            x.fillRect(0, (cv.height - cvJ.height * k) / 2 - 3, cv.width, cvJ.height * k + 6);
+            x.imageSmoothingEnabled = false;
+            x.drawImage(cvJ, Math.round((cv.width - cvJ.width * k) / 2), Math.round((cv.height - cvJ.height * k) / 2), cvJ.width * k, cvJ.height * k);
+            return;
+          }
           x.font = '19px "Trebuchet MS", Verdana, Arial, sans-serif';
           x.textAlign = "center";
           x.textBaseline = "middle";
@@ -995,7 +1007,12 @@ export class VRPaneles {
       prio: 70,
       exclusivo: true,
       pixel: false,
-      visible: () => ESTADOS_VR_CENTRO.has(vr.estado),
+      visible: () => {
+        const v = ESTADOS_VR_CENTRO.has(vr.estado);
+        this._fondoMenuVR(vr, v);
+        this._tituloVR(vr, v);
+        return v;
+      },
       captura: () => true,
       lienzo: () => vr.cv,
       recorte: recorte(240, 2),
@@ -1012,6 +1029,7 @@ export class VRPaneles {
         }
       }
     });
+    this._barrasK = () => vr.barrasCine || 0;
     this.agregar({
       id: "vr_reloj",
       tipo: "arriba",
@@ -1028,6 +1046,35 @@ export class VRPaneles {
         }
       }
     });
+  }
+  _fondoMenuVR(vr, visible) {
+    const D = vr.menuD, p = this.panel("vr");
+    if (!D || !p) return;
+    if (!this._fondoMenu) {
+      const m = vr.fondoMenu?.mallaPanel?.();
+      if (!m) return;
+      m.renderOrder = p.mesh.renderOrder - .5;
+      p.mesh.add(m);
+      this._fondoMenu = m;
+    }
+    if (!D.fondoAparte) D.fondoAparte = () => !!(this.activo && this._fondoMenu?.visible);
+    const V = vr.menuVR;
+    if (V && !V.fondoAparte) V.fondoAparte = () => !!(this.activo && this._fondoMenu?.visible);
+    this._fondoMenu.visible = !!(visible && this.activo && vr.estado === "menu" && !vr.tituloD?.activo && (D.activo || V?.activo));
+  }
+  _tituloVR(vr, visible) {
+    const T = vr.tituloD, p = this.panel("vr");
+    if (!T || !p) return;
+    if (!this._titulo) {
+      const g = T.mallaPanel?.();
+      if (!g) return;
+      p.mesh.add(g);
+      this._titulo = g;
+    }
+    if (!T.gpuAparte) T.gpuAparte = () => !!(this.activo && this._titulo?.visible);
+    const ver = !!(visible && this.activo && vr.estado === "menu" && T.activo && T.pant !== "album");
+    this._titulo.visible = ver;
+    if (ver) T.pintarGPU(p.mesh.renderOrder - 1);
   }
   _conInventario(inv) {
     this.inventario = inv;
@@ -1164,21 +1211,64 @@ export class VRPaneles {
     return p;
   }
   _conVeloDom(el, hudDom, base) {
-    let alfa = 0;
+    const st = {
+      alfa: 0,
+      desde: 0,
+      destino: 0,
+      t: 0,
+      dur: 0,
+      estilo: undefined
+    };
+    const duracion = () => {
+      if (/\bnone\b/.test(el.style.transition || "")) return 0;
+      let props = "all", durs = "0s";
+      try {
+        const cs = getComputedStyle(el);
+        props = cs.transitionProperty || "all";
+        durs = cs.transitionDuration || "0s";
+      } catch {}
+      const P = props.split(",").map(s => s.trim()), D = durs.split(",").map(s => parseFloat(s) * (/ms\s*$/.test(s) ? .001 : 1) || 0);
+      const i = P.findIndex(p => p === "opacity" || p === "all");
+      return i < 0 ? 0 : D[i % D.length] || 0;
+    };
     this._velos.push(() => {
-      if (hudDom?.hidden) return null;
-      const op = +(el.style.opacity || 0);
-      if (op <= 0 && alfa <= .001) return null;
-      const cs = getComputedStyle(el);
-      alfa = +cs.opacity || 0;
+      if (hudDom?.hidden) {
+        st.alfa = st.destino = 0;
+        st.estilo = undefined;
+        return null;
+      }
+      const s = el.style.opacity;
+      if (s !== st.estilo) {
+        st.estilo = s;
+        st.desde = st.alfa;
+        st.destino = limitar(+(s || 0) || 0, 0, 1);
+        st.t = 0;
+        st.dur = st.desde === st.destino ? 0 : duracion();
+      }
+      if (st.dur > 0 && st.t < st.dur) {
+        st.t += this._dt || 0;
+        st.alfa = st.desde + (st.destino - st.desde) * Math.min(1, st.t / st.dur);
+      } else st.alfa = st.destino;
+      if (st.alfa <= .001) return null;
       let color = base;
       if (color == null) {
-        const m = /(\d+)\D+(\d+)\D+(\d+)/.exec(cs.backgroundColor || "");
-        color = m ? +m[1] << 16 | +m[2] << 8 | +m[3] : 13369344;
+        let bg = el.style.background || el.style.backgroundColor || "";
+        if (!/\d/.test(bg) && !/^#/.test(bg)) {
+          try {
+            bg = getComputedStyle(el).backgroundColor || "";
+          } catch {
+            bg = "";
+          }
+        }
+        const h = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(bg.trim()), m = /(\d+)\D+(\d+)\D+(\d+)/.exec(bg);
+        if (h) {
+          const x = h[1].length === 3 ? h[1].split("").map(c => c + c).join("") : h[1];
+          color = parseInt(x, 16);
+        } else color = m ? +m[1] << 16 | +m[2] << 8 | +m[3] : 13369344;
       }
       return {
         color: color,
-        alfa: alfa
+        alfa: st.alfa
       };
     });
   }
@@ -1860,6 +1950,11 @@ export class VRPaneles {
       R.xr.enabled = prev.xr;
       R.setRenderTarget(prev.target);
     }
+    let tAgua = null;
+    try {
+      tAgua = this.aguaCine?.(R, this._rtCine, demo) || null;
+    } catch {}
+    this._matCine.uniforms.map.value = tAgua || this._rtCine.texture;
     const c = demo._conm || {};
     const ant = demo.filtroAntiparras;
     this._matCine.uniforms.modo.value = ant === "nvg" ? 3 : ant === "termica" ? 4 : c[36] ? 1 : c[27] ? 2 : 0;
@@ -1994,7 +2089,8 @@ export class VRPaneles {
     const t = demo.tiempo || 0, linea = !activa || demo._salida ? null : (demo.subtitulos || []).find(l => t >= l.t && t < l.t + l.d);
     const telops = activa ? (demo._telops || []).filter(tl => tl.visible && tl.png) : [];
     const mira = activa && demo.miraHud?.visible ? demo.miraHud : null;
-    const firma = `${activa}|${demo.barras}|${linea?.texto ?? ""}|${telops.map(tl => `${tl.png}:${tl.x},${tl.y}:${Math.min(128, tl.shade)}`).join(";")}|${[ ...C.imgs.values() ].filter(i => i.complete).length}|${mira?.firma ?? ""}`;
+    const cvJ = linea?.tj != null ? demo.lienzoSubtitulo?.(linea) : null;
+    const firma = `${activa}|${demo.barras}|${linea?.texto ?? ""}|${cvJ ? linea.t : ""}|${telops.map(tl => `${tl.png}:${tl.x},${tl.y}:${Math.min(128, tl.shade)}`).join(";")}|${[ ...C.imgs.values() ].filter(i => i.complete).length}|${mira?.firma ?? ""}`;
     if (firma === C.firma) return;
     C.firma = firma;
     const x = this._cvCine.getContext("2d"), W = 320 * k, H = 224 * k;
@@ -2011,16 +2107,27 @@ export class VRPaneles {
       }
       return i.complete && i.naturalWidth ? i : null;
     };
-    for (const tl of telops) {
+    for (const t0 of telops) {
+      const dd = desplazamiento(t0.png), tl = dd ? {
+        ...t0,
+        x: t0.x + dd[0],
+        y: t0.y + dd[1]
+      } : t0;
       const op = Math.min(128, tl.shade) / 128;
       if (tl.png2) {
-        const i2 = img(tl.png2);
+        const r2 = reemplazo(hashDeRuta(tl.png2)), i2 = r2?.listo ? r2.img : img(tl.png2);
         if (i2) {
           x.globalAlpha = op * .7;
           x.filter = "brightness(0)";
-          x.drawImage(i2, tl.x * k, tl.y * k, (tl.w2 || i2.naturalWidth) * k, (tl.h2 || i2.naturalHeight) * k);
+          x.drawImage(i2, tl.x * k, tl.y * k, (r2?.listo ? r2.w : tl.w2 || i2.naturalWidth) * k, (r2?.listo ? r2.h : tl.h2 || i2.naturalHeight) * k);
           x.filter = "none";
         }
+      }
+      const rl = reemplazo(hashDeRuta(tl.png));
+      if (rl?.listo) {
+        x.globalAlpha = op;
+        x.drawImage(rl.img, tl.x * k, tl.y * k, rl.w * k, rl.h * k);
+        continue;
       }
       const i = img(tl.png);
       if (i) {
@@ -2034,7 +2141,10 @@ export class VRPaneles {
       x.fillRect(0, 0, W, 24 * k);
       x.fillRect(0, H - 40 * k, W, 40 * k);
     }
-    if (linea) {
+    if (cvJ) {
+      const kk = Math.max(1, Math.floor(Math.min((W - 8) / cvJ.width, (40 * k - 4) / cvJ.height)));
+      x.drawImage(cvJ, W / 2 - cvJ.width * kk / 2, H - 2 * k - cvJ.height * kk, cvJ.width * kk, cvJ.height * kk);
+    } else if (linea && linea.tj == null) {
       const filas = String(linea.texto).split("\n"), alto = 10.5 * k;
       x.font = `${Math.round(9.5 * k)}px "Trebuchet MS", Verdana, Arial, sans-serif`;
       x.textAlign = "center";
@@ -2053,6 +2163,7 @@ export class VRPaneles {
   dibujar(R = this.R, cam = this.cam) {
     if (!this.activo || !this.xr.activo()) return false;
     for (const p of this._mostrados) if (!p.malla) this._subir(p);
+    this._ponerBarras();
     const auto = R.autoClear;
     R.autoClear = false;
     try {
@@ -2066,6 +2177,74 @@ export class VRPaneles {
       R.autoClear = auto;
     }
     return true;
+  }
+  _armarBarras() {
+    const P = this._pantalla, mat = () => new THREE.MeshBasicMaterial({
+      color: 0,
+      transparent: true,
+      opacity: 0,
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false
+    });
+    const arriba = new THREE.Mesh(this._plano, mat()), abajo = new THREE.Mesh(this._plano, mat());
+    const ha = P.h * 24 / 240, hb = P.h * 40 / 240;
+    arriba.scale.set(P.w, ha, 1);
+    arriba.position.set(0, P.h / 2 - ha / 2, .001);
+    abajo.scale.set(P.w, hb, 1);
+    abajo.position.set(0, -P.h / 2 + hb / 2, .001);
+    for (const m of [ arriba, abajo ]) {
+      m.renderOrder = 6;
+      m.visible = false;
+      P.pivote.add(m);
+    }
+    const vista = new THREE.Mesh(new THREE.SphereGeometry(.28, 24, 16), new THREE.ShaderMaterial({
+      uniforms: {
+        uK: {
+          value: 0
+        }
+      },
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.BackSide,
+      toneMapped: false,
+      vertexShader: "varying vec4 vClip; void main() { vClip = projectionMatrix * modelViewMatrix * vec4(position, 1.0); gl_Position = vClip; }",
+      fragmentShader: "uniform float uK; varying vec4 vClip; void main() { if (vClip.w <= 0.0) discard; float y = vClip.y / vClip.w; if (y < 0.8 && y > -0.6667) discard; gl_FragColor = vec4(0.0, 0.0, 0.0, uK); }"
+    }));
+    vista.renderOrder = 40;
+    vista.visible = false;
+    vista.frustumCulled = false;
+    this.escena.add(vista);
+    this._barras = {
+      arriba: arriba,
+      abajo: abajo,
+      vista: vista,
+      k: 0
+    };
+  }
+  _ponerBarras() {
+    const B = this._barras;
+    if (!B) return;
+    let k = 0;
+    try {
+      k = this._dibujandoSolo || this.cineActivo ? 0 : limitar(+this._barrasK?.() || 0, 0, 1);
+    } catch {
+      k = 0;
+    }
+    const enPantalla = k > 0 && this._pantalla.frame === this.frame;
+    for (const m of [ B.arriba, B.abajo ]) {
+      m.visible = enPantalla;
+      m.material.opacity = k;
+    }
+    B.vista.visible = k > 0 && !enPantalla;
+    B.vista.material.uniforms.uK.value = k;
+    if (B.vista.visible) {
+      B.vista.position.copy(this.cab.pos);
+      B.vista.updateMatrixWorld(true);
+    }
+    B.k = k;
+    B.donde = k > 0 ? enPantalla ? "pantalla" : "vista" : null;
   }
   get conPartida() {
     return this._mostrados.some(p => p.id === "partida");
@@ -2120,6 +2299,10 @@ export class VRPaneles {
       cine: this.cineActivo,
       pantalla: this.pantallaActiva,
       manoActiva: this.manoActiva,
+      barras: this._barras ? {
+        k: r(this._barras.k),
+        donde: this._barras.donde ?? null
+      } : null,
       cabeza: {
         pos: this.cab.pos.toArray().map(r),
         yaw: r(this.cab.yaw / GRADO),

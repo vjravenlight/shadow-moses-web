@@ -604,7 +604,8 @@ export class ClearVR {
       if (i === 3) y += 12;
       if (!(i === puesto && !on)) {
         const v = i < 3 ? this.records[i] : this.final;
-        this.txt.push([ tiempoTexto(Math.abs(v), Math.abs(v)).slice(0, n), 159, y, v > 0 ? NAR : OSC, 0 ], [ lab, 99, y, NAR, 0 ]);
+        const s = this.formato ? this.formato(Math.abs(v)) : tiempoTexto(Math.abs(v), Math.abs(v));
+        this.txt.push([ s.slice(0, n), 159, y, v > 0 ? NAR : OSC, 0 ], [ lab, 99, y, NAR, 0 ]);
       }
       y += 12;
     });

@@ -3,6 +3,10 @@ import { blit, limpiar, cargarImg, texDeImagen, textoMenu, textoChico, OPACO, AD
 
 import { guardarFotos, leerFotos } from "./fotos.js";
 
+import * as texIdioma from "./texturas_idioma.js";
+
+const reemplazoTex = texIdioma.reemplazo;
+
 const BASE = new URL("./assets/extras/", import.meta.url).href;
 
 const CX = 160, CY = 112;
@@ -92,7 +96,8 @@ export class Pantalla {
     const r = await fetch(BASE + "extras.json");
     if (!r.ok) throw new Error("extras.json " + r.status);
     const info = await r.json(), nombres = Object.keys(info.camera || {});
-    const imgs = await Promise.all(nombres.map(n => cargarImg(BASE + "camera/" + n + ".png")));
+    await texIdioma.listo.catch(() => null);
+    const imgs = await Promise.all(nombres.map(n => cargarImg(reemplazoTex(n)?.url || BASE + "camera/" + n + ".png")));
     this.tex = {};
     nombres.forEach((n, i) => {
       if (imgs[i]) this.tex[n] = texDeImagen(imgs[i]);

@@ -354,6 +354,7 @@ class Driver {
     vd = vd >= s.dec_vol ? vd - s.dec_vol : 0;
     if (mt < 13 || this.se_playing[mt - 13].kind === 0) {
       let pan = Math.min(40, s.pand >> 8);
+      if (this.sound_mono_fg) pan = 20;
       if (mt < 13) {
         r.vol_r = vd * PANT[pan] * this.master[mt] / 65536;
         r.vol_l = vd * PANT[40 - pan] * this.master[mt] / 65536;
@@ -362,7 +363,7 @@ class Driver {
         r.vol_l = vd * PANT[40 - pan];
       }
     } else {
-      const pan = this.se_pan[mt - 13];
+      const pan = this.sound_mono_fg ? 32 : this.se_pan[mt - 13];
       vd = vd * this.se_vol[mt - 13] >> 16;
       r.vol_r = vd * SE_PANT[pan];
       r.vol_l = vd * SE_PANT[64 - pan];
@@ -898,6 +899,7 @@ class Driver {
   }
   codigo(c) {
     if (c >= 33554179 && c <= 33554181) {
+      if (this.sng_play_code === -1) return;
       if (this.sng_status < 3) this.fadein_fg = c; else {
         this.fadein_time = this.fadeTiempo(c);
         this.fout_term = 0;
@@ -915,10 +917,10 @@ class Driver {
       for (let i = 4; i < 13; i++) if (!(this.fout_term & 1 << i)) this.fade_time[i] = 81;
       this.fadein_time = 0;
       this.kaihi_fg = 1;
-    } else if (c === 33554431) {
+    } else if (c === 33554177) this.pausa = true; else if (c === 33554178) this.pausa = false; else if (c === 33554431) {
       this.sng_play_code = 0;
       this.sng_off();
-    } else if (c === 4278190334) this.stop_jouchuu_se = 1; else if (c === 33554208) this.syukan = 1; else if (c === 33554209) this.syukan = 0; else if ((c & 4294967280) === 16777216 && c !== this.sng_play_code) {
+    } else if (c === 4278190085) this.sound_mono_fg = 1; else if (c === 4278190086) this.sound_mono_fg = 0; else if (c === 4278190334) this.stop_jouchuu_se = 1; else if (c === 33554208) this.syukan = 1; else if (c === 33554209) this.syukan = 0; else if ((c & 4294967280) === 16777216 && c !== this.sng_play_code) {
       if (this.sng_play_code === -1) {
         this.fade_time.fill(0);
         this.fade_value.fill(0);
@@ -945,16 +947,20 @@ class Driver {
         }
         if (this.fout_term === 8191 && this.sng_play_code === -1) this.sng_status = 4;
       }
-    } else if (this.fadein_time) {
-      let algo = 0;
-      for (let i = 0; i < 13; i++) {
-        this.fade_value[i] = this.fadein_time >= this.fade_value[i] ? 0 : this.fade_value[i] - this.fadein_time;
-        algo |= this.fade_value[i];
+    } else {
+      this.vox_on_vol = this.vox ? Math.min(24576, (this.vox_on_vol || 0) + 245) : Math.max(0, (this.vox_on_vol || 0) - 245);
+      if (this.fadein_time) {
+        let algo = 0;
+        for (let i = 0; i < 13; i++) {
+          this.fade_value[i] = this.fadein_time >= this.fade_value[i] ? 0 : this.fade_value[i] - this.fadein_time;
+          algo |= this.fade_value[i];
+        }
+        if (!algo) this.fadein_time = 0;
       }
-      if (!algo) this.fadein_time = 0;
     }
     this.syukan_vol = this.syukan ? Math.min(20480, (this.syukan_vol || 0) + 204) : Math.max(0, (this.syukan_vol || 0) - 204);
-    for (let i = 0; i < 13; i++) this.master[i] = Math.max(0, 65536 - Math.max(this.fade_value[i], this.syukan_vol));
+    const vol3 = Math.max(this.vox_on_vol || 0, this.syukan_vol);
+    for (let i = 0; i < 13; i++) this.master[i] = Math.max(0, 65536 - Math.max(this.fade_value[i], vol3));
   }
   sePlay(code, fuente = 0) {
     const id = code & 255;
@@ -1204,6 +1210,7 @@ class SPU extends AudioWorkletProcessor {
     this.drv = new Driver(this);
     this.acum = 0;
     this.volMaster = 1;
+    this.ganMusica = 1;
     this.revL = new Reverb;
     this.revR = new Reverb;
     this.revR.combs.forEach(c => {
@@ -1244,12 +1251,14 @@ class SPU extends AudioWorkletProcessor {
       d.efx = new Uint8Array(m.buf);
     } else if (m.tipo === "residente") {
       d.res = m.datos;
-    } else if (m.tipo === "codigo") d.codigos.push(m.codigo >>> 0); else if (m.tipo === "se") d.sePlay(m.codigo >>> 0, m.fuente || 0); else if (m.tipo === "espacial") this.espacial = !!m.on; else if (m.tipo === "volumen") this.volMaster = m.v; else if (m.tipo === "estado") this.port.postMessage({
+    } else if (m.tipo === "codigo") d.codigos.push(m.codigo >>> 0); else if (m.tipo === "vox") d.vox = !!m.on; else if (m.tipo === "se") d.sePlay(m.codigo >>> 0, m.fuente || 0); else if (m.tipo === "espacial") this.espacial = !!m.on; else if (m.tipo === "volumen") this.volMaster = m.v; else if (m.tipo === "estado") this.port.postMessage({
       sng: d.sng ? d.sng.length : 0,
       efx: d.efx ? d.efx.length : 0,
       status: d.sng_status,
       play: d.sng_play_code,
       song_end: d.song_end.toString(16),
+      pausa: d.pausa,
+      ganMusica: +this.ganMusica.toFixed(3),
       voces: this.voces.filter(v => v.on).length,
       instrumentos: d.voces.filter(Boolean).length,
       master: d.master.slice(0, 4),
@@ -1270,6 +1279,7 @@ class SPU extends AudioWorkletProcessor {
         this.acum += TICK;
         this.drv.tick();
       }
+      this.ganMusica += ((this.drv.pausa ? 0 : 1) - this.ganMusica) * .003;
       let l = 0, r = 0, el = 0, er = 0;
       for (let k = 0; k < 21; k++) {
         const v = this.voces[k];
@@ -1279,7 +1289,7 @@ class SPU extends AudioWorkletProcessor {
           out[k - 12][0][i] += s * (v.volL + v.volR) / 32768 / 32768 * this.volMaster;
           continue;
         }
-        const sl = s * v.volL / 16384, sr = s * v.volR / 16384;
+        const gm = k < 13 ? this.ganMusica : 1, sl = s * v.volL / 16384 * gm, sr = s * v.volR / 16384 * gm;
         l += sl;
         r += sr;
         if (k < 13) {

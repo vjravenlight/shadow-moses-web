@@ -3,6 +3,8 @@ import { Partida, RANURAS, RANURA_AUTO, SIGLAS_NIVEL } from "./partida.js";
 
 import * as ctl from "./controles.js";
 
+import { todoDesbloqueado } from "./desbloqueo.js";
+
 const NIVELES = [ "VERY EASY", "EASY", "NORMAL", "HARD", "EXTREME" ];
 
 const MARCA_NIVEL = {
@@ -112,12 +114,24 @@ export class PartidaUI {
       cursor = r.i;
       const id = filas[r.i].id;
       if (id === "nueva") {
-        const d = dificultad ?? await this.nivel();
+        const version = await this.preguntarVersion();
+        if (version === null) continue;
+        const muyFacil = version === "integral";
+        const d = dificultad != null && (muyFacil || dificultad > 0) ? dificultad : await this.nivel(null, {
+          muyFacil: muyFacil
+        });
         if (d == null) continue;
+        const alterna = muyFacil ? await this.alternaRound() : false;
+        if (alterna === null) continue;
+        const smoking = await this.smoking();
+        if (smoking === null) continue;
         this.cerrar();
         return {
           accion: "nueva",
-          dificultad: d
+          dificultad: d,
+          version: version,
+          alterna: alterna,
+          smoking: smoking
         };
       }
       if (id === "auto") {
@@ -141,7 +155,7 @@ export class PartidaUI {
       }
     }
   }
-  async nivel(cursor = null) {
+  async nivel(cursor = null, {muyFacil: muyFacil = true} = {}) {
     let c = cursor;
     if (c == null) {
       try {
@@ -151,17 +165,79 @@ export class PartidaUI {
         c = 2;
       }
     }
+    const desde = muyFacil ? 0 : 1;
+    const filas = NIVELES.map((t, i) => ({
+      texto: t,
+      marca: MARCA_NIVEL[i]
+    })).slice(desde);
     const r = await this._menu({
       titulo: "SELECT GAME LEVEL",
-      filas: NIVELES.map((t, i) => ({
-        texto: t,
-        marca: MARCA_NIVEL[i]
-      })),
+      filas: filas,
       ayuda: "O ELEGIR    X VOLVER",
-      cursor: c,
+      cursor: Math.max(0, c - desde),
       sola: true
     });
-    return r ? r.i : null;
+    return r ? r.i + desde : null;
+  }
+  async preguntarVersion() {
+    let a = null;
+    try {
+      a = await (this.op.version?.());
+    } catch {}
+    if (!a?.hay) return "original";
+    const r = await this._menu({
+      titulo: "VERSION",
+      sub: "METAL GEAR SOLID",
+      filas: [ {
+        texto: "ORIGINAL",
+        marca: "USA"
+      }, {
+        texto: "INTEGRAL",
+        marca: "JAPON"
+      } ],
+      ayuda: "O ELEGIR    X VOLVER",
+      cursor: a.ultima === "integral" ? 1 : 0,
+      sola: true
+    });
+    return r ? r.i === 1 ? "integral" : "original" : null;
+  }
+  async alternaRound() {
+    let a = null;
+    try {
+      a = this.op.alterna?.();
+    } catch {}
+    if (!a?.hay) return false;
+    const clear = Partida.listar().some(f => f.datos?.visor?.nuevaPartida);
+    if (!clear && !todoDesbloqueado()) return false;
+    const r = await this._menu({
+      titulo: "ALTERNATE ROUND",
+      sub: clear ? "INTEGRAL - CLEAR DATA" : "INTEGRAL - TODO DESBLOQUEADO",
+      filas: [ {
+        texto: "YES"
+      }, {
+        texto: "NO"
+      } ],
+      ayuda: "O ELEGIR    X VOLVER",
+      cursor: clear ? 0 : 1,
+      sola: true
+    });
+    return r ? r.i === 0 : null;
+  }
+  async smoking() {
+    if (!todoDesbloqueado()) return false;
+    const r = await this._menu({
+      titulo: "SMOKING",
+      sub: "TODO DESBLOQUEADO",
+      filas: [ {
+        texto: "YES"
+      }, {
+        texto: "NO"
+      } ],
+      ayuda: "O ELEGIR    X VOLVER",
+      cursor: 1,
+      sola: true
+    });
+    return r ? r.i === 0 : null;
   }
   async cargar({cerrarAlFinal: cerrarAlFinal = true} = {}) {
     let cursor = 0;
@@ -220,6 +296,7 @@ export class PartidaUI {
       const r = await this._menu({
         titulo: "SAVE DATA",
         sub: sub,
+        subIdx: areaIdx,
         filas: lista.map(f => this._filaRanura(f)),
         botones: this.modoVR ? [ "VOLVER" ] : [ "EXPORTAR", "VOLVER" ],
         ayuda: "O GUARDAR    X VOLVER",
@@ -318,6 +395,7 @@ export class PartidaUI {
     return {
       num: n,
       texto: r.area,
+      areaIdx: f.datos.areaIdx,
       detalle: [ `DISC ${r.disco}`, r.siglas, r.tiempo, f.ranura === RANURA_AUTO ? "AUTO" : `SAVE ${r.guardados}` ]
     };
   }
@@ -371,7 +449,7 @@ export class PartidaUI {
       this._raf = requestAnimationFrame(f);
     }
   }
-  _menu({titulo: titulo, sub: sub = "", filas: filas, botones: botones = [], ayuda: ayuda = "", cursor: cursor = 0, sola: sola = false}) {
+  _menu({titulo: titulo, sub: sub = "", subIdx: subIdx = null, filas: filas, botones: botones = [], ayuda: ayuda = "", cursor: cursor = 0, sola: sola = false}) {
     this._abrir();
     this._vr = {
       titulo: titulo,
@@ -450,6 +528,7 @@ export class PartidaUI {
       return d;
     });
     const todos = [ ...nodos, ...bots ];
+    this._nombresArea(this._vr, subIdx, nodos);
     return new Promise(fin => {
       this.estado = {
         nodos: todos,
@@ -464,6 +543,40 @@ export class PartidaUI {
       };
       this._ir(Math.max(0, Math.min(todos.length - 1, cursor)), true);
     });
+  }
+  _nombresArea(vr, subIdx, nodos) {
+    const pedidos = [];
+    if (subIdx > 0) pedidos.push([ subIdx, cv => {
+      vr.subLienzo = cv;
+      if (this._vr === vr) {
+        this._ponerLienzo(this.el.sub, cv);
+        this.el.sub.lastChild.style.display = "block";
+        this.el.sub.lastChild.style.margin = "0 auto";
+      }
+    } ]);
+    vr.filas.forEach((f, i) => {
+      if (f.areaIdx > 0) pedidos.push([ f.areaIdx, cv => {
+        f.lienzo = cv;
+        if (this._vr === vr) this._ponerLienzo(nodos[i]?.querySelector(".pui-area"), cv);
+      } ]);
+    });
+    if (!pedidos.length) return;
+    import("./codec.js").then(m => pedidos.forEach(([idx, poner]) => m.lienzoArea(idx).then(cv => {
+      if (cv) {
+        poner(cv);
+        this.version++;
+      }
+    }))).catch(() => {});
+  }
+  _ponerLienzo(el, cv) {
+    if (!el || !cv) return;
+    const c = document.createElement("canvas");
+    c.width = cv.width;
+    c.height = cv.height;
+    c.getContext("2d").drawImage(cv, 0, 0);
+    c.style.cssText = `width:calc(var(--kr)*${cv.width}px);height:calc(var(--kr)*${cv.height}px);image-rendering:pixelated;vertical-align:middle`;
+    el.textContent = "";
+    el.appendChild(c);
   }
   _ir(i, mudo = false) {
     const s = this.estado;
@@ -675,7 +788,7 @@ export class PartidaUI {
     let y = Math.max(6, Math.round((240 - alto) / 2));
     texto(d.titulo, 160, y, FT, CLARO, "center");
     y += 12 + 5;
-    texto(d.sub || "", 160, y, FN, OSCURO, "center");
+    if (d.subLienzo) x.drawImage(d.subLienzo, 160 - (d.subLienzo.width >> 1), y - 3); else texto(d.sub || "", 160, y, FN, OSCURO, "center");
     y += 9 + 5;
     d.filas.forEach((f, i) => {
       const sel = s ? s.sel === i : false;
@@ -686,7 +799,7 @@ export class PartidaUI {
         tx = X0 + 26;
       }
       const centrada = d.sola && f.num == null;
-      texto(f.texto, centrada ? 160 : tx, y + (f.detalle ? 4 : (hf - 9) / 2), F8, f.vacia ? OSCURO : sel ? CLARO : "#9fd8a0", centrada ? "center" : "left");
+      if (f.lienzo) x.drawImage(f.lienzo, tx, y + (f.detalle ? 1 : (hf - 14) / 2)); else texto(f.texto, centrada ? 160 : tx, y + (f.detalle ? 4 : (hf - 9) / 2), F8, f.vacia ? OSCURO : sel ? CLARO : "#9fd8a0", centrada ? "center" : "left");
       if (f.marca) texto(f.marca, X0 + W - 6, y + (hf - 8) / 2, FN, OSCURO, "right");
       if (f.detalle) {
         let dx = centrada ? 160 - 50 : tx;

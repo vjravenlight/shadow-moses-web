@@ -1,9 +1,15 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { sonido } from "./sonido.js";
+
+import { caption } from "./caption.js";
+
 import { Guion, valorGCL } from "./codec_gcl.js";
 
 import { B } from "./controles.js";
 
 import { cargarVoz } from "./audio_ps1.js";
+
+import { idioma } from "./idioma.js";
 
 export const W = 320, H = 224;
 
@@ -90,6 +96,90 @@ function cargarImg(src) {
   });
 }
 
+function armarFuente(fp, fj) {
+  const c = lienzo(fp.width, fp.height), x = c.getContext("2d");
+  x.drawImage(fp, 0, 0);
+  const d = x.getImageData(0, 0, fp.width, fp.height).data, niv = new Uint8Array(fp.width * fp.height);
+  for (let k = 0; k < niv.length; k++) niv[k] = d[k * 4 + 3] ? Math.round(d[k * 4] / 85) : 0;
+  return {
+    ascii: fj.ascii,
+    zen: fj.zen,
+    zenY: fj.zen_y,
+    zenPaso: fj.zen_paso,
+    niv: niv,
+    aw: fp.width,
+    europea: !!fj.europea
+  };
+}
+
+const _fuentes = new Map;
+
+export function fuenteDe(base) {
+  if (!_fuentes.has(base)) _fuentes.set(base, Promise.all([ cargarImg(base + "fuente.png"), fetch(base + "fuente.json").then(r => r.json()) ]).then(([fp, fj]) => fp ? armarFuente(fp, fj) : null).catch(() => null));
+  return _fuentes.get(base);
+}
+
+const _areas = new Map;
+
+export async function lienzoArea(idx, color = [ 180, 244, 172 ]) {
+  try {
+    await (idioma.listo || idioma.iniciar());
+    const T = idioma.texto;
+    if (T === "en" || !(idx > 0)) return null;
+    const dir = `${idioma.carpeta(T)}codec/`;
+    if (!_areas.has(dir)) _areas.set(dir, Promise.all([ fetch(dir + "areas.json").then(r => r.ok ? r.json() : null, () => null), fuenteDe(dir + "ui/") ]));
+    const [lista, f] = await _areas.get(dir), a = lista?.[idx - 1];
+    if (!a || !f) return null;
+    return textoEnLienzo(f, a.t, {
+      1: a.glifos
+    }, color);
+  } catch (e) {
+    console.warn("nombre de área:", e);
+    return null;
+  }
+}
+
+const hexA = h => {
+  const b = new Uint8Array(36);
+  for (let i = 0; i < 36; i++) b[i] = parseInt(h.substr(i * 2, 2), 16);
+  return b;
+};
+
+function textoEnLienzo(f, t, glifos = {}, color = [ 255, 255, 255 ], ancho = 320) {
+  const renglones = 2 + (String(t).match(/\||#N/g) || []).length + (ancho < 320 ? Math.ceil(String(t).length * 12 / Math.max(24, ancho - 12)) : 0);
+  const tab = new Tablero(f, ancho, renglones * 18 + 2);
+  tab.cH = renglones;
+  tab.alto = (tab.lSkip + 12) * renglones + 2;
+  tab.zenT = {};
+  for (const [k, g] of Object.entries(glifos || {})) {
+    const arr = [];
+    for (const [n, h] of Object.entries(g || {})) arr[+n] = hexA(h);
+    tab.zenT[+k] = arr;
+  }
+  tab.zen1 = tab.zenT[1] || null;
+  tab.clut[0] = [ null, ...[ 1, 2, 3 ].map(k => color.map(c => Math.round(c * k / 3))) ];
+  tab.limpiar();
+  tab.dibujar(t, 0, 1, 0);
+  let alto = 1;
+  for (let y = tab.h - 1; y >= 0 && alto === 1; y--) for (let x = 0; x < tab.w; x++) if (tab.px[y * tab.w + x] & 3) {
+    alto = y + 2;
+    break;
+  }
+  const cv = tab.volcar(), out = lienzo(Math.max(1, tab.maxW), alto);
+  out.getContext("2d").drawImage(cv, 0, 0);
+  return out;
+}
+
+export async function lienzoTexto(t, dirFuente, glifos = {}, color = [ 255, 255, 255 ], ancho = 320) {
+  try {
+    const f = await fuenteDe(dirFuente);
+    return f ? textoEnLienzo(f, t, glifos, color, ancho || 320) : null;
+  } catch (e) {
+    console.warn("texto:", e);
+    return null;
+  }
+}
+
 function lienzo(w, h) {
   const c = document.createElement("canvas");
   c.width = w;
@@ -141,7 +231,7 @@ function triangulo(x, a) {
   x.fill();
 }
 
-class Tablero {
+export class Tablero {
   constructor(fuente, w = 252, h = 76) {
     this.f = fuente;
     this.w = w;
@@ -175,7 +265,7 @@ class Tablero {
       return 18;
     }
     let c = code;
-    if (c > 128) c -= 34;
+    if (c > 128 && !this.f.europea) c -= 34;
     c -= 32;
     const g = this.f.ascii[c];
     if (!g) return 0;
@@ -209,7 +299,14 @@ class Tablero {
   glifoZen(code) {
     code &= ~24576;
     let i;
-    if (code < 33280) i = code - 33025; else if (code < 33536) i = code - 33198; else if (code < 38400) i = code - 36721 - (code >> 8) + 169; else if (code < 39424) i = code - 38251 - (code >> 8) | 4096; else return null;
+    if (code < 33280) i = code - 33025; else if (code < 33536) i = code - 33198; else if (code < 38400) i = code - 36721 - (code >> 8) + (this.f.zen > 169 ? 169 : 0); else if (code < 39424) i = code - 38251 - (code >> 8) | 4096; else {
+      const r = code - 39424, tv = r >> 9, a = r & 511;
+      const g = this.zenT?.[tv + 2]?.[a - 1 - (a >> 8)];
+      return g ? (r2, c) => {
+        const v = g[r2 * 3] << 16 | g[r2 * 3 + 1] << 8 | g[r2 * 3 + 2];
+        return v >> 22 - 2 * c & 3;
+      } : null;
+    }
     const tabla = i >> 12, n = i & 4095;
     if (tabla === 0) {
       if (n < 0 || n >= this.f.zen) return null;
@@ -231,6 +328,7 @@ class Tablero {
       const c = ch.charCodeAt(0);
       cod.push(c < 256 ? 32768 | c : c);
     }
+    if (!this.f.europea) for (let k = 0; k < cod.length; k++) if (cod[k] > 32895 && cod[k] <= 33023) cod[k] = 32831;
     const n = cod.length, bufW = this.w - 12, mask = 40959, CODE = ch => 32768 | ch.charCodeAt(0);
     let i = 0, x = xtop, y = ytop, counter = 0, flag1 = 0, cr = 0, result = 0, color = color0, mdata, next, dx, m2 = 0;
     const peek = k => k < n ? cod[k] : 32768;
@@ -362,6 +460,22 @@ class Tablero {
   }
 }
 
+function sinAcentos(s) {
+  return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[\u00bf\u00a1]/g, "");
+}
+
+function repartirSub(S, talks) {
+  const t0 = S[0][0], t1 = S[S.length - 1][1], largo = talks.map(e => Math.max(8, String(e.t ?? e.texto ?? "").length)), tot = largo.reduce((a, b) => a + b, 0);
+  const out = [];
+  let t = t0;
+  for (let i = 0; i < talks.length; i++) {
+    const d = (t1 - t0) * largo[i] / tot;
+    out.push([ t, Math.max(t + .1, t + d - .05), "" ]);
+    t += d;
+  }
+  return out;
+}
+
 class Voces {
   constructor(codec) {
     this.c = codec;
@@ -375,20 +489,42 @@ class Voces {
       this.salida = this._ctx.createGain();
       this.salida.gain.value = this.c.op.volumenVoz ?? 1;
       this.salida.connect(this._ctx.destination);
+      sonido.registrarMono(this.salida);
     }
     return this._ctx;
   }
-  cargar(id) {
+  cargar(id, desde = "en") {
     if (!(id > 0) && id !== 0) return Promise.resolve(null);
-    if (this.cache.has(id)) return this.cache.get(id);
-    const p = cargarVoz(this.c.base + "vox/", id, this.ctx()).catch(e => {
-      console.warn("voz", id, e);
+    const voz = idioma.voz, clave = `${desde}:${voz}:${id}`;
+    if (this.cache.has(clave)) return this.cache.get(clave);
+    const p = (async () => {
+      const lista = await idioma.resolverVoz(id, desde, voz, this.c.base + "../").catch(() => [ [ this.c.base + "vox/", id ] ]);
+      for (const [base, n] of lista) {
+        const r = await cargarVoz(base, n, this.ctx()).catch(() => null);
+        if (r) {
+          r.idioma = r.datos?.idioma || "en";
+          return r;
+        }
+      }
+      console.warn("voz", id, desde, "no está");
       return null;
-    });
-    this.cache.set(id, p);
-    this.orden.push(id);
+    })();
+    this.cache.set(clave, p);
+    this.orden.push(clave);
     while (this.orden.length > 24) this.cache.delete(this.orden.shift());
     return p;
+  }
+  async subtitulosEn(id, texto, desde = "en") {
+    const lista = await idioma.resolverVoz(id, desde, texto, this.c.base + "../").catch(() => []);
+    for (const [base, n] of lista) {
+      try {
+        const r = await fetch(base + n + ".json");
+        if (!r.ok) continue;
+        const s = (await r.json()).sub || null;
+        if (s && s.some(q => q[2] || q[3])) return s;
+      } catch {}
+    }
+    return null;
   }
 }
 
@@ -452,18 +588,7 @@ export class Codec {
   async cargar() {
     const b = this.base, hud = this.op.rutaHud || b + "../hud/";
     const [fp, fj, marco, call, num, grande] = await Promise.all([ cargarImg(b + "ui/fuente.png"), fetch(b + "ui/fuente.json").then(r => r.json()), cargarImg(b + "ui/marco.png"), cargarImg(b + "ui/call.png"), cargarImg(hud + "num.png"), cargarImg(hud + "fuente.png") ]);
-    const c = lienzo(fp.width, fp.height), x = c.getContext("2d");
-    x.drawImage(fp, 0, 0);
-    const d = x.getImageData(0, 0, fp.width, fp.height).data, niv = new Uint8Array(fp.width * fp.height);
-    for (let k = 0; k < niv.length; k++) niv[k] = d[k * 4 + 3] ? Math.round(d[k * 4] / 85) : 0;
-    this.fuente = {
-      ascii: fj.ascii,
-      zen: fj.zen,
-      zenY: fj.zen_y,
-      zenPaso: fj.zen_paso,
-      niv: niv,
-      aw: fp.width
-    };
+    this.fuente = armarFuente(fp, fj);
     this.tablero = new Tablero(this.fuente);
     this.tabMem = new Tablero(this.fuente);
     this.tabMem.clut[2] = clutColor(7429);
@@ -614,7 +739,13 @@ export class Codec {
       };
       this.vozJuego = s;
       s.start(ctx.currentTime + retraso, r.offset);
-      if (subtitulos && r.datos?.sub?.length) this.subtitularVozJuego(s, r.datos.sub, ctx.currentTime + retraso);
+      if (subtitulos && r.datos?.sub?.length) {
+        const t0 = ctx.currentTime + retraso, texto = idioma.texto;
+        if (texto === (r.idioma || "en") && r.datos.sub.some(q => q[2] || q[3])) this.subtitularVozJuego(s, r.datos.sub, t0); else this.voces.subtitulosEn(id, texto).then(S => {
+          const fin = S?.length ? S[S.length - 1][1] : 0, k = fin > 0 ? Math.min(1.5, Math.max(.6, r.datos.sub[r.datos.sub.length - 1][1] / fin)) : 1;
+          this.subtitularVozJuego(s, S?.length ? S.map(([a, b, ...resto]) => [ a * k, b * k, ...resto ]) : r.datos.sub, t0);
+        });
+      }
     });
   }
   subtitularVozJuego(s, S, t0) {
@@ -638,21 +769,43 @@ export class Codec {
         dw = c - t0 - wAnt;
       }
       const t = mudo ? w + dw : c - t0;
-      const l = S.find(x => t >= x[0] && t < x[1]);
-      return l ? l[2] : "";
+      lineaAhora = caption.on ? S.find(x => t >= x[0] && t < x[1]) || null : null;
+      return lineaAhora ? lineaAhora[2] : "";
     };
+    let lineaAhora = null, lineaVista;
     this._subVoz = {
       s: s,
-      texto: texto
+      texto: texto,
+      linea: () => lineaAhora
     };
     const paso = () => {
       if (this.vozJuego !== s) {
         el.style.display = "none";
         return;
       }
-      const txt = texto();
-      if (el.textContent !== txt) el.textContent = txt;
-      el.style.display = txt ? "block" : "none";
+      const txt = texto(), j = lineaAhora?.[3];
+      if (j?.tj != null) {
+        if (lineaVista !== lineaAhora) {
+          lineaVista = lineaAhora;
+          el.textContent = "";
+          const l = lineaAhora;
+          (j._cv ? Promise.resolve(j._cv) : lienzoTexto(j.tj, `${idioma.carpeta(j.i || "ja")}codec/ui/`, {
+            3: j.glifos
+          })).then(cv => {
+            if (!cv || lineaVista !== l) return;
+            j._cv = cv;
+            const k = Math.max(1, Math.round((parseFloat(getComputedStyle(el).fontSize) || 16) / 12 * 10) / 10);
+            cv.style.cssText = `width:${Math.round(cv.width * k)}px;height:${Math.round(cv.height * k)}px;image-rendering:pixelated;display:inline-block`;
+            el.textContent = "";
+            el.appendChild(cv);
+          });
+        }
+        el.style.display = "block";
+      } else {
+        lineaVista = null;
+        if (el.textContent !== txt) el.textContent = txt;
+        el.style.display = txt ? "block" : "none";
+      }
       requestAnimationFrame(paso);
     };
     requestAnimationFrame(paso);
@@ -665,6 +818,24 @@ export class Codec {
     } catch {
       return "";
     }
+  }
+  lienzoVozJuego() {
+    const v = this._subVoz;
+    if (!v || !this.vozJuego || this.vozJuego !== v.s) return null;
+    try {
+      v.texto();
+    } catch {
+      return null;
+    }
+    const j = v.linea?.()?.[3];
+    if (j?.tj == null) return null;
+    if (j._cv) return j._cv;
+    if (!j._pidiendo) j._pidiendo = lienzoTexto(j.tj, `${idioma.carpeta(j.i || "ja")}codec/ui/`, {
+      3: j.glifos
+    }).then(cv => {
+      if (cv) j._cv = cv;
+    });
+    return null;
   }
   pararVozJuego() {
     try {
@@ -1295,9 +1466,13 @@ export class Codec {
   llamar() {
     this.cont = 30;
     this.op.se?.(SE.SEND);
-    const code = this.guion.codigoDe(this.freq);
+    let code = this.guion.codigoDe(this.freq), extra = null;
+    if (code < 0 && this.op.llamadaExtra) {
+      extra = this.op.llamadaExtra(this.freq, this.guion.st) || null;
+      if (extra) code = extra.code ?? 0;
+    }
     if (code >= 0) {
-      this.iniciarLlamada(this.freq, code);
+      this.iniciarLlamada(this.freq, code, extra);
       this.estado = 2;
       this.cb.tipo = 0;
       this.cb.freq = this.freq;
@@ -1306,7 +1481,7 @@ export class Codec {
     this.op.sinRespuesta?.(this.freq);
     this.estado = 9;
   }
-  iniciarLlamada(freq, code) {
+  iniciarLlamada(freq, code, extra = null) {
     const cs = this.cs = this.nuevoCS();
     cs.llamada = {
       cargando: true,
@@ -1317,9 +1492,17 @@ export class Codec {
     const off = code & 16777215;
     cs.llamada.promesa = (async () => {
       try {
-        const r = await fetch(`${this.base}llamadas/${off}.json`);
-        if (!r.ok) throw new Error("llamada " + off + ": " + r.status);
+        const url = extra?.url || `${this.base}llamadas/${off}.json`;
+        await (idioma.listo || idioma.iniciar());
+        const texto = extra ? "en" : idioma.texto, dirT = `${this.base}../idiomas/${texto}/codec/`;
+        let r = texto !== "en" ? await fetch(`${dirT}llamadas/${off}.json`).catch(() => null) : null;
+        const deIdioma = !!r?.ok;
+        if (!deIdioma) r = await fetch(url);
+        if (!r.ok) throw new Error("llamada " + url + ": " + r.status);
         const d = await r.json();
+        d.idioma = deIdioma ? texto : "en";
+        if (deIdioma) d.fuenteTablero = await fuenteDe(dirT + "ui/");
+        if (extra?.fuente) d.fuenteTablero = await fuenteDe(extra.fuente);
         const caras = new Set, voces = [];
         const rec = evs => {
           for (const ev of evs || []) {
@@ -1334,7 +1517,7 @@ export class Codec {
         d.vocesOrden = voces;
         d.imgs = {};
         await Promise.all([ ...caras ].map(k => this.cargarCara(d, k)));
-        voces.slice(0, 2).forEach(v => this.voces.cargar(v));
+        voces.slice(0, 2).forEach(v => this.voces.cargar(v, d.idioma));
         d.glifosBytes = (d.glifos || []).map(h => {
           const a = new Uint8Array(36);
           for (let i = 0; i < 36; i++) a[i] = parseInt(h.substr(i * 2, 2), 16);
@@ -1394,6 +1577,7 @@ export class Codec {
     cs.tareaViva = true;
     const id = this.tareaId = (this.tareaId || 0) + 1;
     this.tablero.zen1 = l.datos.glifosBytes;
+    this.tablero.f = l.datos.fuenteTablero || this.fuente;
     (async () => {
       cs.enBloque = 0;
       cs.flags = (l.datos.flags || 0) & ~1;
@@ -1443,7 +1627,7 @@ export class Codec {
      case "voz":
       {
         if (!(cs.flags & 256)) {
-          this.iniciarVoz(ev.vox);
+          this.iniciarVoz(ev.vox, ev.eventos);
           cs.enBloque = 1;
           await this.ejecutarBloque(ev.eventos, id);
           cs.enBloque = 0;
@@ -1706,7 +1890,7 @@ export class Codec {
     }
     s.img.getContext("2d").putImageData(this._ruido, 0, 0);
   }
-  iniciarVoz(id) {
+  iniciarVoz(id, eventos = null) {
     this.pararVoz();
     const v = this.voz = {
       id: id,
@@ -1716,17 +1900,17 @@ export class Codec {
       subVis: false,
       lipI: 0
     };
-    const l = this.cs.llamada?.datos;
+    const l = this.cs.llamada?.datos, desde = l?.idioma || "en";
     if (l) {
       const k = l.vocesOrden.indexOf(id);
-      l.vocesOrden.slice(k + 1, k + 3).forEach(x => this.voces.cargar(x));
+      l.vocesOrden.slice(k + 1, k + 3).forEach(x => this.voces.cargar(x, desde));
     }
     if (!(id > 0)) {
       v.estado = -1;
       v.falta = true;
       return;
     }
-    this.voces.cargar(id).then(async r => {
+    this.voces.cargar(id, desde).then(async r => {
       if (this.voz !== v) return;
       if (!r) {
         v.estado = -1;
@@ -1739,6 +1923,11 @@ export class Codec {
       } catch {}
       if (this.voz !== v) return;
       v.datos = r.datos;
+      const talks = (eventos || []).filter(e => e.tipo === "hablar");
+      if ((r.idioma || "en") !== desde && talks.length && r.datos.sub?.length && talks.length !== r.datos.sub.length) v.datos = {
+        ...r.datos,
+        sub: repartirSub(r.datos.sub, talks)
+      };
       if (ctx.state !== "running") {
         this.vozMuda(v, 0);
         v.estado = 2;
@@ -1986,8 +2175,22 @@ export class Codec {
       sel: 0,
       fase: 0,
       t: 0,
-      partidas: Codec.partidas()
+      partidas: Codec.partidas(),
+      lienzos: {}
     };
+    this.lienzosArea(this.guardado);
+  }
+  lienzosArea(g) {
+    const pedir = (k, idx, color) => lienzoArea(idx, color).then(cv => {
+      if (cv) g.lienzos[k] = cv;
+    });
+    pedir("area", g.areaIdx, [ 255, 255, 255 ]);
+    g.partidas.forEach((p, i) => {
+      if (p?.areaIdx > 0) {
+        pedir("s" + i, p.areaIdx, BASE);
+        pedir("S" + i, p.areaIdx, [ 255, 255, 255 ]);
+      }
+    });
   }
   pasoGuardado(pad) {
     const g = this.guardado;
@@ -2025,6 +2228,7 @@ export class Codec {
           ok = false;
         }
         g.partidas = Codec.partidas();
+        this.lienzosArea(g);
         g.fase = ok ? 1 : 2;
         g.t = 0;
         this.op.se?.(ok ? 32 : 35);
@@ -2042,7 +2246,8 @@ export class Codec {
     x.fillStyle = "#000";
     x.fillRect(0, 0, W, H);
     this.textoGrande(x, 160, 24, "SAVE DATA", "base", 2);
-    this.textoChico(x, 160, 42, g.area.toUpperCase(), "blanco", 2);
+    const la = g.lienzos?.area;
+    if (la) x.drawImage(la, 160 - (la.width >> 1), 38); else this.textoChico(x, 160, 42, g.area.toUpperCase(), "blanco", 2);
     for (let i = 0; i < 3; i++) {
       const y = 62 + i * 34, p = g.partidas[i], sel = i === g.sel;
       x.fillStyle = rgb(sel ? PANEL2 : PANEL);
@@ -2051,7 +2256,8 @@ export class Codec {
       polilinea(x, [ 40, y, 279, y, 279, y + 25, 40, y + 25, 40, y ]);
       this.textoGrande(x, 50, y + 10, String(i + 1), "base");
       if (p) {
-        this.textoChico(x, 70, y + 6, String(p.area || "").toUpperCase().slice(0, 24), sel ? "blanco" : "base");
+        const ls = g.lienzos?.[(sel ? "S" : "s") + i];
+        if (ls) x.drawImage(ls, 70, y + 1); else this.textoChico(x, 70, y + 6, String(p.area || "").toUpperCase().slice(0, 24), sel ? "blanco" : "base");
         const f = p.fecha ? new Date(p.fecha) : null, dd = n => String(n).padStart(2, "0");
         this.textoChico(x, 70, y + 15, f ? `${f.getFullYear()}-${dd(f.getMonth() + 1)}-${dd(f.getDate())} ${dd(f.getHours())}:${dd(f.getMinutes())}` : "", "base");
       } else this.textoChico(x, 70, y + 10, "NO DATA", "base");
@@ -2101,6 +2307,7 @@ export class Codec {
     for (const [tx, ty, gx] of glifos) x.drawImage(img, tx, ty, 6, 5, ox + gx, Y, 6, 5);
   }
   textoGrande(x, X, Y, s, color = "base", alinear = 0) {
+    s = sinAcentos(s);
     const img = this.img.grande[color] || this.img.grande.base;
     const glifos = [];
     let w = 0;

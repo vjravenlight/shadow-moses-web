@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>MGS web · Sin usar</title>
+
+<style>
+@font-face{font-family:MGS8;src:url(assets/hud/mgs8.woff) format("woff");font-display:block}:root{--fondo:#000;--claro:#b4f4ac;--medio:#7fb08c;--borde:#2f4a39;--panel:#041008}*{box-sizing:border-box}body{margin:0;background:var(--fondo);color:var(--claro);font:14px/1.4 Trebuchet MS,Verdana,Arial,sans-serif}header{padding:14px 16px 10px;border-bottom:1px solid var(--borde);display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}header h1{margin:0;font:400 22px MGS8,Consolas,monospace;letter-spacing:1px;flex:1 1 auto}header a,button{background:var(--panel);color:#9fd8a0;border:1px solid var(--borde);font:13px MGS8,Consolas,monospace;padding:7px 11px;cursor:pointer;text-decoration:none}header a:hover,button:hover{border-color:var(--claro);color:var(--claro)}.intro{padding:10px 16px;color:var(--medio);max-width:980px}#vitrina{position:relative;height:min(52vh,460px);border-bottom:1px solid var(--borde);background:radial-gradient(#0c2416,#000 70%)}#vitrina canvas{width:100%;height:100%;display:block;touch-action:none}#ficha{position:absolute;left:12px;bottom:10px;right:12px;pointer-events:none;text-shadow:1px 1px 0 #000}#ficha b{font:400 18px MGS8,Consolas,monospace}h2{font:400 16px MGS8,Consolas,monospace;margin:18px 16px 8px;color:var(--claro)}.grilla{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px;padding:0 16px 16px}.tarjeta{border:1px solid var(--borde);background:var(--panel);cursor:pointer;padding:6px}.tarjeta.sel{border-color:var(--claro);background:#006e3c61}.tarjeta canvas,.tarjeta img{width:100%;aspect-ratio:4/3;display:block;background:#000;image-rendering:pixelated;object-fit:contain}.tarjeta .n{font:400 13px MGS8,Consolas,monospace;margin-top:4px}.tarjeta .d{color:var(--medio);font-size:12px}.doc{border:1px solid var(--borde);background:var(--panel);padding:10px}.doc .fotos{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.doc .fotos img{height:96px;image-rendering:pixelated;background:#000}.doc i{color:var(--medio);font-size:12px;font-style:normal;display:block;margin-top:4px}.grilla.docs{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}
+</style>
+<script type="importmap">
+{ "imports": { "three": "./lib/three/build/three.module.js", "three/addons/": "./lib/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header><h1>SIN USAR</h1><a href="index.html">✕ VOLVER AL TITULO</a></header>
+<p class="intro" id="intro">Cargando…</p>
+<div id="vitrina"><canvas id="cv"></canvas><div id="ficha"></div></div>
+<h2>MODELOS QUE NINGUN GUION, CINEMATICA NI CODIGO NOMBRA</h2>
+<div class="grilla" id="modelos"></div>
+<h2>COMPROBADO A MANO (DOCS)</h2>
+<div class="grilla docs" id="docs"></div>
+<script type="module" src="sin_usar.js"></script>
+</body>
+</html>

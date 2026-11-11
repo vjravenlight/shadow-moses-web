@@ -1,4 +1,6 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { reemplazo, hashDeRuta, desplazamiento } from "./texturas_idioma.js";
+
 const BASE = "assets/telops/";
 
 const FUENTE = '"Helvetica Neue", Helvetica, Arial, "Liberation Sans", "Nimbus Sans", Roboto, sans-serif';
@@ -93,6 +95,30 @@ export function esTexto(png) {
 export function dibujarTelop(ctx, png, o) {
   const a = Math.max(0, Math.min(1, o.alfa ?? 1));
   if (a <= 0) return false;
+  const dd = o.sinIdioma ? null : desplazamiento(png);
+  if (dd) o = {
+    ...o,
+    x: o.x + dd[0] * o.kx,
+    y: o.y + dd[1] * o.ky
+  };
+  const rl = o.sinIdioma ? null : reemplazo(hashDeRuta(png));
+  if (rl?.listo) {
+    ctx.save();
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    const rs = typeof o.sombra === "string" ? reemplazo(hashDeRuta(o.sombra)) : null;
+    if (rs?.listo) {
+      ctx.globalAlpha = a * .7;
+      ctx.drawImage(enNegro(rs.img), o.x, o.y, rs.w * o.kx, rs.h * o.ky);
+    } else if (o.sombra) {
+      ctx.globalAlpha = a * .7;
+      ctx.drawImage(enNegro(rl.img), o.x + o.kx * .5, o.y + o.ky * .5, rl.w * o.kx, rl.h * o.ky);
+    }
+    ctx.globalAlpha = a;
+    ctx.drawImage(rl.img, o.x, o.y, rl.w * o.kx, rl.h * o.ky);
+    ctx.restore();
+    return true;
+  }
   const e = datos?.[png];
   ctx.save();
   if (e?.L) {
@@ -172,7 +198,8 @@ export function dibujarCreditos(lienzo, lineas) {
       kx: s,
       ky: s,
       alfa: l.a,
-      img: l.img
+      img: l.img,
+      sinIdioma: l.sinIdioma
     });
   }
   return c;

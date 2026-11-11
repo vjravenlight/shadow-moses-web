@@ -2019,7 +2019,8 @@ class Vapor {
     this.diff = V3(this.end.x - this.mov.x, this.end.y - this.mov.y, this.end.z - this.mov.z);
     this.speed = V3(Math.trunc(this.diff.x / 16), Math.trunc(this.diff.y / 16), Math.trunc(this.diff.z / 16));
     const x = num("x"), lv = Math.max(0, rap.nivelJuego());
-    this.vida = x.length ? x[Math.min(lv, x.length - 1)] ?? 36 : 36;
+    if (x.length) rap.vidaVapor = x[Math.min(lv, x.length - 1)] ?? 36;
+    this.vida = rap.vidaVapor ?? 36;
     const b = num("b");
     this.vecs = [];
     for (let k = 0; k + 2 < b.length && this.vecs.length < 3; k += 3) this.vecs.push(V3(b[k] - this.mov.x, b[k + 1] - this.mov.y, b[k + 2] - this.mov.z));

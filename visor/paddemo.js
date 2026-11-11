@@ -1,7 +1,13 @@
 // MGS web — FeniXVOID · Project Ravenlight
+import { miraRifleEscena } from "./mira_armas.js";
+
 import * as ctl from "./controles.js";
 
 import { urlVoz } from "./audio_ps1.js";
+
+import { idioma } from "./idioma.js";
+
+import { caption } from "./caption.js";
 
 export const BOTON = {
   L2: 1,
@@ -323,7 +329,7 @@ export class Escena10A {
       f30: [ 0, 0, 0 ],
       registro: []
     });
-    this.mira = this._mira();
+    miraRifleEscena(this, true);
     const hud = typeof document !== "undefined" ? document.getElementById("hud") : null;
     this.hudAntes = hud ? hud.hidden : null;
     if (hud) hud.hidden = true;
@@ -402,51 +408,6 @@ export class Escena10A {
       zoom: ZOOM_10A
     };
   }
-  _mira() {
-    if (typeof document === "undefined") return null;
-    const d = document.createElement("div");
-    d.className = "mira-10a";
-    d.style.cssText = "position:fixed;inset:0;pointer-events:none;z-index:6;";
-    const cv = document.createElement("canvas");
-    cv.width = 640;
-    cv.height = 448;
-    cv.style.cssText = "width:100%;height:100%;";
-    const x = cv.getContext("2d");
-    x.fillStyle = "#000";
-    x.fillRect(0, 0, 640, 448);
-    x.globalCompositeOperation = "destination-out";
-    x.beginPath();
-    x.ellipse(320, 224, 250, 200, 0, 0, Math.PI * 2);
-    x.fill();
-    x.globalCompositeOperation = "source-over";
-    x.strokeStyle = "rgba(0,0,0,.85)";
-    x.lineWidth = 2;
-    x.beginPath();
-    x.moveTo(70, 224);
-    x.lineTo(570, 224);
-    x.moveTo(320, 24);
-    x.lineTo(320, 424);
-    x.stroke();
-    x.lineWidth = 6;
-    x.beginPath();
-    x.moveTo(70, 224);
-    x.lineTo(250, 224);
-    x.moveTo(390, 224);
-    x.lineTo(570, 224);
-    x.moveTo(320, 260);
-    x.lineTo(320, 424);
-    x.stroke();
-    for (let k = 1; k <= 4; k++) {
-      x.lineWidth = 2;
-      x.beginPath();
-      x.moveTo(314, 224 + k * 12);
-      x.lineTo(326, 224 + k * 12);
-      x.stroke();
-    }
-    d.appendChild(cv);
-    (document.getElementById("hud")?.parentNode || document.body).appendChild(d);
-    return d;
-  }
   _engancharReinicio() {
     const g = globalThis.__mgs?.guion;
     if (!g?.op || g.op.__esc10a) return;
@@ -478,8 +439,7 @@ export class Escena10A {
     }
     this.activo = false;
     this.camara = null;
-    this.mira?.remove();
-    this.mira = null;
+    miraRifleEscena(this, false);
     this.hudAntes = null;
   }
 }
@@ -674,6 +634,7 @@ export class Movie {
     this.cortar();
     this.op = op;
     this.actor = actor;
+    this.b = op.base || this.base;
     this.t = 0;
     this.activo = true;
     this.tipo = actor?.tipo || "MOVIE";
@@ -705,7 +666,21 @@ export class Movie {
   _video(listo) {
     const id = hex4(this.actor?.nombre);
     this.id = id;
-    jsonDe(`${this.base}demos/movie/${id}.json`).then(listo(info => {
+    const deIdioma = k => k && k !== "en" && this.b === BASE_ASSETS ? jsonDe(`${idioma.carpeta(k)}demos/movie/${id}.json`) : Promise.resolve(null);
+    const pedir = (idioma.listo || idioma.iniciar?.() || Promise.resolve()).then(() => Promise.all([ jsonDe(`${this.b}demos/movie/${id}.json`), deIdioma(idioma.voz), idioma.texto === idioma.voz ? null : deIdioma(idioma.texto) ]));
+    pedir.then(listo(([usa, iv, it]) => {
+      const info = usa && iv ? {
+        ...usa,
+        archivo: iv.archivo,
+        w: iv.w,
+        h: iv.h,
+        cuadros: iv.cuadros,
+        fps: iv.fps,
+        duracion: iv.duracion,
+        sub: iv.sub,
+        idiomaVoz: iv.idioma
+      } : usa;
+      if (info && idioma.texto !== idioma.voz) info.sub = (it || (idioma.texto === "en" ? usa : null))?.sub || info.sub;
       if (!info) {
         this.estado = "sin-video";
         this.log("sin video", {
@@ -717,10 +692,18 @@ export class Movie {
       this.f40 = 11 + (opNum(this.actor, "i", 0) || 0);
       this.f42 = info.cuadros - 11 - (opNum(this.actor, "o", 0) || 0);
       const c = this.capa = armarCapa();
+      this.completo = info.h > 200;
+      if (this.completo) {
+        c.pant.style.width = "min(100vw,calc(100vh*320/240))";
+        c.pant.style.aspectRatio = "320/240";
+        c.ventana.style.top = "0";
+        c.ventana.style.height = "100%";
+      }
       const v = this.media = document.createElement("video");
       v.playsInline = true;
       v.preload = "auto";
-      v.src = `${this.base}${info.archivo}`;
+      v.src = `${this.b}${info.archivo}`;
+      globalThis.__mgs?.audio?.monoElemento?.(v);
       v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:fill;";
       c.ventana.insertBefore(v, c.fundido);
       v.addEventListener("ended", () => {
@@ -757,12 +740,19 @@ export class Movie {
     });
   }
   _entrada(c) {
-    if (this.tipo !== "MOVIE") return;
+    if (this.tipo !== "MOVIE" && !this.op?.cortable) return;
     const cortar = () => {
-      if (this.activo && this.estado === "reproduciendo") {
-        this.log("cortado");
-        this.terminar("cortado");
+      if (!this.activo || this.estado !== "reproduciendo") return;
+      if (this.tipo === "ENDINGROLL") {
+        if (this.rod && this.rod.fase !== "sale") {
+          this.log("cortado");
+          this.rod.fase = "sale";
+          this.rod.sombra = 40;
+        }
+        return;
       }
+      this.log("cortado");
+      this.terminar("cortado");
     };
     this._teclas = e => {
       if ([ "Enter", "Escape", "Space", "KeyC", "NumpadEnter" ].includes(e.code)) {
@@ -794,9 +784,29 @@ export class Movie {
     this._mandoAntes = ap;
   }
   _subtitulo(t, lista) {
-    const l = lista?.find(x => t >= x[0] && t < x[1]);
+    if (!caption.on) lista = null;
+    const l = lista?.find(x => t >= x[0] && t < x[1]), j = l?.[3];
+    if (j?.tj != null && this.capa) {
+      const el = this.capa.sub;
+      if (el._linea === l) return;
+      el._linea = l;
+      el.textContent = "";
+      (j._cv ? Promise.resolve(j._cv) : import("./codec.js").then(m => m.lienzoTexto(j.tj, `${idioma.carpeta(j.i || "ja")}codec/ui/`, {
+        3: j.glifos
+      }))).then(cv => {
+        if (!cv || el._linea !== l) return;
+        j._cv = cv;
+        cv.style.cssText = `height:${cv.height / 12 * 1.2}em;image-rendering:pixelated`;
+        el.textContent = "";
+        el.appendChild(cv);
+      }).catch(() => {});
+      return;
+    }
     const txt = l ? l[2] : "";
-    if (this.capa && this.capa.sub.textContent !== txt) this.capa.sub.textContent = txt;
+    if (this.capa) {
+      this.capa.sub._linea = null;
+      if (this.capa.sub.textContent !== txt) this.capa.sub.textContent = txt;
+    }
   }
   _telop(listo) {
     const tex = hex4(opNum(this.actor, "t", 0) ?? 0);
@@ -820,7 +830,7 @@ export class Movie {
       c.ventana.insertBefore(cv, c.fundido);
       this.imgs = lista.map(x => {
         const im = new Image;
-        im.src = this.base + x.png;
+        im.src = this.b + x.png;
         return im;
       });
       this.tel = {
@@ -899,14 +909,18 @@ export class Movie {
     }
   }
   cargarCreditos() {
-    if (!this.creditos) this.creditos = jsonDe(`${this.base}demos/creditos/creditos.json`);
+    const b = this.b || this.base;
+    if (!this.creditos || this._baseCreditos !== b) {
+      this._baseCreditos = b;
+      this.creditos = jsonDe(`${b}demos/creditos/creditos.json`);
+    }
     return this.creditos;
   }
   _rodillo(listo) {
     const voz = opNum(this.actor, "v", 0) || 0;
     this.f30 = opNum(this.actor, "w", 660) ?? 660;
     const id = hex4(this.actor?.nombre);
-    Promise.all([ this.cargarCreditos(), voz ? jsonDe(`${this.base}codec/vox/${voz}.json`) : jsonDe(`${this.base}demos/movie/${id}.json`) ]).then(listo(([cr, info]) => {
+    Promise.all([ this.cargarCreditos(), voz ? jsonDe(`${this.b}codec/vox/${voz}.json`) : jsonDe(`${this.b}demos/movie/${id}.json`) ]).then(listo(([cr, info]) => {
       const lista = cr?.archivos?.credit || [];
       if (!lista.length || !info) {
         this.estado = "sin-video";
@@ -928,7 +942,7 @@ export class Movie {
       if (voz) {
         const a = this.media = new Audio;
         a.preload = "auto";
-        urlVoz(`${this.base}codec/vox/`, voz, info).then(({url: url, esBlob: esBlob}) => {
+        urlVoz(`${this.b}codec/vox/`, voz, info).then(({url: url, esBlob: esBlob}) => {
           if (this.media !== a) {
             if (esBlob) URL.revokeObjectURL(url);
             return;
@@ -943,7 +957,7 @@ export class Movie {
         const v = this.media = document.createElement("video");
         v.playsInline = true;
         v.preload = "auto";
-        v.src = `${this.base}${info.archivo}`;
+        v.src = `${this.b}${info.archivo}`;
         v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:fill;filter:brightness(0.625);";
         c.ventana.insertBefore(v, c.fundido);
       }
@@ -964,7 +978,7 @@ export class Movie {
       c.ventana.insertBefore(cv, c.fundido);
       this.imgs = lista.map(x => {
         const im = new Image;
-        im.src = this.base + x.png;
+        im.src = this.b + x.png;
         return im;
       });
       const T = cr.tiempos_rodillo || [];
@@ -985,6 +999,7 @@ export class Movie {
         fin: +fin.toFixed(1),
         w: this.f30
       });
+      this._entrada(c);
     }));
   }
   _rodilloCuadro() {
@@ -1068,6 +1083,7 @@ export class Movie {
       return;
     }
     if (this.tipo === "ENDINGROLL") {
+      this._mando();
       while (this._acum >= 1 && this.activo) {
         this._acum -= 1;
         this._rodilloCuadro();
@@ -1126,6 +1142,7 @@ export class Movie {
     this.activo = false;
     this.op = null;
     this._pedido = null;
+    this.completo = false;
     if (this._teclas) {
       removeEventListener("keydown", this._teclas, true);
       this._teclas = null;
@@ -1152,7 +1169,7 @@ export class Movie {
       cv.width = 320 * k;
       cv.height = 224 * k;
     }
-    const x = cv.getContext("2d"), W = cv.width, H = cv.height, s = W / 320, vy = 24 * s, vh = 160 * s;
+    const x = cv.getContext("2d"), W = cv.width, H = cv.height, s = W / 320, vy = this.completo ? 0 : 24 * s, vh = this.completo ? H : 160 * s;
     x.globalAlpha = 1;
     x.filter = "none";
     x.fillStyle = "#000";
@@ -1177,8 +1194,12 @@ export class Movie {
       x.fillStyle = `rgba(0,0,0,${Math.min(1, op)})`;
       x.fillRect(0, vy, W, vh);
     }
-    const txt = c.sub.textContent;
-    if (txt) {
+    const txt = c.sub.textContent, cvJ = c.sub.querySelector?.("canvas");
+    if (cvJ && cvJ.width) {
+      const k = Math.max(1, Math.floor(Math.min((W - 8) / cvJ.width, 30 * s / cvJ.height)));
+      x.imageSmoothingEnabled = false;
+      x.drawImage(cvJ, Math.round((W - cvJ.width * k) / 2), Math.round(188 * s), cvJ.width * k, cvJ.height * k);
+    } else if (txt) {
       const filas = String(txt).split("\n"), alto = 12 * s;
       x.font = `${Math.round(10.5 * s)}px "Trebuchet MS", Verdana, Arial, sans-serif`;
       x.textAlign = "center";
@@ -1196,7 +1217,7 @@ export class Movie {
     return cv;
   }
   saltarVR() {
-    if (this.activo && this.tipo === "MOVIE" && this._cortarMando) {
+    if (this.activo && (this.tipo === "MOVIE" || this.op?.cortable) && this._cortarMando) {
       this._cortarMando();
       return true;
     }
@@ -1212,10 +1233,11 @@ function engancharVoces(movie) {
   c.reproducirVoz = function(id, op = {}) {
     if (movie.activo && movie.tipo === "ED_TELOP") {
       const antes = c.vozJuego;
-      jsonDe(`${movie.base}codec/vox/${id}.json`).then(d => {
-        if (d?.sub && movie.activo) {
+      const pedir = c.voces?.subtitulosEn ? c.voces.subtitulosEn(id, idioma.texto).catch(() => null) : Promise.resolve(null);
+      pedir.then(S => S || jsonDe(`${movie.base}codec/vox/${id}.json`).then(d => d?.sub)).then(sub => {
+        if (sub && movie.activo) {
           movie.vozSub = {
-            sub: d.sub,
+            sub: sub,
             t0: null,
             src: antes
           };

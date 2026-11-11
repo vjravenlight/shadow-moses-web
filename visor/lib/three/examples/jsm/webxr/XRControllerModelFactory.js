@@ -83,6 +83,9 @@ class XRControllerModel extends Object3D {
 
 				} else if ( valueNodeProperty === MotionControllerConstants.VisualResponseProperty.TRANSFORM ) {
 
+					// MGS web (08/11/2026): el modelo del Quest 2 no trae menu_pressed_min/max; sin esto tiraba un error en el cuadro
+					if ( ! minNode || ! maxNode ) return;
+
 					valueNode.quaternion.slerpQuaternions(
 						minNode.quaternion,
 						maxNode.quaternion,

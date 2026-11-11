@@ -36,6 +36,12 @@ null
 true
 ],
 [
+"armas/famas_l.png",
+"disco1/01_stages/init/nocache/famas_l.pcx",
+"png",
+null
+],
+[
 "armas/goggles.glb",
 "disco1/01_stages/init/resident/goggles.kmd",
 "glb",

@@ -51,6 +51,11 @@ export const MODELOS = {
   caja: "armas/cb_box.glb"
 };
 
+const MISIL_S = {
+  geo: null,
+  mat: null
+};
+
 export const RETROCESO = {
   [WP.SOCOM]: 9,
   [WP.FAMAS]: 4,
@@ -263,16 +268,24 @@ export class Armas {
   piso(p) {
     return this.juego?.alturaPiso?.(p.x, p.z, p.y + .3) ?? this.ctx.piso?.(p) ?? 0;
   }
+  pies(g) {
+    return g.o.position.y - (g.altCtrl || 0);
+  }
+  centroGuardia(g, v = new THREE.Vector3) {
+    v.copy(g.o.position);
+    v.y = this.pies(g) + .9 * (g.escala || 1);
+    return v;
+  }
   guardiaEn(o, d, lejos, radio = .33) {
     let mejor = null, md = lejos;
     for (const g of this.guardias()) {
-      const p = g.o.position, dx = p.x - o.x, dz = p.z - o.z, h = Math.hypot(d.x, d.z) || 1e-6;
+      const p = g.o.position, e = g.escala || 1, r = radio * e, dx = p.x - o.x, dz = p.z - o.z, h = Math.hypot(d.x, d.z) || 1e-6;
       const t = (dx * d.x + dz * d.z) / (h * h);
       if (t <= 0) continue;
       const cx = o.x + d.x * t - p.x, cz = o.z + d.z * t - p.z;
-      if (cx * cx + cz * cz > radio * radio) continue;
-      const y = o.y + d.y * t - p.y, dist = t * Math.hypot(d.x, d.y, d.z);
-      const tope = [ "piso", "cae", "soltado" ].includes(g.accion) ? .5 : 1.85;
+      if (cx * cx + cz * cz > r * r) continue;
+      const y = o.y + d.y * t - this.pies(g), dist = t * Math.hypot(d.x, d.y, d.z);
+      const tope = ([ "piso", "cae", "soltado" ].includes(g.accion) ? .5 : 1.85) * e;
       if (y < 0 || y > tope || dist >= md) continue;
       md = dist;
       mejor = g;
@@ -303,6 +316,7 @@ export class Armas {
   equipar(id) {
     const inv = this.inv, previo = this.actual;
     this.actual = id;
+    this.socomListo = false;
     this.recargando = 0;
     this.tFamas = 0;
     this.tApunta = 0;
@@ -353,7 +367,8 @@ export class Armas {
     this.tSuelto = 0;
     switch (id) {
      case WP.SOCOM:
-      return this.tiroPistola(origen, this.dir);
+      this.socomListo = true;
+      return null;
 
      case WP.FAMAS:
       this.tFamas = 0;
@@ -386,6 +401,14 @@ export class Armas {
   soltar(origen, dir) {
     this.gatillo = false;
     this.tFamas = 0;
+    if (this.socomListo) {
+      this.socomListo = false;
+      if (this.inv.arma === WP.SOCOM && this.actual === WP.SOCOM && !this.bloqueado()) {
+        const o = (origen || this.origen).clone(), d = (dir || this.dir).clone().normalize(), r = this.tiroPistola(o, d);
+        if (r) this.ctx.alRafaga?.(r, o, d);
+        return r;
+      }
+    }
     this.juego?.botonAgarre?.(false);
     const G = this.granadaMano;
     if (G && G.sale == null) {
@@ -678,9 +701,8 @@ export class Armas {
       snake: 0
     };
     for (const g of this.guardias()) {
-      const c = g.o.position.clone();
-      c.y += .9;
-      const a = cubo(c, CAJA_GUARDIA, 1), b = cubo(c, CAJA_GUARDIA, 2);
+      const c = this.centroGuardia(g), caja = g.escala > 1 ? CAJA_GUARDIA.clone().multiplyScalar(g.escala) : CAJA_GUARDIA;
+      const a = cubo(c, caja, 1), b = cubo(c, caja, 2);
       if (!a && !b) continue;
       const d = (a ? daño : 0) + (b ? daño : 0), f = (a ? 5 : 0) + (b ? 3 : 0);
       this.juego.dañar(g, d, 1);
@@ -749,6 +771,10 @@ export class Armas {
     const normal = (this.juego?.modo ?? 0) === 0, lista = [];
     for (const g of this.guardias()) {
       if ([ "piso", "cae", "soltado", "levanta", "agarrado" ].includes(g.accion)) continue;
+      if (this.juego.aturdir) {
+        if (this.juego.aturdir(g, normal)) lista.push(g);
+        continue;
+      }
       this.juego.dañar(g, normal ? Math.max(1, g.faint) : 5, 3);
       lista.push(g);
     }
@@ -971,24 +997,34 @@ export class Armas {
       if (g.vital > 0) this.juego.dañar(g, 3, 4);
       tocados.add(g);
     }
-    let snake = false, s0 = this.posSnake();
+    let snake = false, aSnakeP = 0, s0 = this.posSnake();
     const enZona = this.postura() !== 2 && this.dentroZona(m, s0, [ 1.1, .5, .14 ][this.postura()] || 1.1);
-    for (let k = -3; k <= 3; k++) {
-      const d = f.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), k * .12), h = this.pared(o, d, 4.5), lejos = h ? h.distance : 4.5;
-      const gg = this.guardiaEn(o, d, lejos, .35);
-      if (gg && !esquirlas.has(gg.g)) {
+    const randS = n => Math.floor(Math.random() * 2 * n) - n, A = Math.PI / 2048, ejeY = new THREE.Vector3(0, 1, 0), lado = new THREE.Vector3(f.z, 0, -f.x);
+    for (let k = 0; k < 16; k++) {
+      const op = o.clone().addScaledVector(lado, randS(256) / 1e3);
+      op.y += randS(128) / 1e3;
+      const yaw = randS(512) * A, pitch = randS(512) * A;
+      const d = f.clone().applyAxisAngle(ejeY, yaw);
+      d.y = Math.sin(pitch);
+      d.x *= Math.cos(pitch);
+      d.z *= Math.cos(pitch);
+      d.normalize();
+      const h = this.pared(op, d, 10), lejos = h ? h.distance : 10;
+      const gg = this.guardiaEn(op, d, lejos, .35);
+      const s = this.posSnake(), sv = s.clone().sub(op);
+      const t = sv.x * d.x + sv.z * d.z;
+      const yEn = op.y + d.y * (t / (Math.hypot(d.x, d.z) || 1e-6)) - s.y, alto = [ 1.6, .9, .35 ][this.postura()] || 1.6;
+      const pegaSnake = this.juego && t > 0 && t < lejos && Math.hypot(sv.x - d.x * t, sv.z - d.z * t) < .3 && yEn > 0 && yEn < alto;
+      if (gg && (!pegaSnake || gg.dist <= t)) {
         this.juego.dañar(gg.g, 256, 1);
-        esquirlas.add(gg.g);
         tocados.add(gg.g);
-      }
-      const s = this.posSnake(), sv = s.clone().sub(o);
-      sv.y = 0;
-      const t = sv.dot(d);
-      if (!snake && t > 0 && t < lejos && sv.clone().addScaledVector(d, -t).length() < .3 && this.postura() !== 2 && this.juego) {
-        snake = d.clone().multiplyScalar(1500 / 32);
+        esquirlas.add(gg.g);
+      } else if (pegaSnake) {
+        aSnakeP += 256;
+        if (!snake) snake = d.clone().multiplyScalar(1500 / 32);
       }
     }
-    const aSnake = (enZona ? 128 : 0) + (snake ? 256 : 0);
+    const aSnake = (enZona ? 128 : 0) + aSnakeP;
     if (aSnake && this.juego?.dañoSnake) this.juego.dañoSnake(aSnake, 2, snake || null);
     m.fx = 6;
     this.fx.push({
@@ -1062,6 +1098,10 @@ export class Armas {
   cuadroNikita() {
     const M = this.misil;
     if (!M) return;
+    if (this.inv.arma !== WP.NIKITA) {
+      this.terminarNikita(true);
+      return;
+    }
     if (this.mandoMisil) this.girarMisil(this.mandoMisil);
     if (!M.perdido && (this.chaff > 0 || this.juego?.muerto)) M.perdido = true;
     if (M.freno > 0) {
@@ -1081,9 +1121,7 @@ export class Armas {
     M.rumbo = (M.rumbo + (Math.abs(d) < 4 ? d : Math.round(d / 4)) + 4096) % 4096;
     const dir = new THREE.Vector3(Math.sin(M.rumbo * ANG), 0, Math.cos(M.rumbo * ANG));
     const h = this.pared(M.p, dir, M.vel + .1, this.juego?.paredCol || this.juego?.vista);
-    const bajo = M.p.clone();
-    bajo.y -= .5;
-    const gg = this.guardiaEn(bajo, dir, M.vel + .2, .4);
+    const gg = this.guardiaEn(M.p, dir, M.vel + .2, .4);
     M.p.addScaledVector(dir, M.vel);
     const piso = this.piso(M.p);
     M.p.y += (piso + M.alto - M.p.y) * .5;
@@ -1121,17 +1159,16 @@ export class Armas {
     cam.updateMatrixWorld();
     for (const g of this.guardias()) {
       if ([ "piso", "cae", "soltado" ].includes(g.accion)) continue;
-      v.copy(g.o.position);
-      v.y += .9;
+      this.centroGuardia(g, v);
       w.copy(v);
-      w.y += .54;
+      w.y += .54 * (g.escala || 1);
       const d = v.distanceTo(s);
       if (d < 2.401) continue;
       v.project(cam);
       w.project(cam);
       if (v.z > 1 || v.z < -1) continue;
       const sx = v.x * 160, sy = -v.y * 112, caja = sy - -w.y * 112;
-      if (caja <= 0 || caja >= 225) continue;
+      if (caja <= 0 || caja >= 225 && !(g.escala > 1)) continue;
       const hol = caja * (this.holguraFijado || 1);
       if (Math.abs(sx) < hol && Math.abs(sy) < hol && d < md) {
         md = d;
@@ -1152,9 +1189,11 @@ export class Armas {
     }
     this.recargaStinger = 30;
     this.patadaStinger = 30;
-    const obj = this.modelo(null, new THREE.Mesh(new THREE.CylinderGeometry(.035, .035, .6, 6).rotateX(Math.PI / 2), new THREE.MeshBasicMaterial({
+    MISIL_S.geo ||= new THREE.CylinderGeometry(.035, .035, .6, 6).rotateX(Math.PI / 2);
+    MISIL_S.mat ||= new THREE.MeshBasicMaterial({
       color: 9079408
-    })));
+    });
+    const obj = this.modelo(null, new THREE.Mesh(MISIL_S.geo, MISIL_S.mat));
     const p = o.clone();
     obj.position.copy(p);
     this.misilS.push({
@@ -1193,9 +1232,7 @@ export class Armas {
         if (--m.despegue >= 0) m.p.y += 11 * MM;
         const b = m.blanco;
         if (b && !b.inactivo && b.accion !== "muerto") {
-          const q = b.o.position.clone();
-          q.y += .9;
-          q.sub(m.p);
+          const q = this.centroGuardia(b).sub(m.p);
           const tasa = Math.max(0, 30 - Math.floor(m.t / 3)) * ANG, yaw = Math.atan2(m.d.x, m.d.z), yawB = Math.atan2(q.x, q.z);
           let dy = Math.atan2(Math.sin(yawB - yaw), Math.cos(yawB - yaw));
           if (Math.abs(dy) <= Math.PI / 2) {

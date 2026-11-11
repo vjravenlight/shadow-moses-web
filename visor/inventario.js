@@ -11,6 +11,10 @@ import { ducto as ductoSnake } from "./ducto.js";
 
 import * as ctl from "./controles.js";
 
+import { Tablero, fuenteDe } from "./codec.js";
+
+import { idioma } from "./idioma.js";
+
 const FPS = 30, MM = .001;
 
 export const PAD = {
@@ -330,6 +334,9 @@ export class Inventario {
     this.agachado = false;
     this.ducto = false;
     this.padExterno = null;
+    this.sinArmas = false;
+    this.mascaraPad = 0;
+    this.padCrudo = 0;
     this.juego = null;
     this.aplicarMaximos(opts.nivelHistoria ?? 1);
     this.lados = [ 0, 1 ].map(k => ({
@@ -377,6 +384,10 @@ export class Inventario {
     this._prevItem = this.item;
     this.listo = false;
     this.cargar();
+    this.cargarDescripciones();
+    if (typeof addEventListener === "function") addEventListener("mgs:idioma", e => {
+      if (e.detail?.clave === "texto") this.cargarDescripciones();
+    });
     if (opts.contenedor !== null) this.crearLienzo(opts.contenedor || document.body);
     if (opts.teclado !== false) this.conectarTeclado();
   }
@@ -422,6 +433,71 @@ export class Inventario {
     })) this.letras[k] = teñir(num, c);
     this.listo = true;
   }
+  async cargarDescripciones() {
+    try {
+      await (idioma.listo || idioma.iniciar());
+      const T = idioma.texto, bajar = u => fetch(u).then(r => r.ok ? r.json() : null, () => null);
+      let d = T !== "en" ? await bajar(`assets/idiomas/${T}/textos.json`) : null, dir = `assets/idiomas/${T}/codec/ui/`;
+      if (!d) {
+        d = await bajar("assets/hud/descripciones.json");
+        dir = "assets/codec/ui/";
+      }
+      const f = d ? await fuenteDe(dir) : null;
+      this.desc = d && f ? {
+        d: d,
+        tab: new Tablero(f, 200, 80),
+        clave: ""
+      } : null;
+    } catch (e) {
+      console.warn("descripciones:", e);
+      this.desc = null;
+    }
+  }
+  textoDescripcion(L, p) {
+    const D = this.desc?.d;
+    if (!D || p.id < 0) return null;
+    if (L.k === 1) return D.armas?.[p.id] ?? null;
+    let t = D.items?.[p.id] ?? null;
+    if (this.congeladas && p.id === IT.RATION) t = D.items?.[24] ?? t;
+    if (this.congeladas && p.id === IT.KETCHUP) t = D.items?.[25] ?? t;
+    if (t && p.id === IT.CARD && D.carta >= 0) t = t.slice(0, D.carta) + String(Math.max(1, this.tarjeta)) + t.slice(D.carta + 1);
+    return t;
+  }
+  dibujarDescripcion(x, L) {
+    const p = L.lista?.[L.sel];
+    if (!this.desc || L.estado !== 1 || !p || p.pos !== 0 || L.mov.n > 0) {
+      L.descDesde = 0;
+      return;
+    }
+    const ahora = performance.now();
+    if (L.descSel !== L.sel || !L.descDesde) {
+      L.descSel = L.sel;
+      L.descDesde = ahora;
+    }
+    if (ahora - L.descDesde < 4e3 / 30) return;
+    const t = this.textoDescripcion(L, p);
+    if (!t) return;
+    const D = this.desc, clave = L.k + ":" + t;
+    if (D.clave !== clave) {
+      D.clave = clave;
+      D.tab.imprimir(t);
+      D.img = D.tab.volcar();
+    }
+    const [bx, by] = this.base[L.k], x0 = L.k ? bx - 212 : bx + 70, y0 = Math.max(12, by - 112);
+    const rot = L.k ? "WEAPON" : "EQUIP", w = 210, x3 = x0 - 10;
+    const xr = this.letra(x, x0 - 8, -100, rot, "texto") + 12 - (x0 - 8);
+    x.fillStyle = "rgba(0,0,0,0.75)";
+    x.beginPath();
+    x.moveTo(x3, y0 - 9);
+    x.lineTo(x3 + xr, y0 - 9);
+    x.lineTo(x3 + xr + 10, y0);
+    x.lineTo(x3, y0);
+    x.closePath();
+    x.fill();
+    x.fillRect(x3, y0, w, 80);
+    this.letra(x, x0 - 8, y0 - 7, rot, "texto");
+    x.drawImage(D.img, x0, y0);
+  }
   get nivelJuego() {
     return this.dificultad - 1;
   }
@@ -459,6 +535,10 @@ export class Inventario {
     this.lados[0].ultimo = -1;
   }
   async cargarPuertas(st, aplicar = true) {
+    if (/^(?:vr|vab|vcd|vefgh|vijkl|photo)_/.test(st)) {
+      this.puertas = new Map;
+      return null;
+    }
     try {
       const j = await (await fetch(`assets/niveles/${st}/puertas.json`)).json();
       this.puertas = new Map((j.puertas || []).map(p => [ p.nombre, p ]));
@@ -488,9 +568,10 @@ export class Inventario {
   }
   armaDeshabilitada(id) {
     if (id < 0) return false;
+    if (this.sinArmas) return true;
     if (this.item >= 0 && TIPO_ITEM[this.item] & 1 && TIPO_ARMA[id] & 512) return true;
     if (this.agachado && id === WP.STINGER) return true;
-    if (this.chaff && id === WP.NIKITA) return true;
+    if ((this.chaff || this.jamming) && id === WP.NIKITA) return true;
     if (this.misilEnVuelo && (id === WP.STINGER || id === WP.PSG1)) return true;
     return (this.deshabilitadas & 1 << id) !== 0;
   }
@@ -1211,6 +1292,8 @@ export class Inventario {
     }
     s |= this.toque;
     if (this.padExterno != null) s = this.padExterno;
+    this.padCrudo = s;
+    s &= ~this.mascaraPad;
     const P = this.pad;
     P.press = s & ~P.prev;
     P.status = s;
@@ -1423,7 +1506,10 @@ export class Inventario {
         if (L.parpadeo > 0) {
           if ((L.parpadeo & 3) > 1) this.panel(x, L, L.actual, ...this.base[L.k]);
         } else if ((L.k ? this.arma : this.item) >= 0) this.panel(x, L, L.actual, ...this.base[L.k]);
-      } else this.dibujarLista(x, L);
+      } else {
+        this.dibujarLista(x, L);
+        this.dibujarDescripcion(x, L);
+      }
     }
     for (const f of this.extras || []) f(x, W, H);
     this.acomodarTactil(W, H, k / dpr);

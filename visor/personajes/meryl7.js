@@ -87,6 +87,7 @@ export class Meryl7 extends Personaje {
       const fa = await cargarModelo(ctx, "armas/famas.glb");
       o.getObjectByName("hueso_4")?.add(fa);
     } catch {}
+    ctx.luzArma?.(o);
     const r = typeof o0.r?.[0] === "number" ? o0.r[0] : 0;
     const pts = this.ruta(r);
     const p0 = pts.length ? pts[0].p : new THREE.Vector3(...a.p || [ 0, 0, 0 ]);

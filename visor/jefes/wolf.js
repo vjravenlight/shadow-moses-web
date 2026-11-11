@@ -7,6 +7,8 @@ import { apoyo, isqrt, idiv, rsin } from "./apoyo3.js";
 
 import { WP, IT } from "../inventario.js";
 
+import { miraRifleEscena } from "../mira_armas.js";
+
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 
 const ALT_SNAKE = [ 1100, 496, 136 ];
@@ -1413,22 +1415,7 @@ export class Wolf extends Jefe {
     }
   }
   mira(si) {
-    if (si && !this.divMira) {
-      const d = document.createElement("div");
-      Object.assign(d.style, {
-        position: "fixed",
-        inset: "0",
-        zIndex: "6",
-        pointerEvents: "none",
-        background: "radial-gradient(circle at 50% 50%, transparent 0 34vmin, #000 35vmin), linear-gradient(#000a, #000a) 50% 50% / 1px 100% no-repeat, linear-gradient(#000a, #000a) 50% 50% / 100% 1px no-repeat"
-      });
-      (document.getElementById("hud")?.parentElement || document.body).appendChild(d);
-      this.divMira = d;
-    }
-    if (!si && this.divMira) {
-      this.divMira.remove();
-      this.divMira = null;
-    }
+    miraRifleEscena(this, si);
   }
   cajasBlanco() {
     if (!this.t1 || this.f6FC < 1) return [];

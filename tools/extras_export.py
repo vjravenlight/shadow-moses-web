@@ -3,6 +3,7 @@ import json, os, struct, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from rutas import EXTRAIDO, ASSETS
 from pcx_mgs import decode, modo_semi
+import brf_dat
 ST = os.path.join(EXTRAIDO, 'disco1', '01_stages')
 BRF = os.path.join(EXTRAIDO, 'disco1', '00_disco', 'MGS', 'BRF.DAT')
 DESTINO = os.path.join(ASSETS, 'extras')
@@ -56,8 +57,11 @@ def main():
     os.makedirs(DESTINO, exist_ok=True)
     brf = open(BRF, 'rb').read()
     info = {'version': 1, 'fantasmas': fantasmas(brf), 'camera': texturas('camera', 'camera'), 'preope': texturas('preope', 'preope')}
+    briefing = brf_dat.exportar(os.path.join(DESTINO, 'brf'))
+    if briefing:
+        info['brf'] = briefing
     with open(os.path.join(DESTINO, 'extras.json'), 'w', encoding='utf-8') as fh:
         json.dump(info, fh, ensure_ascii=False, indent=1)
-    print('extras: %d fantasmas, %d texturas de camera, %d de preope' % (info['fantasmas'], len(info['camera']), len(info['preope'])))
+    print('extras: %d fantasmas, %d texturas de camera, %d de preope, %s' % (info['fantasmas'], len(info['camera']), len(info['preope']), 'con BRIEFING' if briefing else 'sin BRIEFING'))
 if __name__ == '__main__':
     main()
