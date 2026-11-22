@@ -1146,6 +1146,55 @@ export function vibrarDisparo(nombre = "socom") {
   });
 }
 
+const CLAVE_TIPO_BOTONES = "sm_tipo_botones", CLAVE_VISTA_INV = "sm_vista_invertida";
+
+const PAR_TIPO = [ null, [ "circulo", "cruz" ], [ "circulo", "cuadrado" ] ];
+
+function parDeFabrica(par) {
+  const f = deFabrica();
+  return par.every(id => config.mando[id] === f.mando[id] && JSON.stringify(config.teclas[id]) === JSON.stringify(f.teclas[id]));
+}
+
+export function tipoBotones() {
+  const t = +(leerLS(CLAVE_TIPO_BOTONES) || 0);
+  if (t !== 1 && t !== 2) return 0;
+  if (parDeFabrica(PAR_TIPO[t])) {
+    escribirLS(CLAVE_TIPO_BOTONES, "0");
+    return 0;
+  }
+  return t;
+}
+
+function cambiarPar(par) {
+  if (!par) return;
+  const [a, b] = par;
+  [config.mando[a], config.mando[b]] = [ config.mando[b], config.mando[a] ];
+  [config.teclas[a], config.teclas[b]] = [ config.teclas[b], config.teclas[a] ];
+}
+
+export function ponerTipoBotones(t) {
+  t = t === 1 || t === 2 ? t : 0;
+  const antes = tipoBotones();
+  if (t === antes) return false;
+  cambiarPar(PAR_TIPO[antes]);
+  cambiarPar(PAR_TIPO[t]);
+  escribirLS(CLAVE_TIPO_BOTONES, String(t));
+  guardar();
+  return true;
+}
+
+let vistaInv = leerLS(CLAVE_VISTA_INV) === "1";
+
+export const vistaInvertida = () => vistaInv;
+
+export function ponerVistaInvertida(v) {
+  vistaInv = !!v;
+  escribirLS(CLAVE_VISTA_INV, vistaInv ? "1" : "0");
+  for (const f of oyentes) try {
+    f();
+  } catch {}
+}
+
 if (typeof window !== "undefined") window.__controles = {
   config: config,
   ACCIONES: ACCIONES,

@@ -19,6 +19,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## Novedades
 
+- **v2.12:** SIN USAR suma las llamadas del códec, las voces y la música que el juego no usa, para escucharlas; la KEY CONFIG original del disco de VR; GRABAR CINEMATICAS también en el casco; el Ninja jugable con los controles y los sonidos del original; los efectos del Integral; los kanji de STAFF; el archivo del celular entero o en partes (el juego pide el disco 2 cuando hace falta); el juego en el iPhone (Safari, Agregar a inicio) y una app de iPhone sin firmar ([cómo firmarla](ios/FIRMAR_E_INSTALAR.md)); quejidos de Snake y golpes a los guardias como el original, y arreglos.
 - **v2.11:** las 300 misiones del disco de VR (con NINJA jugando como el Ninja, MYSTERY y PHOTOGRAPH), su título, MOVIE y OPTION; NEW GAME pregunta ORIGINAL o INTEGRAL, con los guiones del Integral, el Alternate Round y STAFF; texto y voces en inglés, castellano, alemán, italiano y japonés, elegidos por separado; el BRIEFING; galería de cinemáticas, música, comparador original/mejorado, fotos 8K, sala de desarrollo y TODO DESBLOQUEADO; en el casco, armas a dos manos y cinemáticas desde los ojos de Snake; camuflaje óptico como el original y muchos arreglos.
 - **v2.10:** las claymores ya no estaban dos veces y su daño sigue al original; la cámara, la máscara de gas, las antiparras y la mira del PSG1 usan sus dibujos del juego; el radar se traba con el chaff y aparece la barra de O2; Opciones suma BRILLO, CONTRASTE, COLOR y POLIGONOS; nuevo menú SPECIAL con el álbum de fotos, las fotos de fantasmas y PREVIOUS OPERATIONS, y la partida con smoking. Con el disco del Integral, además, muy fácil con la MP5 y la Meryl de la vuelta con smoking.
 - **v2.9:** en primera persona, la caja de cartón se ve desde adentro, con el agujero del juego original, en la PC y en el casco. Se abre con su animación y el borde es difuso. Alrededor es cartón oscuro en lugar del negro del original.
@@ -41,7 +42,7 @@ virtual. También hay app para Android. Se juega con **tus propios discos** (ver
 
 ## `TX-01` OPERACIÓN: INSTALAR
 
-1. **Bajá el Release** (`MGSweb_v2.11.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
+1. **Bajá el Release** (`MGSweb_v2.12.zip`, en [Releases](../../releases/latest)) y descomprimilo donde quieras.
 2. **Doble clic en `INSTALAR.cmd`.**
 3. **Elegí tus discos**: el `.cue` (o el `.bin`) del disco 1 y del disco 2. Los convierte en tu PC y se abre el juego
    en el navegador (`http://127.0.0.1:8123`). Tarda de 5 a 8 minutos; si se corta, abrí `INSTALAR.cmd` de nuevo y
@@ -80,7 +81,8 @@ casa, no en un wifi público. También sirve desde el navegador del casco, aunqu
 
 ### App de celular (Android)
 
-1. Instalá el juego en la PC y hacé doble clic en `ARMAR_ARCHIVO_CELULAR.cmd`: arma `MGSweb_datos.mgs`, cerca de 1 GB.
+1. Instalá el juego en la PC y hacé doble clic en `ARMAR_ARCHIVO_CELULAR.cmd`: arma `MGSweb_datos.mgs`, cerca de 1 GB, o
+   **en partes** (`MGS_disco1.mgs` alcanza para empezar; el juego pide el disco 2 y lo demás cuando hace falta).
 2. Bajá `ShadowMoses_celular.apk` de [Releases](../../releases/latest) e instalala. Android te va a pedir permiso para
    instalar apps de fuera de la tienda.
 3. Copiá `MGSweb_datos.mgs` al celular, abrí la app y elegilo. Después no hace falta la PC ni internet: la app no tiene
@@ -89,6 +91,13 @@ casa, no en un wifi público. También sirve desde el navegador del casco, aunqu
 La app no trae ningún archivo del juego. El archivo `.mgs` son tus datos: no lo subas ni lo compartas. Para exportar una
 partida o una foto, la app pregunta dónde guardarla. No trae realidad virtual. Se probó en un celular virtual con Android 14,
 todavía no en uno real: si la probás, contanos en un issue qué celular usaste y cómo te fue.
+
+### iPhone
+
+- **Safari:** entrá a https://mgs.ravenlight.net/full, tocá **Compartir > Agregar a inicio** y cargá tus `.mgs` desde ese ícono. Sin realidad virtual.
+- **App sin firmar:** `ShadowMoses_iphone_sin_firmar.ipa`, en [Releases](../../releases/latest). La firma cada uno con AltStore,
+  SideStore o Sideloadly: [ios/FIRMAR_E_INSTALAR.md](ios/FIRMAR_E_INSTALAR.md). Con una cuenta gratis de Apple vence a los 7 días
+  y hay un límite de 3 apps; con la paga (99 USD por año), no. Todavía sin probar en un iPhone real.
 
 ## `TX-04` CÓDEC: PROBLEMAS COMUNES
 

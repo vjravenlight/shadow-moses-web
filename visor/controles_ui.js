@@ -1,6 +1,8 @@
 // MGS web — FeniXVOID · Project Ravenlight
 import { ACCIONES, NOMBRE_BOTON, ASIGNABLES, config, asignarTecla, asignarBoton, teclasDe, botonDe, tecla_reservada, bloquearEntrada, bloquearMando, mandosCrudos, vibraActiva, ponerVibra, vibrar, alCambiar, B, restaurarTeclado, restaurarMando, TIPOS_MANDO, NOMBRE_TIPO, detectarTipo, tipoMando, ponerTipoMando, nombreBotonMando, nombreAccionMando, mandoConectado, tactil, ponerTactil, restaurarTactil, quest, ponerQuest, asignarQuest, accionQuest, restaurarQuest, BOTONES_QUEST, ACCIONES_QUEST, ANGULOS_GIRO, VELOCIDADES_GIRO, ZONAS_MUERTAS, VIBRAS_QUEST, botonQuestDe, pasoLista, rotarQuest } from "./controles.js";
 
+import { personajeNinja, textoNinjaAccion, textoNinjaQuest } from "./ninja_escenarios.js";
+
 const NOMBRES_TECLA = {
   ArrowUp: "↑",
   ArrowDown: "↓",
@@ -336,7 +338,7 @@ class PantallaControles {
       const texto = id => ACCIONES_QUEST.find(a => a.id === id)?.texto ?? "—";
       for (const b of BOTONES_QUEST) op(`q:${b.lado}:${b.i}`, b.nombre, () => texto(accionQuest(b.lado, b.i)), d => {
         if (!rotarQuest(b.lado, b.i, d)) this._aviso("START tiene que quedar en algún botón: ponelo primero en otro.", true);
-      }, b.i === 0 ? "También es el clic del rayo sobre los paneles" : "");
+      }, [ b.i === 0 ? "También es el clic del rayo sobre los paneles" : "", personajeNinja() ? textoNinjaQuest(accionQuest(b.lado, b.i)) : "" ].filter(Boolean).join(" · "));
       op("q-giro", "Giro", () => quest.giro === "suave" ? "Suave" : "Por saltos", () => ponerQuest("giro", quest.giro === "suave" ? "saltos" : "suave"));
       if (quest.giro === "suave") op("q-vel", "Velocidad del giro", () => quest.velGiro + " °/s", d => ponerQuest("velGiro", paso(VELOCIDADES_GIRO, quest.velGiro, d))); else op("q-ang", "Ángulo de cada salto", () => quest.angulo + "°", d => ponerQuest("angulo", paso(ANGULOS_GIRO, quest.angulo, d)));
       op("q-zona", "Zona muerta de las palancas", () => pct(quest.zonaMuerta), d => ponerQuest("zonaMuerta", paso(L_ZONA, quest.zonaMuerta, d)));
@@ -438,6 +440,12 @@ class PantallaControles {
           s.textContent = "En la Play: " + NOMBRE_BOTON[a.boton];
           t0.appendChild(s);
         }
+        if (personajeNinja() && textoNinjaAccion(a.id)) {
+          const s = document.createElement("small");
+          s.className = "cu-ninja";
+          s.textContent = textoNinjaAccion(a.id);
+          t0.appendChild(s);
+        }
         tr.appendChild(t0);
         const t1 = document.createElement("td");
         if (tecla && a.teclas.length) {
@@ -476,6 +484,16 @@ class PantallaControles {
           t1.appendChild(s);
         }
         tr.appendChild(t1);
+        tb.appendChild(tr);
+      }
+      if (personajeNinja()) {
+        const tr = document.createElement("tr"), t0 = document.createElement("td"), t1 = document.createElement("td"), s = document.createElement("span");
+        t0.className = "cu-acc";
+        t0.textContent = "Agacharse / cuerpo a tierra con el Ninja (extra)";
+        s.className = "cu-fijo";
+        s.textContent = tecla ? "Q" : nombreBoton(B.L3, tipo);
+        t1.appendChild(s);
+        tr.append(t0, t1);
         tb.appendChild(tr);
       }
     }

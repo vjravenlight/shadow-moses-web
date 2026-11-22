@@ -1,28 +1,40 @@
 <!doctype html>
-<!-- Primera pantalla en el casco: guarda el .mgs en este navegador y abre el juego. Nada sale del aparato. FeniXVOID · Project Ravenlight -->
+<!-- Primera pantalla en el casco y en el iPhone (2.12, window.MGSIphone lo pone tools/armar_casco.py - -iphone): guarda los .mgs
+     en este navegador y abre el juego. Acepta el .mgs entero de siempre o las partes (disco 1, disco 2, VR Missions,
+     Integral, idiomas). Nada sale del aparato. FeniXVOID · Project Ravenlight -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex, nofollow">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Shadow Moses">
+<meta name="theme-color" content="#020604">
 <title>Shadow Moses</title>
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icono_192.png">
 <style>
   :root { --verde: #5ef08a; --claro: #b9ffd0; --fondo: #020604; --apagado: #8fbb9c; --amarillo: #ffd23c; --rojo: #ff6b6b; color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; padding: 24px 16px; background: var(--fondo); color: #dff5e5; font: 18px/1.5 Consolas, "DejaVu Sans Mono", monospace; display: grid; place-items: center; }
+  body { margin: 0; min-height: 100vh; padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    background: var(--fondo); color: #dff5e5; font: 18px/1.5 Consolas, Menlo, "DejaVu Sans Mono", monospace; display: grid; place-items: center; }
   main { width: 100%; max-width: 640px; }
   h1 { margin: 0 0 4px; font-size: 34px; letter-spacing: 0.08em; color: var(--claro); }
   h2 { margin: 0 0 18px; font-size: 15px; font-weight: normal; letter-spacing: 0.24em; color: var(--verde); }
-  p { margin: 10px 0; } ol { padding-left: 24px; } li { margin: 8px 0; }
-  code { color: var(--claro); }
+  p { margin: 10px 0; } ol, ul { padding-left: 24px; } li { margin: 8px 0; }
+  code { color: var(--claro); word-break: break-all; }
   button, label.boton { display: block; width: 100%; margin: 14px 0 0; padding: 18px; font: inherit; font-size: 20px; letter-spacing: 0.1em; text-align: center; color: #021006; background: var(--verde); border: 0; border-radius: 4px; cursor: pointer; }
   button:hover, label.boton:hover, button:focus-visible, label.boton:focus-within { background: var(--claro); outline: 2px solid var(--claro); outline-offset: 2px; }
-  button.chico { background: none; color: var(--apagado); font-size: 15px; padding: 10px; border: 1px solid #1c4a2c; }
+  button.chico, label.chico { background: none; color: var(--apagado); font-size: 15px; padding: 10px; border: 1px solid #1c4a2c; }
   input[type=file] { position: absolute; opacity: 0; width: 1px; height: 1px; }
   progress { width: 100%; height: 20px; margin-top: 14px; accent-color: var(--verde); }
   .nota { color: var(--apagado); font-size: 15px; }
   .aviso { color: var(--amarillo); } .error { color: var(--rojo); }
+  .caja { border: 1px solid var(--amarillo); padding: 10px 12px; margin: 0 0 16px; font-size: 16px; }
+  #partes li { list-style: none; margin: 4px 0; } #partes li::before { content: '■ '; color: var(--verde); }
+  #faltan li { list-style: none; margin: 4px 0; color: var(--apagado); font-size: 15px; } #faltan li::before { content: '□ '; }
   [hidden] { display: none !important; }
 </style>
 </head>
@@ -31,9 +43,10 @@
   <h1>SHADOW MOSES</h1>
   <h2 id="sub"></h2>
   <p id="prep" class="aviso"></p>
+  <div id="inicio-ios" class="caja aviso" hidden></div>
   <section id="elegir" hidden>
     <ol id="pasos"></ol>
-    <label class="boton" for="archivo"><span id="t-elegir"></span><input id="archivo" type="file" accept=".mgs"></label>
+    <label class="boton" for="archivo"><span id="t-elegir"></span><input id="archivo" type="file" accept=".mgs" multiple></label>
     <p class="nota" id="t-privado"></p>
   </section>
   <section id="copiando" hidden>
@@ -43,81 +56,151 @@
   </section>
   <section id="listo" hidden>
     <p id="t-listo"></p>
+    <ul id="partes"></ul>
+    <p class="nota" id="t-faltan" hidden></p>
+    <ul id="faltan"></ul>
     <button id="jugar"></button>
+    <label class="boton chico" for="agregar"><span id="t-agregar"></span><input id="agregar" type="file" accept=".mgs" multiple></label>
     <button id="cambiar" class="chico"></button>
+    <p class="nota" id="t-lugar"></p>
   </section>
   <p id="msg" class="error" role="alert"></p>
 </main>
 <script src="mgs_zip.js"></script>
 <script>
 const ES = /^es/i.test(navigator.language || '');
+const IPHONE = !!window.MGSIphone;
+const SOLO = IPHONE && (navigator.standalone === true || matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches);
 const T = ES ? {
-  sub: 'CASCO DE REALIDAD VIRTUAL', prep: 'Preparando el juego. La primera vez tarda un poco y necesita internet.',
-  pasos: ['En la PC, instalá el juego y corré <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: arma <code>MGSweb_datos.mgs</code>, de cerca de 1 GB.', 'Copiá ese archivo al casco por USB, por ejemplo a <code>Download</code>.', 'Elegilo acá abajo. Se guarda una sola vez, en este navegador.'],
-  elegir: 'ELEGIR MGSweb_datos.mgs', privado: 'Son tus datos, salen de tus discos: no se suben a ningún lado. Después se juega sin señal.',
-  copiando: 'Guardando tus datos en el casco. No cierres esta ventana.', listo: 'Tus datos ya están en este casco. Ya podés borrar el archivo que copiaste a Download: no hace falta para jugar.', jugar: 'JUGAR', cambiar: 'Cambiar el archivo',
-  noSoporta: 'Este navegador no puede guardar el archivo. Probá con otro navegador o actualizá el casco.', noSW: 'Este navegador no deja correr el juego acá: hace falta una conexión segura.',
-  invalido: 'Ese no es un archivo .mgs válido. Armalo con ARMAR_ARCHIVO_CELULAR.cmd.', espacio: (n) => `No hay espacio: hacen falta ${n} GB libres en el casco.`, fallo: 'No se pudo guardar. Probá de nuevo.', confirmar: '¿Borrar los datos guardados en este casco? Tu archivo original no se toca.',
+  sub: IPHONE ? 'IPHONE / IPAD' : 'CASCO DE REALIDAD VIRTUAL', prep: 'Preparando el juego. La primera vez tarda un poco y necesita internet.',
+  pasos: IPHONE
+    ? ['En la PC, instalá el juego y corré <code>ARMAR_ARCHIVO_CELULAR.cmd</code>. Elegí <b>EN PARTES</b>: <code>MGS_disco1.mgs</code> (unos 400 MB) y, aparte, el disco 2 y lo opcional.', 'Pasá los <code>.mgs</code> al iPhone (AirDrop, iCloud Drive o el cable) y dejalos en la app Archivos, en <b>En mi iPhone</b>.', 'Elegilos acá abajo (podés elegir varios a la vez). Se guardan una sola vez, en esta app.']
+    : ['En la PC, instalá el juego y corré <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: arma <code>MGSweb_datos.mgs</code> (ENTERO, cerca de 1 GB) o las partes (<code>MGS_disco1.mgs</code> y lo demás aparte).', 'Copiá esos archivos al casco por USB, por ejemplo a <code>Download</code>.', 'Elegilos acá abajo (podés elegir varios a la vez). Se guardan una sola vez, en este navegador.'],
+  elegir: 'ELEGIR ARCHIVOS .mgs', privado: 'Son tus datos, salen de tus discos: no se suben a ningún lado. Después se juega sin señal.',
+  inicioIOS: '<b>Primero agregalo a la pantalla de inicio:</b> tocá Compartir y después <b>Agregar a inicio</b>. Abrilo desde ese ícono y cargá los archivos ahí: Safari y el ícono guardan cada uno lo suyo, por separado.',
+  copiando: (n, i, k) => `Guardando ${n} (${i} de ${k}). No cierres esta ventana.`,
+  listo: IPHONE ? 'Tus datos ya están en este iPhone. Ya podés borrar los .mgs de la app Archivos: no hacen falta para jugar.' : 'Tus datos ya están en este casco. Ya podés borrar los archivos que copiaste a Download: no hacen falta para jugar.',
+  faltan: 'Partes que armaste y no cargaste (el juego las pide cuando hacen falta):',
+  jugar: 'JUGAR', agregar: 'Agregar partes', cambiar: 'Borrar lo guardado',
+  lugar: (u, q) => `Lugar usado por este juego en el navegador: ${u} de ${q} disponibles.`,
+  noSoporta: 'Este navegador no puede guardar los archivos. Probá con otro navegador o actualizá el aparato.', noSW: 'Este navegador no deja correr el juego acá: hace falta una conexión segura.',
+  invalido: (n) => `${n} no es un archivo .mgs válido. Armalo con ARMAR_ARCHIVO_CELULAR.cmd.`, espacio: (n) => `No hay espacio: hacen falta ${n} GB libres.`,
+  fallo: 'No se pudo guardar. Probá de nuevo.', confirmar: '¿Borrar los datos guardados en este aparato? Tus archivos originales no se tocan.',
+  sinDisco1: 'Falta MGS_disco1.mgs (o el MGSweb_datos.mgs entero): sin eso no arranca. Elegilo.',
+  reemplazaEntero: 'Vas a cargar partes: se saca el MGSweb_datos.mgs entero que estaba guardado. ¿Seguimos?',
+  reemplazaPartes: 'Vas a cargar el archivo ENTERO: se sacan las partes que estaban guardadas. ¿Seguimos?',
+  nombres: { entero: 'TODO (archivo entero)', disco1: 'DISCO 1', disco2: 'DISCO 2', vr_missions: 'VR MISSIONS', integral: 'INTEGRAL' }, idioma: 'IDIOMA',
 } : {
-  sub: 'VIRTUAL REALITY HEADSET', prep: 'Getting the game ready. The first time takes a while and needs internet.',
-  pasos: ['On the PC, install the game and run <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: it builds <code>MGSweb_datos.mgs</code>, about 1 GB.', 'Copy that file to the headset over USB, for example to <code>Download</code>.', 'Choose it below. It is saved once, in this browser.'],
-  elegir: 'CHOOSE MGSweb_datos.mgs', privado: 'This is your own data, made from your discs: it is not uploaded anywhere. After this you can play offline.',
-  copiando: 'Saving your data to the headset. Do not close this window.', listo: 'Your data is on this headset. You can now delete the file you copied to Download: it is not needed to play.', jugar: 'PLAY', cambiar: 'Change the file',
-  noSoporta: 'This browser cannot save the file. Try another browser or update the headset.', noSW: 'This browser cannot run the game here: it needs a secure connection.',
-  invalido: 'That is not a valid .mgs file. Build it with ARMAR_ARCHIVO_CELULAR.cmd.', espacio: (n) => `Not enough space: ${n} GB free needed on the headset.`, fallo: 'It could not be saved. Please try again.', confirmar: 'Delete the data saved on this headset? Your original file is not touched.',
+  sub: IPHONE ? 'IPHONE / IPAD' : 'VIRTUAL REALITY HEADSET', prep: 'Getting the game ready. The first time takes a while and needs internet.',
+  pasos: IPHONE
+    ? ['On the PC, install the game and run <code>ARMAR_ARCHIVO_CELULAR.cmd</code>. Choose <b>IN PARTS</b>: <code>MGS_disco1.mgs</code> (about 400 MB) plus disc 2 and the optional parts.', 'Copy the <code>.mgs</code> files to the iPhone (AirDrop, iCloud Drive or the cable) into the Files app, <b>On My iPhone</b>.', 'Choose them below (you can pick several at once). They are saved once, in this app.']
+    : ['On the PC, install the game and run <code>ARMAR_ARCHIVO_CELULAR.cmd</code>: it builds <code>MGSweb_datos.mgs</code> (WHOLE, about 1 GB) or the parts (<code>MGS_disco1.mgs</code> and the rest apart).', 'Copy those files to the headset over USB, for example to <code>Download</code>.', 'Choose them below (you can pick several at once). They are saved once, in this browser.'],
+  elegir: 'CHOOSE .mgs FILES', privado: 'This is your own data, made from your discs: it is not uploaded anywhere. After this you can play offline.',
+  inicioIOS: '<b>First add it to the Home Screen:</b> tap Share and then <b>Add to Home Screen</b>. Open it from that icon and load the files there: Safari and the icon keep their data separately.',
+  copiando: (n, i, k) => `Saving ${n} (${i} of ${k}). Do not close this window.`,
+  listo: IPHONE ? 'Your data is on this iPhone. You can now delete the .mgs files from the Files app: they are not needed to play.' : 'Your data is on this headset. You can now delete the files you copied to Download: they are not needed to play.',
+  faltan: 'Parts you built and did not load (the game asks for them when needed):',
+  jugar: 'PLAY', agregar: 'Add parts', cambiar: 'Delete saved data',
+  lugar: (u, q) => `Space used by this game in the browser: ${u} of ${q} available.`,
+  noSoporta: 'This browser cannot save the files. Try another browser or update the device.', noSW: 'This browser cannot run the game here: it needs a secure connection.',
+  invalido: (n) => `${n} is not a valid .mgs file. Build it with ARMAR_ARCHIVO_CELULAR.cmd.`, espacio: (n) => `Not enough space: ${n} GB free needed.`,
+  fallo: 'It could not be saved. Please try again.', confirmar: 'Delete the data saved on this device? Your original files are not touched.',
+  sinDisco1: 'MGS_disco1.mgs (or the whole MGSweb_datos.mgs) is missing: the game cannot start without it. Choose it.',
+  reemplazaEntero: 'You are loading parts: the whole MGSweb_datos.mgs saved before is removed. Continue?',
+  reemplazaPartes: 'You are loading the WHOLE file: the parts saved before are removed. Continue?',
+  nombres: { entero: 'EVERYTHING (whole file)', disco1: 'DISC 1', disco2: 'DISC 2', vr_missions: 'VR MISSIONS', integral: 'INTEGRAL' }, idioma: 'LANGUAGE',
 };
-const $ = (i) => document.getElementById(i), ARCHIVO = 'MGSweb_datos.mgs', TROZO = 16 * 1048576;
+const $ = (i) => document.getElementById(i);
+const gb = (b) => (b / 1e9).toFixed(b < 1e9 ? 2 : 1) + ' GB', mb = (b) => Math.round(b / 1048576) + ' MB';
+const nombreParte = (p) => T.nombres[p] || (p.startsWith('idioma_') ? T.idioma + ': ' + p.slice(7).toUpperCase() : p.toUpperCase());
 document.documentElement.lang = ES ? 'es' : 'en';
 $('sub').textContent = T.sub; $('prep').textContent = T.prep; $('pasos').innerHTML = T.pasos.map((p) => `<li>${p}</li>`).join('');
-$('t-elegir').textContent = T.elegir; $('t-privado').textContent = T.privado; $('t-copiando').textContent = T.copiando; $('t-listo').textContent = T.listo; $('jugar').textContent = T.jugar; $('cambiar').textContent = T.cambiar;
+$('t-elegir').textContent = T.elegir; $('t-privado').textContent = T.privado; $('t-faltan').textContent = T.faltan;
+$('jugar').textContent = T.jugar; $('t-agregar').textContent = T.agregar; $('cambiar').textContent = T.cambiar;
+if (IPHONE && !SOLO) { $('inicio-ios').innerHTML = T.inicioIOS; $('inicio-ios').hidden = false; }
 const ver = (id) => { $('prep').hidden = true; for (const s of ['elegir', 'copiando', 'listo']) $(s).hidden = s !== id; };
 const avisar = (m) => { $('msg').textContent = m || ''; };
+const avisarSW = () => navigator.serviceWorker?.controller?.postMessage('casco-datos-cambiaron');
 
+/** Lo guardado: { mapa, cargadas, partes } (mgs_zip.js). */
 async function guardado() {
-  try {
-    const raiz = await navigator.storage.getDirectory();
-    const f = await (await raiz.getFileHandle(ARCHIVO)).getFile();
-    return (await self.mgsIndice(f))?.has('discos.json') ? f : null;
-  } catch { return null; }
+  try { return await self.mgsJuntar(await self.mgsListar()); } catch { return { mapa: new Map(), cargadas: [], partes: null }; }
 }
-async function copiar(f) {
-  avisar('');
-  const ind = await self.mgsIndice(f).catch(() => null);
-  if (!ind?.has('discos.json')) { avisar(T.invalido); return; }
+async function pintar() {
+  const d = await guardado();
+  if (!d.mapa.has('discos.json')) { ver('elegir'); if (d.cargadas.length) avisar(T.sinDisco1); return; }
+  $('partes').innerHTML = d.cargadas.map((c) => `<li>${nombreParte(c.parte)} <span class="nota">(${mb(c.bytes)})</span></li>`).join('');
+  const hay = new Set(d.cargadas.map((c) => c.parte));
+  const faltan = hay.has('entero') ? [] : Object.entries(d.partes?.partes || {}).filter(([p]) => !hay.has(p));
+  $('faltan').innerHTML = faltan.map(([p, i]) => `<li>${nombreParte(p)}: <code>${i.archivo}</code> (${mb(i.bytes)})</li>`).join('');
+  $('t-faltan').hidden = !faltan.length;
+  $('t-listo').textContent = T.listo;
   const est = await navigator.storage.estimate?.().catch(() => null);
-  if (est && est.quota - est.usage < f.size) { avisar(T.espacio((f.size / 1e9).toFixed(1))); return; }
-  await navigator.storage.persist?.().catch(() => {});
-  ver('copiando');
-  const raiz = await navigator.storage.getDirectory();
-  try {
-    const temporal = await raiz.getFileHandle(ARCHIVO, { create: true });
-    const w = await temporal.createWritable();
-    for (let a = 0; a < f.size; a += TROZO) {
-      await w.write(f.slice(a, a + TROZO));
-      const k = Math.min(1, (a + TROZO) / f.size); $('barra').value = k; $('t-porc').textContent = Math.round(k * 100) + ' %';
-    }
-    await w.close();
-    if (!(await guardado())) throw new Error('verificación');
-    navigator.serviceWorker?.controller?.postMessage('casco-datos-cambiaron');
-    ver('listo');
-  } catch (e) {
-    console.error(e); await raiz.removeEntry(ARCHIVO).catch(() => {});
-    ver('elegir'); avisar(e?.name === 'QuotaExceededError' ? T.espacio((f.size / 1e9).toFixed(1)) : T.fallo);
-  }
+  $('t-lugar').textContent = est?.quota ? T.lugar(gb(est.usage || 0), gb(est.quota)) : '';
+  ver('listo');
 }
-$('archivo').addEventListener('change', (e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) copiar(f).catch((x) => { console.error(x); ver('elegir'); avisar(T.fallo); }); });
-$('jugar').addEventListener('click', () => { location.href = 'juego.html'; });
+async function copiar(lista) {
+  avisar('');
+  const nuevos = [];
+  for (const f of lista) {
+    const p = await self.mgsParte(f).catch(() => null);
+    if (!p) { avisar(T.invalido(f.name)); return; }
+    nuevos.push({ f, parte: p.parte });
+  }
+  const antes = await self.mgsListar().catch(() => []);
+  const partesAntes = [];
+  for (const a of antes) { const p = await self.mgsParte(a.archivo).catch(() => null); partesAntes.push({ nombre: a.nombre, parte: p?.parte, bytes: a.archivo.size }); }
+  const traeEntero = nuevos.some((n) => n.parte === 'entero'), traePartes = nuevos.some((n) => n.parte !== 'entero');
+  // un entero y partes no van juntos: el entero ya tiene todo
+  let sacar = [];
+  if (traeEntero) sacar = partesAntes.filter((a) => a.parte !== 'entero');
+  else if (traePartes) sacar = partesAntes.filter((a) => a.parte === 'entero');
+  if (traeEntero && traePartes) { nuevos.splice(0, nuevos.length, ...nuevos.filter((n) => n.parte === 'entero')); }
+  if (sacar.length && !confirm(traeEntero ? T.reemplazaPartes : T.reemplazaEntero)) return;
+  const libera = sacar.reduce((s, a) => s + a.bytes, 0) + partesAntes.filter((a) => nuevos.some((n) => self.mgsNombre(n.parte) === a.nombre)).reduce((s, a) => s + a.bytes, 0);
+  const total = nuevos.reduce((s, n) => s + n.f.size, 0);
+  const est = await navigator.storage.estimate?.().catch(() => null);
+  if (est?.quota && est.quota - est.usage + libera < total) { avisar(T.espacio((total / 1e9).toFixed(1))); return; }
+  await navigator.storage.persist?.().catch(() => {});
+  for (const a of sacar) await self.mgsBorrar(a.nombre);
+  ver('copiando');
+  let hecho = 0;
+  for (let i = 0; i < nuevos.length; i++) {
+    const { f, parte } = nuevos[i], nombre = self.mgsNombre(parte);
+    $('t-copiando').textContent = T.copiando(f.name, i + 1, nuevos.length);
+    try {
+      await self.mgsGuardar(f, nombre, (k) => { const v = (hecho + k * f.size) / total; $('barra').value = v; $('t-porc').textContent = Math.round(v * 100) + ' %'; });
+      const r = await (await (await navigator.storage.getDirectory()).getFileHandle(nombre)).getFile();
+      if ((await self.mgsParte(r))?.parte !== parte) throw new Error('verificación');
+    } catch (e) {
+      console.error(e); await self.mgsBorrar(nombre); avisarSW();
+      await pintar(); avisar(e?.name === 'QuotaExceededError' ? T.espacio((total / 1e9).toFixed(1)) : T.fallo);
+      return;
+    }
+    hecho += f.size;
+  }
+  avisarSW();
+  await pintar();
+}
+for (const id of ['archivo', 'agregar']) $(id).addEventListener('change', (e) => {
+  const l = [...(e.target.files || [])]; e.target.value = '';
+  if (l.length) copiar(l).catch((x) => { console.error(x); pintar(); avisar(T.fallo); });
+});
+// ?opfs=worker / ?prueba=… siguen en el juego
+$('jugar').addEventListener('click', () => { location.href = 'juego.html' + location.search; });
 $('cambiar').addEventListener('click', async () => {
   if (!confirm(T.confirmar)) return;
-  await (await navigator.storage.getDirectory()).removeEntry(ARCHIVO).catch(() => {});
-  navigator.serviceWorker?.controller?.postMessage('casco-datos-cambiaron');
-  ver('elegir');
+  for (const a of await self.mgsListar().catch(() => [])) await self.mgsBorrar(a.nombre);
+  avisarSW();
+  avisar(''); ver('elegir');
 });
 (async () => {
-  if (!navigator.storage?.getDirectory || !self.FileSystemFileHandle?.prototype.createWritable) { $('prep').hidden = true; avisar(T.noSoporta); return; }
+  if (!self.mgsPuedeGuardar()) { $('prep').hidden = true; avisar(T.noSoporta); return; }
   if (!('serviceWorker' in navigator)) { $('prep').hidden = true; avisar(T.noSW); return; }
-  try { await navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }); await navigator.serviceWorker.ready; } catch (e) { console.error(e); $('prep').hidden = true; avisar(T.noSW); return; }
-  ver((await guardado()) ? 'listo' : 'elegir');
+  // ?prueba=sinopfs: el service worker sin OPFS (como algunos Safari)
+  const prueba = new URLSearchParams(location.search).get('prueba');
+  try { await navigator.serviceWorker.register('sw.js' + (prueba ? '?prueba=' + encodeURIComponent(prueba) : ''), { updateViaCache: 'none' }); await navigator.serviceWorker.ready; } catch (e) { console.error(e); $('prep').hidden = true; avisar(T.noSW); return; }
+  await pintar();
 })();
 </script>
 </body>

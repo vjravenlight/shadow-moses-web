@@ -186,6 +186,16 @@ export const integral = {
     if (!g?.guion || !!g.nivel !== (nivel === "integral")) return null;
     return "assets/" + g.guion;
   },
+  claveSonido(st, snd) {
+    const e = on() && st ? datos.sonido?.efx?.[st] : null, base = snd?.tabla?.[st];
+    if (!e || !base) return st;
+    const k = "int:" + st;
+    snd.tabla[k] = {
+      ...base,
+      efx: "../../integral/sonido/" + e
+    };
+    return k;
+  },
   tieneGuion(st) {
     return !!(on() && st && datos.guiones?.escenarios?.[st]);
   },

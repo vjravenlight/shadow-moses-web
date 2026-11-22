@@ -17,6 +17,26 @@ def en_usa(st, nombre):
             return md5(p)
     return None
 
+def efx_distintos():
+    import shutil
+    out = {}
+    for base in INT:
+        for p in sorted(glob.glob(os.path.join(base, '*', 'sound', '*.efx'))):
+            st, nombre = (os.path.basename(os.path.dirname(os.path.dirname(p))), os.path.basename(p))
+            if st in out:
+                continue
+            usa = [os.path.join(EXTRAIDO, 'disco%d' % n, '01_stages', st, 'sound', nombre) for n in (1, 2)]
+            usa = [u for u in usa if os.path.exists(u)]
+            if not usa or md5(usa[0]) == md5(p):
+                continue
+            a, b = (open(usa[0], 'rb').read(), open(p, 'rb').read())
+            if len(a) != len(b) or sum((x != y for x, y in zip(a, b))) > 32:
+                continue
+            os.makedirs(os.path.join(OUT, 'sonido'), exist_ok=True)
+            shutil.copyfile(p, os.path.join(OUT, 'sonido', nombre))
+            out[st] = os.path.splitext(nombre)[0]
+    return out
+
 def buscar(st, sub, nombre):
     for base in INT:
         p = os.path.join(base, st, sub, nombre)
@@ -360,6 +380,10 @@ def main():
     if camaras:
         info['actores'] = camaras
         print('cámaras nuevas:', {k: len(v) for k, v in camaras.items()})
+    efx = efx_distintos()
+    if efx:
+        info['sonido'] = {'efx': efx}
+        print('efectos de sonido distintos:', efx)
     st = staff()
     if st:
         info['staff'] = st

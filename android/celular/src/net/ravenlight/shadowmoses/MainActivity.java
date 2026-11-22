@@ -1,11 +1,16 @@
-// La app de celular: el visor va adentro de la APK y los datos del juego salen del archivo único que elige el jugador
+// La app de celular: el visor va adentro de la APK y los datos del juego salen del archivo que elige el jugador
 // (MGSweb_datos.mgs, un zip sin comprimir que arma ARMAR_ARCHIVO_CELULAR.cmd en la PC). Sirve las dos cosas a una WebView en
 // una dirección https propia, porque el juego necesita conexión segura (AudioWorklet). No sale nada a internet.
+// 2.12: el archivo puede venir EN PARTES (MGS_disco1.mgs, MGS_disco2.mgs, MGS_vr_missions.mgs, MGS_integral.mgs,
+// MGS_idioma_xx.mgs; cada una trae mgs_parte.json): se abren todas juntas, assets/_partes_cargadas.json dice cuáles hay y
+// el juego (visor/partes.js) pide las que faltan con MGSApp.elegirParte(), como el cambio de disco. El .mgs entero (también
+// los viejos) sigue igual. Detalle: docs/iphone_y_partes.md.
 // FeniXVOID · Project Ravenlight
 package net.ravenlight.shadowmoses;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
@@ -39,9 +44,18 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 public class MainActivity extends Activity {
     private static final String TAG = "ShadowMoses";
@@ -49,12 +63,31 @@ public class MainActivity extends Activity {
     private static final String BASE = "https://" + HOST + "/";
     private static final String INICIO = BASE + "_app/inicio.html";
     private static final String JUEGO = BASE + "index.html?tactil";   // siempre con los controles táctiles
-    private static final int PEDIDO_ARCHIVO = 1, PEDIDO_PARTIDA = 2, PEDIDO_GUARDAR = 3;
+    private static final int PEDIDO_ARCHIVO = 1, PEDIDO_PARTIDA = 2, PEDIDO_GUARDAR = 3, PEDIDO_PARTE = 4;
+    // el orden en que se buscan los archivos cuando dos partes traen el mismo (no debería pasar)
+    private static final String[] ORDEN = { "entero", "disco1", "disco2", "vr_missions", "integral" };
+
+    /** Un .mgs abierto: su canal, su índice y qué parte es ('entero' para el de siempre). */
+    private static final class Abierto {
+        final ParcelFileDescriptor descriptor; final FileChannel canal; final Map<String, long[]> indice; final String parte; final long tam;
+        Abierto(ParcelFileDescriptor d, FileChannel c, Map<String, long[]> i, String p, long t) { descriptor = d; canal = c; indice = i; parte = p; tam = t; }
+        void cerrar() { try { descriptor.close(); } catch (IOException ignorado) { } }
+    }
+    /** Dónde está cada archivo de assets/: en qué canal y en qué lugar del zip. */
+    private static final class Entrada {
+        final FileChannel canal; final long local, tam;
+        Entrada(FileChannel c, long l, long t) { canal = c; local = l; tam = t; }
+    }
 
     private WebView web;
-    private ParcelFileDescriptor descriptor;
-    private volatile FileChannel canal;
-    private volatile Map<String, long[]> indice;   // nombre -> { offset del encabezado local, tamaño }
+    // uri -> archivo abierto (sólo desde el hilo de la pantalla)
+    private final Map<String, Abierto> abiertos = new HashMap<>();
+    // nombre -> dónde está; lo leen los hilos de la WebView
+    private volatile Map<String, Entrada> indice;
+    // assets/_partes_cargadas.json
+    private volatile String cargadas = "{\"formato\":1,\"cargadas\":[]}";
+    // elegirParte() en curso
+    private String parteEsperada;
     private ValueCallback<Uri[]> esperaPartida;
     private byte[] porGuardar;   // lo que exporta el juego, hasta que el jugador elige dónde dejarlo
 
@@ -93,12 +126,30 @@ public class MainActivity extends Activity {
         web.setWebViewClient(new Cliente());
         web.setWebChromeClient(new Cromo());
 
-        String guardada = prefs().getString("archivo", null);
-        if (guardada != null && abrir(Uri.parse(guardada)) == null) web.loadUrl(JUEGO);
-        else web.loadUrl(INICIO + (guardada != null ? "?error=mover" : ""));
+        Map<String, String> guardadas = guardadas();
+        if (!guardadas.isEmpty() && usar(guardadas) == null) web.loadUrl(JUEGO);
+        else web.loadUrl(INICIO + (!guardadas.isEmpty() ? "?error=mover" : ""));
     }
 
     private SharedPreferences prefs() { return getSharedPreferences("mgs", MODE_PRIVATE); }
+
+    /** Los archivos elegidos: parte -> uri. La 1.16 guardaba uno solo en "archivo": se toma como el entero. */
+    private Map<String, String> guardadas() {
+        Map<String, String> m = new LinkedHashMap<>();
+        String j = prefs().getString("archivos", null);
+        if (j != null) {
+            try { JSONObject o = new JSONObject(j); for (Iterator<String> k = o.keys(); k.hasNext(); ) { String p = k.next(); m.put(p, o.getString(p)); } }
+            catch (JSONException e) { Log.w(TAG, "archivos guardados ilegibles", e); }
+        } else {
+            String viejo = prefs().getString("archivo", null);
+            if (viejo != null) m.put("entero", viejo);
+        }
+        return m;
+    }
+
+    private void guardar(Map<String, String> m) {
+        prefs().edit().putString("archivos", new JSONObject(m).toString()).remove("archivo").apply();
+    }
 
     private void pantallaCompleta() {
         web.setSystemUiVisibility(View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
@@ -131,14 +182,57 @@ public class MainActivity extends Activity {
             byte[] datosGuardar = porGuardar;
             porGuardar = null;
             if (uri != null && datosGuardar != null) escribir(uri, datosGuardar);
-        } else if (pedido == PEDIDO_ARCHIVO && uri != null) {
-            String error = abrir(uri);
+        } else if (pedido == PEDIDO_ARCHIVO) {
+            // la primera pantalla: uno o varios .mgs
+            List<Uri> uris = new ArrayList<>();
+            if (resultado == RESULT_OK && datos != null) {
+                ClipData clip = datos.getClipData();
+                if (clip != null) for (int i = 0; i < clip.getItemCount(); i++) uris.add(clip.getItemAt(i).getUri());
+                else if (datos.getData() != null) uris.add(datos.getData());
+            }
+            if (uris.isEmpty()) return;
+            Map<String, String> nuevas = new LinkedHashMap<>(guardadas());
+            for (Uri u : uris) {
+                String[] r = probar(u);
+                if (r[1] != null) { web.loadUrl(INICIO + "?error=" + r[1]); return; }
+                sumar(nuevas, r[0], u);
+            }
+            String error = usar(nuevas);
             if (error != null) { web.loadUrl(INICIO + "?error=" + error); return; }
-            try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
-            catch (SecurityException e) { Log.w(TAG, "sin permiso permanente", e); }
-            prefs().edit().putString("archivo", uri.toString()).apply();
+            guardar(nuevas);
             web.loadUrl(JUEGO);
+        } else if (pedido == PEDIDO_PARTE) {
+            // el juego pidió una parte (visor/partes.js)
+            String quiero = parteEsperada;
+            parteEsperada = null;
+            if (uri == null) { avisarParte(false, null, "cancelado"); return; }
+            String[] r = probar(uri);
+            if (r[1] != null) { avisarParte(false, null, r[1]); return; }
+            if ("entero".equals(r[0])) { avisarParte(false, r[0], "otra"); return; }
+            Map<String, String> nuevas = new LinkedHashMap<>(guardadas());
+            sumar(nuevas, r[0], uri);
+            String error = usar(nuevas);
+            if (error != null) { usar(guardadas()); avisarParte(false, r[0], error); return; }
+            guardar(nuevas);
+            avisarParte(true, r[0], quiero != null && !quiero.equals(r[0]) ? "otra" : null);
         }
+    }
+
+    /** Suma una parte elegida: el entero reemplaza a las partes y una parte reemplaza al entero (no van juntos). */
+    private void sumar(Map<String, String> m, String parte, Uri uri) {
+        try { getContentResolver().takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION); }
+        catch (SecurityException e) { Log.w(TAG, "sin permiso permanente", e); }
+        if ("entero".equals(parte)) m.clear(); else m.remove("entero");
+        m.put(parte, uri.toString());
+    }
+
+    private void avisarParte(boolean ok, String parte, String error) {
+        try {
+            JSONObject o = new JSONObject().put("ok", ok);
+            if (parte != null) o.put("parte", parte);
+            if (error != null) o.put("error", error);
+            web.evaluateJavascript("window.mgsPartes&&window.mgsPartes.alElegir(" + o + ")", null);
+        } catch (JSONException e) { Log.w(TAG, "aviso de parte", e); }
     }
 
     /** Escribe lo exportado donde eligió el jugador, fuera del hilo de la pantalla (una foto 360 pesa varios MB). */
@@ -155,28 +249,106 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    /** Abre el archivo y arma el índice. Devuelve null si está bien, o el código del error para la pantalla de inicio. */
-    private String abrir(Uri uri) {
-        cerrar();
+    /** Abre un .mgs: null si no se puede o no sirve. */
+    private Abierto abrirUno(Uri uri) {
+        ParcelFileDescriptor d = null;
         try {
-            ParcelFileDescriptor d = getContentResolver().openFileDescriptor(uri, "r");
-            if (d == null) return "abrir";
+            d = getContentResolver().openFileDescriptor(uri, "r");
+            if (d == null) return null;
             FileChannel c = new FileInputStream(d.getFileDescriptor()).getChannel();
             Map<String, long[]> ind = leerIndice(c);
-            if (ind == null) { d.close(); return "formato"; }
-            if (!ind.containsKey("discos.json")) { d.close(); return "formato"; }
-            descriptor = d; canal = c; indice = ind;
-            return null;
+            String parte = ind == null ? null : parteDe(c, ind);
+            if (parte == null) { d.close(); return null; }
+            return new Abierto(d, c, ind, parte, c.size());
         } catch (IOException | SecurityException | IllegalArgumentException e) {
-            Log.w(TAG, "no se pudo abrir el archivo", e);
-            return "abrir";
+            Log.w(TAG, "no se pudo abrir " + uri, e);
+            if (d != null) try { d.close(); } catch (IOException ignorado) { }
+            return null;
         }
     }
 
+    /** Qué parte es un .mgs abierto (su mgs_parte.json; 'entero' si no lo trae pero tiene discos.json), o null si no sirve. */
+    private static String parteDe(FileChannel c, Map<String, long[]> ind) throws IOException {
+        String parte = null;
+        long[] e = ind.get("mgs_parte.json");
+        if (e != null && e[1] < 65536) {
+            ByteBuffer h = leer(c, e[0], 30);
+            if (h.limit() == 30 && h.getInt(0) == 0x04034b50) {
+                ByteBuffer b = leer(c, e[0] + 30 + (h.getShort(26) & 0xffff) + (h.getShort(28) & 0xffff), (int) e[1]);
+                try { parte = new JSONObject(new String(b.array(), 0, b.limit(), StandardCharsets.UTF_8)).optString("parte", null); }
+                catch (JSONException x) { parte = null; }
+            }
+        }
+        if (parte == null && ind.containsKey("discos.json")) parte = "entero";
+        if (parte == null || !parte.matches("[a-z0-9_]+")) return null;
+        if (("entero".equals(parte) || "disco1".equals(parte)) && !ind.containsKey("discos.json")) return null;
+        return parte;
+    }
+
+    /** Mira un archivo elegido sin quedárselo: { parte, error }. */
+    private String[] probar(Uri uri) {
+        Abierto a = abrirUno(uri);
+        if (a == null) {
+            try (ParcelFileDescriptor d = getContentResolver().openFileDescriptor(uri, "r")) { return new String[] { null, d == null ? "abrir" : "formato" }; }
+            catch (IOException | SecurityException | IllegalArgumentException e) { return new String[] { null, "abrir" }; }
+        }
+        String p = a.parte;
+        a.cerrar();
+        return new String[] { p, null };
+    }
+
+    private static int orden(String parte) {
+        for (int i = 0; i < ORDEN.length; i++) if (ORDEN[i].equals(parte)) return i;
+        return ORDEN.length;
+    }
+
+    /**
+     * Abre los archivos elegidos (parte -> uri; los que ya estaban abiertos quedan como están) y arma el índice junto.
+     * Devuelve null si está bien, o el código del error para la pantalla de inicio. Un archivo opcional que ya no se puede
+     * abrir (se movió o se borró) se saca de la lista y el juego lo vuelve a pedir cuando haga falta.
+     */
+    private String usar(Map<String, String> elegidas) {
+        Map<String, Abierto> nuevos = new HashMap<>();
+        List<Abierto> lista = new ArrayList<>();
+        boolean cambio = false;
+        for (Iterator<Map.Entry<String, String>> it = elegidas.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<String, String> k = it.next();
+            Abierto a = abiertos.get(k.getValue());
+            if (a == null) a = abrirUno(Uri.parse(k.getValue()));
+            if (a == null) {
+                if ("entero".equals(k.getKey()) || "disco1".equals(k.getKey())) { cerrarNuevos(nuevos); return "mover"; }
+                it.remove(); cambio = true; continue;
+            }
+            nuevos.put(k.getValue(), a);
+            lista.add(a);
+        }
+        Collections.sort(lista, (x, y) -> orden(x.parte) != orden(y.parte) ? orden(x.parte) - orden(y.parte) : x.parte.compareTo(y.parte));
+        Map<String, Entrada> ind = new HashMap<>();
+        JSONArray car = new JSONArray();
+        for (Abierto a : lista) {
+            for (Map.Entry<String, long[]> e : a.indice.entrySet())
+                if (!ind.containsKey(e.getKey())) ind.put(e.getKey(), new Entrada(a.canal, e.getValue()[0], e.getValue()[1]));
+            try { car.put(new JSONObject().put("parte", a.parte).put("bytes", a.tam)); } catch (JSONException ignorado) { }
+        }
+        if (!ind.containsKey("discos.json")) { cerrarNuevos(nuevos); return lista.isEmpty() ? "formato" : "disco1"; }
+        indice = ind;
+        try { cargadas = new JSONObject().put("formato", 1).put("cargadas", car).toString(); } catch (JSONException ignorado) { }
+        for (Map.Entry<String, Abierto> e : abiertos.entrySet()) if (!nuevos.containsKey(e.getKey())) e.getValue().cerrar();
+        abiertos.clear();
+        abiertos.putAll(nuevos);
+        if (cambio) guardar(elegidas);
+        return null;
+    }
+
+    /** Cierra lo que se abrió en un usar() que no salió (lo que ya estaba abierto queda). */
+    private void cerrarNuevos(Map<String, Abierto> nuevos) {
+        for (Map.Entry<String, Abierto> e : nuevos.entrySet()) if (!abiertos.containsKey(e.getKey())) e.getValue().cerrar();
+    }
+
     private void cerrar() {
-        indice = null; canal = null;
-        try { if (descriptor != null) descriptor.close(); } catch (IOException ignorado) { }
-        descriptor = null;
+        indice = null;
+        for (Abierto a : abiertos.values()) a.cerrar();
+        abiertos.clear();
     }
 
     private static ByteBuffer leer(FileChannel c, long pos, int n) throws IOException {
@@ -239,13 +411,19 @@ public class MainActivity extends Activity {
     }
 
     private WebResourceResponse delArchivo(String nombre, WebResourceRequest r) throws IOException {
-        Map<String, long[]> ind = indice;
-        FileChannel c = canal;
-        long[] e = ind == null ? null : ind.get(nombre);
-        if (e == null || c == null) return vacia(404, "Not Found");
-        ByteBuffer h = leer(c, e[0], 30);
+        if ("_partes_cargadas.json".equals(nombre)) {
+            // qué partes hay en el aparato (visor/partes.js)
+            Map<String, String> enc = new HashMap<>();
+            enc.put("Cache-Control", "no-store");
+            return new WebResourceResponse("application/json", "utf-8", 200, "OK", enc, new ByteArrayInputStream(cargadas.getBytes(StandardCharsets.UTF_8)));
+        }
+        Map<String, Entrada> ind = indice;
+        Entrada e = ind == null ? null : ind.get(nombre);
+        if (e == null) return vacia(404, "Not Found");
+        FileChannel c = e.canal;
+        ByteBuffer h = leer(c, e.local, 30);
         if (h.limit() < 30 || h.getInt(0) != 0x04034b50) return vacia(500, "Bad Entry");
-        long ini = e[0] + 30 + (h.getShort(26) & 0xffff) + (h.getShort(28) & 0xffff), tam = e[1];
+        long ini = e.local + 30 + (h.getShort(26) & 0xffff) + (h.getShort(28) & 0xffff), tam = e.tam;
         long desde = 0, hasta = tam - 1;
         Map<String, String> enc = new HashMap<>();
         enc.put("Accept-Ranges", "bytes");
@@ -311,14 +489,26 @@ public class MainActivity extends Activity {
         @Override public int available() { return (int) Math.min(resta, Integer.MAX_VALUE); }
     }
 
+    /** El selector de archivos del sistema, empezando en Descargas. */
+    private static Intent elegir(boolean varios) {
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
+        i.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload"));
+        if (varios) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        return i;
+    }
+
     /** Lo que ven las páginas como window.MGSApp. El visor lo usa para saber que corre adentro de la app. */
     private final class Puente {
         @JavascriptInterface public void elegirArchivo() {
+            runOnUiThread(() -> startActivityForResult(elegir(true), PEDIDO_ARCHIVO));
+        }
+        /** 2.12: el juego pide una parte que no está (el disco 2 al cambiar de disco, un idioma…). Contesta con mgsPartes.alElegir. */
+        @JavascriptInterface public void elegirParte(String parte) {
             runOnUiThread(() -> {
-                Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*");
-                i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
-                i.putExtra(DocumentsContract.EXTRA_INITIAL_URI, Uri.parse("content://com.android.externalstorage.documents/document/primary%3ADownload"));
-                startActivityForResult(i, PEDIDO_ARCHIVO);
+                parteEsperada = parte;
+                try { startActivityForResult(elegir(false), PEDIDO_PARTE); }
+                catch (RuntimeException e) { parteEsperada = null; avisarParte(false, null, "abrir"); }
             });
         }
         /** Exportar una partida o una foto: en una WebView no funciona la descarga de un blob, así que pregunta dónde guardarlo. */
@@ -333,6 +523,6 @@ public class MainActivity extends Activity {
                 startActivityForResult(i, PEDIDO_GUARDAR);
             });
         }
-        @JavascriptInterface public String version() { return "1.16"; }
+        @JavascriptInterface public String version() { return "1.17"; }
     }
 }

@@ -346,7 +346,13 @@ def exportar_voces_integral(sectores, disco=1):
                 d['bloque'] = D.BLOQUE_ESTEREO
             d.update({'seg': round(n / hz, 4), 'muestras': n, 'sub': pistas[-1] if pistas else [], 'lip': [], 'disco': 'integral%d' % disco, 'sector': sec})
             if len(pistas) > 1:
-                d['sub_ja'] = pistas[0]
+                try:
+                    import idiomas_export as IE
+                    x = info['subtitulos'][0]
+                    d['sub_ja'] = [[a, b, '', dict(IE.subtitulo_ja(mm, x, l), i='ja')] for (a, b, _), l in zip(pistas[0], x['lineas'])]
+                except Exception as e:
+                    print('integral: el japonés de la voz %d queda en bytes (%s)' % (sec, e))
+                    d['sub_ja'] = pistas[0]
             json.dump(d, open(os.path.join(OUT_VOX, '%d.json' % sec), 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
             hechas.append(sec)
     return hechas

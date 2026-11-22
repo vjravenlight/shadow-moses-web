@@ -967,6 +967,12 @@ def main():
     if '--sin-titulo' not in sys.argv:
         import vr_titulo_export
         vr_titulo_export.exportar()
+    try:
+        import shutil
+        nodo = shutil.which('node') or os.path.normpath(os.path.join(os.path.dirname(sys.executable), '..', '..', 'node', 'node.exe'))
+        subprocess.run([nodo, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ninja_sonidos_vr.mjs')], check=False)
+    except Exception as ex:
+        print('vr_disco_export: sin los efectos grabados del Ninja:', ex)
     return 0
 if __name__ == '__main__':
     sys.exit(main())

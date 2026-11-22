@@ -184,6 +184,10 @@ export class Tactil {
       this._menu(que === "r2" ? 1 : 0, abajo, t);
       return;
 
+     case "agachar_nj":
+      if (abajo && !inv?.abierto) c.agacharNinja?.();
+      return;
+
      case "r1":
      case "l1":
       inv?.botonVR(que === "r1" ? PAD.R1 : PAD.L1, abajo);
@@ -266,13 +270,18 @@ export class Tactil {
     }
     const cruz = this._cruz || (this._cruz = this.raiz.querySelector('[data-b="cruz"]'));
     const p = this.c.postura?.() || 0;
-    if (cruz && cruz._p !== p) {
-      cruz._p = p;
-      cruz.classList.toggle("fijo", p > 0);
+    const nj = !!inv?.sinArmas, kp = p + (nj ? 10 : 0);
+    if (cruz && cruz._p !== kp) {
+      cruz._p = kp;
+      cruz.classList.toggle("fijo", p > 0 && !nj);
       const s = cruz.querySelector("small");
-      if (s) s.textContent = p ? "PARAR" : "AGACHAR";
+      if (s) s.textContent = nj ? "VOLTERETA" : p ? "PARAR" : "AGACHAR";
+      const ag = this.raiz.querySelector('[data-b="agachar_nj"]');
+      if (ag) {
+        ag.textContent = p ? "PARAR" : "AGACHAR";
+        ag.classList.toggle("fijo", p > 0);
+      }
     }
-    const nj = !!inv?.sinArmas;
     if (nj !== this._ninja) {
       this._ninja = nj;
       this.raiz.classList.toggle("ninja", nj);

@@ -113,8 +113,18 @@ def main():
         modelos.append({'nombre': nombre, 'codigo': '%04x' % cod, 'archivo': x['archivo'], 'categoria': x['categoria'], 'escenarios': x.get('escenarios', []), 'piezas': x.get('piezas'), 'caras': x.get('caras'), 'alto': x.get('alto'), 'ancho': x.get('ancho'), 'esqueleto': x.get('esqueleto')})
     documentado = [{'titulo': 'Tres caras del códec sin llamada', 'texto': 'FACE.DAT trae tres caras que ningún TALK ni ANIM de RADIO.DAT usa: una pose más de Snake, Liquid Snake y una pose de Campbell (los nombres no están en el decomp).', 'fuente': 'docs/codec/face_dat.md §5', 'imagenes': ['codec/caras/desconocido_2089/base.png', 'codec/caras/desconocido_80d8/base.png', 'codec/caras/desconocido_bb69/base.png']}, {'titulo': 'SCN_ANIM en PHOTOGRAPH', 'texto': 'Corazones (HEART) y enojo (PUNPUN) de scn_anim.c: el actor está en el disco de VR pero ninguna sesión de fotos lo crea.', 'fuente': 'docs/vr_foto.md §5'}, {'titulo': 'Menús de desarrollo', 'texto': 'STAGE SELECT, DEMO ALL, VAR INIT, SOUND TEST y VIBRATION EDITER: en el disco 1, sin entrada en el juego normal. En el visor: DESARROLLO del título.', 'fuente': 'docs/menu/titulo_js.md §9'}]
     os.makedirs(os.path.dirname(SALIDA), exist_ok=True)
-    json.dump({'modelos': modelos, 'documentado': documentado, 'cuenta': {'catalogo': len(cat), 'guiones': n_guiones, 'fuentes_c': n_c, 'sin_usar': len(modelos)}}, open(SALIDA, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
+    salida = {'modelos': modelos, 'documentado': documentado, 'cuenta': {'catalogo': len(cat), 'guiones': n_guiones, 'fuentes_c': n_c, 'sin_usar': len(modelos)}}
+    try:
+        import sin_usar_sonido
+        son = sin_usar_sonido.barrer(exportar='--sin-exportar' not in sys.argv)
+        salida['llamadas'], salida['voces'], salida['musica'] = (son['llamadas'], son['voces'], son['musica'])
+        salida['cuenta'].update(son['cuenta_sonido'])
+    except Exception as e:
+        print('sin_usar: no se pudo barrer llamadas, voces y música (%s); sigue con los modelos' % e)
+    json.dump(salida, open(SALIDA, 'w', encoding='utf-8'), ensure_ascii=False, separators=(',', ':'))
     print('sin_usar: %d de %d modelos sin usar (%d guiones, %d archivos del decomp)' % (len(modelos), len(cat), n_guiones, n_c))
+    if 'llamadas' in salida:
+        print('sin_usar: %d llamadas, %d voces y %d canciones sin usar' % (len(salida['llamadas']), len(salida['voces']), len(salida['musica'])))
     for m in modelos[:40]:
         print('  ', m['nombre'], m['categoria'], m['escenarios'][:4])
 if __name__ == '__main__':

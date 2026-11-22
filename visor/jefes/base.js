@@ -664,6 +664,7 @@ export class Flujo {
   async subsTexto(id, r) {
     const propios = r.datos?.sub || null, T = idioma.texto, conTexto = S => S?.some(q => q[2] || q[3]);
     if (T === (r.idioma || "en") && conTexto(propios)) return propios;
+    if (T === "ja" && r.datos?.sub_ja?.some?.(q => q[3]?.tj != null)) return r.datos.sub_ja;
     const S = this.op.voces?.subtitulosEn ? await this.op.voces.subtitulosEn(id, T).catch(() => null) : null;
     if (!S?.length) return propios;
     const fin = S[S.length - 1][1], mio = propios?.length ? propios[propios.length - 1][1] : r.datos?.seg || fin;

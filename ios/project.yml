@@ -1,0 +1,42 @@
+# Proyecto de Xcode de Shadow Moses para iPhone, para XcodeGen (https://github.com/yonaskolb/XcodeGen): así no hace falta
+# guardar un .xcodeproj ni abrir Xcode. Lo usa ios/armar_ipa.sh, que antes arma build/web (el visor + la pantalla de inicio)
+# y build/iconos. Sin firma: CODE_SIGNING_ALLOWED=NO; la firma la hace cada jugador (ios/FIRMAR_E_INSTALAR.md).
+# FeniXVOID · Project Ravenlight
+name: ShadowMoses
+options:
+  bundleIdPrefix: net.ravenlight
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ShadowMoses:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: ShadowMoses
+        excludes:
+          - "Info.plist"
+      - path: build/web
+        type: folder
+        buildPhase: resources
+      - path: build/iconos
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: ShadowMoses
+        PRODUCT_BUNDLE_IDENTIFIER: net.ravenlight.shadowmoses.ios
+        INFOPLIST_FILE: ShadowMoses/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        ENABLE_BITCODE: NO
+        CODE_SIGNING_ALLOWED: NO
+        CODE_SIGNING_REQUIRED: NO
+        CODE_SIGN_IDENTITY: ""
+        DEVELOPMENT_TEAM: ""
+        ASSETCATALOG_COMPILER_APPICON_NAME: ""

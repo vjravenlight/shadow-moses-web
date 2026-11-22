@@ -7,6 +7,50 @@ import { ArcoPlasma } from "./plasma.js";
 
 import { materialKogaku, TINTE } from "./kogaku.js";
 
+import { sonido } from "./sonido.js";
+
+const MUESTRAS = new Map;
+
+function pedirMuestra(url) {
+  const c = sonido.ctx;
+  if (!c) return null;
+  let m = MUESTRAS.get(url);
+  if (!m) {
+    m = {
+      buf: null,
+      fallo: false
+    };
+    MUESTRAS.set(url, m);
+    fetch(url).then(r => r.ok ? r.arrayBuffer() : Promise.reject(new Error(r.status))).then(b => c.decodeAudioData(b)).then(b => {
+      m.buf = b;
+    }).catch(() => {
+      m.fallo = true;
+    });
+  }
+  return m;
+}
+
+function tocarMuestra(url, vol = 1) {
+  const m = pedirMuestra(url), c = sonido.ctx;
+  if (!m?.buf || !c || !sonido.listo) return false;
+  try {
+    const s = c.createBufferSource(), g = c.createGain();
+    s.buffer = m.buf;
+    g.gain.value = vol * (sonido.volumen ?? .9);
+    s.connect(g).connect(c.destination);
+    s.start();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const URL_SE_VR = id => "assets/vr/disco/sonido/ninja/" + id.toString(16) + ".wav";
+
+export const URL_RAYO = "assets/jefes/rex/ninjalaser.wav";
+
+const SE_GRABADOS = [ 197, 198, 199, 205, 208, 209, 210, 211, 212, 168, 169 ];
+
 const MM = .001;
 
 export const MOT = {
@@ -212,6 +256,7 @@ export class NinjaJugable {
     this.pared = null;
     this.forzado = null;
     this.muerto = false;
+    this.primera = false;
   }
   log(t, extra = {}) {
     this.registro.push({
@@ -225,6 +270,7 @@ export class NinjaJugable {
     return this.ctx.juego?.() || null;
   }
   se(id) {
+    if (this.mapaSE && SE_GRABADOS.includes(id) && tocarMuestra(URL_SE_VR(id), .8)) return;
     if (this.mapaSE && id in this.mapaSE) id = this.mapaSE[id];
     if (id == null) return;
     try {
@@ -234,6 +280,10 @@ export class NinjaJugable {
   async cargar({modelo: modelo = "vr/disco/comun/ninja_vr.glb", anims: anims = "vr_ninja", anims_o: anims_o = "vr_ninja_o", escenarios: escenarios = false} = {}) {
     const [o, datos, datosO, datosR] = await Promise.all([ this.ctx.cargarGlb(modelo), cargarAnims(anims), anims_o ? cargarAnims(anims_o).catch(() => null) : null, escenarios ? cargarAnims(RAYO.pose.anims).catch(() => null) : null ]);
     if (escenarios) for (const n of [ "blue_bonbori", "laser_rayo", "laser_brillo" ]) texturaRayo(n);
+    if (escenarios) {
+      pedirMuestra(URL_RAYO);
+      for (const id of SE_GRABADOS) pedirMuestra(URL_SE_VR(id));
+    }
     this.escenarios = !!escenarios;
     this.mapaSE = escenarios ? SE_ESCENARIOS : null;
     this.datosRayo = datosR;
@@ -477,11 +527,11 @@ export class NinjaJugable {
   }
   tick() {
     const J = this.juego();
-    if (this.pulsados.has("l1") && !this.muerto) {
+    if (this.pulsados.has("l1") && !this.muerto && !this.primera) {
       this.ponerKogaku(!this.kogaku);
       this.se(SE.KOGAKU);
     }
-    if (this.kogaku) this.gastarVida();
+    if (this.kogaku && !this.primera) this.gastarVida();
     if (this.esperaRayo > 0) this.esperaRayo--;
     if (this.prestado) {
       if (this.estado !== "quieto") this.cambiar("quieto");
@@ -504,6 +554,12 @@ export class NinjaJugable {
       {
         if (this.pared) {
           this.tocar(this.mueve ? this.pared.lado < 0 ? MOT.PARED_I : MOT.PARED_D : MOT.PARED);
+          this.tocarTorso(null);
+          break;
+        }
+        if (this.primera) {
+          this.estado = "quieto";
+          this.tocar(MOT.QUIETO);
           this.tocarTorso(null);
           break;
         }
@@ -647,7 +703,7 @@ export class NinjaJugable {
         const f = this.cuadroAnim();
         if (f === 3 && this.fSe !== 3) this.se(SE.ZUMBIDO);
         this.fSe = f;
-        this.empujar(this.pasoAnim() + (t < 10 ? 96 : 0));
+        this.empujar(this.pasoAnim() + (t < 10 && this.mueve ? 96 : 0));
         if (t > 2) this.atacar("carrera");
         if (t === 10) this.se(SE.ATERRIZA);
         if (this.terminoAnim() || f > 15 && this.mueve) this.cambiar(this.mueve ? "correr" : "quieto");
@@ -716,7 +772,7 @@ export class NinjaJugable {
           this.tocarTorso(null);
           this.se(SE.VOLTERETA);
         }
-        if (t < 12) this.empujar(96 + Math.max(0, this.pasoAnim())); else if (!this.aterrizo) {
+        if (t < 12) this.empujar((this.mueve ? 96 : 0) + Math.max(0, this.pasoAnim())); else if (!this.aterrizo) {
           this.aterrizo = true;
           this.se(SE.ATERRIZA);
           const c = this.pos.clone();
@@ -949,10 +1005,11 @@ export class NinjaJugable {
     }
     return mejor;
   }
-  animar(dt, {pos: pos, yaw: yaw, vel: vel = 0, pared: pared = null, muerte: muerte = false, forzado: forzado = null, visible: visible = true, prestado: prestado = null, sombra: sombra = false} = {}) {
+  animar(dt, {pos: pos, yaw: yaw, vel: vel = 0, pared: pared = null, muerte: muerte = false, forzado: forzado = null, visible: visible = true, prestado: prestado = null, sombra: sombra = false, primera: primera = false} = {}) {
     if (!this.activo || !this.listo) return;
     this.pos.copy(pos);
     this.pared = prestado ? null : pared;
+    this.primera = !!primera;
     if (!!prestado !== this.prestado) {
       this.prestado = !!prestado;
       this.log(prestado ? "pose de Snake" : "pose propia");
@@ -963,7 +1020,7 @@ export class NinjaJugable {
         this.tocar(MOT.QUIETO);
       }
     }
-    if (this.rumboPedido == null) this.yaw = yaw;
+    if (this.rumboPedido == null && Number.isFinite(yaw)) this.yaw = yaw;
     if (muerte && !this.muerto) {
       this.muerto = true;
       this.ponerKogaku(false);
@@ -1209,10 +1266,11 @@ export class NinjaJugable {
       fin: fin.toArray().map(v => +v.toFixed(2)),
       blanco: quien
     };
-    this.se(RAYO.se);
+    const grabado = tocarMuestra(URL_RAYO, 1);
+    if (!grabado) this.se(RAYO.se);
     this.laserRayo(fin);
     this.chispas(fin, 12577023, 8);
-    this.se(RAYO.seImpacto);
+    if (!grabado) this.se(RAYO.seImpacto);
     this.ctx.destello?.(RAYO.destello);
     this.ctx.vibrar?.(4);
   }

@@ -193,7 +193,7 @@ class Apoyo {
     const J = this.J, inv = J.ctx.inventario;
     J.vida -= inv ? (tipo === "bala" ? inv.dañoBala(daño) : daño) / inv.vidaMax : daño / 256;
     J.ctx.daño?.();
-    sonido("daño");
+    if (J.quejido) J.quejido(tipo === "bala" ? 1 : 2); else sonido(tipo === "bala" ? 24 : 25);
     this.snakeDañado = this.mgr.frame;
   }
   snakeInvencible() {

@@ -633,6 +633,7 @@ export class Tanque extends Jefe {
     const J = this.J, inv = J.ctx.inventario;
     J.vida -= n / (inv?.vidaMax || 256);
     J.ctx.daño?.();
+    J.quejido?.(2);
     this.F78 = 90;
     this.se(189, null);
     this.derribarSnake();
@@ -1725,6 +1726,7 @@ export class Tanque extends Jefe {
         res = 1;
         J.vida -= P.daño / (J.ctx.inventario?.vidaMax || 256);
         J.ctx.daño?.();
+        J.quejido?.(2);
         this.derribarSnake();
       } else if (h) {
         res = 2;
@@ -1742,6 +1744,7 @@ export class Tanque extends Jefe {
           if (n) {
             J.vida -= n / (J.ctx.inventario?.vidaMax || 256);
             J.ctx.daño?.();
+            J.quejido?.(2);
           }
         }
         J.ctx.vibrar?.(8);

@@ -1769,6 +1769,7 @@ export class Mantis extends Jefe {
     if (J.muerto) return;
     J.vida -= n / (inv?.vidaMax || 256);
     J.ctx.daño?.();
+    J.quejido?.(explosion ? 2 : 3);
     this.log("daño a Snake", {
       n: n,
       explosion: explosion

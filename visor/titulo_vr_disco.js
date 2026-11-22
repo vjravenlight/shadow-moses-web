@@ -7,7 +7,7 @@ import { leerFotos } from "./fotos.js";
 
 import { todoDesbloqueado, ponerTodoDesbloqueado } from "./desbloqueo.js";
 
-import { vibrar, vibraActiva, ponerVibra } from "./controles.js";
+import { vibrar, vibraActiva, ponerVibra, tipoBotones, ponerTipoBotones, vistaInvertida, ponerVistaInvertida } from "./controles.js";
 
 import { pantallaControles } from "./controles_ui.js";
 
@@ -1403,7 +1403,13 @@ export class TituloDisco {
         prueba: 0
       },
       vibT: 0,
-      fin: null
+      fin: null,
+      kc: {
+        abierto: false,
+        fila: 0,
+        tipo: tipoBotones(),
+        inv: vistaInvertida() ? 1 : 0
+      }
     };
   }
   vibrarPrueba(v) {
@@ -1433,6 +1439,7 @@ export class TituloDisco {
     }
     if (S.vibT > 0) S.vibT--;
     if (S.f < 53) return;
+    if (S.kc.abierto) return this.cuadroKeyConfig(tiene);
     const F = this.filasOpcion(), it = F[S.fila];
     if (it.prueba && (this.held.has("izq") || this.held.has("der"))) {
       const v = this.held.has("der") ? 1 : 0;
@@ -1457,7 +1464,10 @@ export class TituloDisco {
       }
     } else if ((tiene("o") || tiene("start")) && it.id === "teclas") {
       this.op.sonar?.(32);
-      try {
+      if (this.texO("key_pad")) {
+        S.kc.abierto = true;
+        S.kc.fila = 0;
+      } else try {
         pantallaControles.abrir();
       } catch (e) {
         console.warn("OPTION: CONTROLES", e);
@@ -1472,6 +1482,12 @@ export class TituloDisco {
     try {
       ponerVibra(S.vals.vib === 0);
     } catch {}
+    try {
+      ponerTipoBotones(S.kc.tipo);
+      ponerVistaInvertida(S.kc.inv === 1);
+    } catch (e) {
+      console.warn("KEY CONFIG", e);
+    }
     this.op.sonar?.(33);
     S.fin = {
       n: 0,
@@ -1485,6 +1501,7 @@ export class TituloDisco {
   clicOpcion(x, y) {
     const S = this.opc;
     if (!S || S.fin || S.f < 53) return;
+    if (S.kc.abierto) return this.clicKeyConfig(x, y);
     this.filasOpcion().forEach((it, k) => {
       const yy = 112 + it.y;
       if (y < yy - 3 || y >= yy + 15) return;
@@ -1508,6 +1525,7 @@ export class TituloDisco {
     const add = p => {
       if (p) L.push(p);
     }, S = this.opc, f = S.f, T = n => this.texO(n);
+    if (S.kc.abierto) return this.armarKeyConfig(add);
     const VERDE = [ 100, 160, 135 ], APAG = [ 70, 100, 90 ];
     const sh = f < 33 ? 0 : Math.min(128, Math.floor((f - 32) * 128 / 10));
     if (sh > 0) {
@@ -1557,6 +1575,104 @@ export class TituloDisco {
       this.piezasCursor(160 - (t.w >> 1), 112 + it.y, t.w, 12, b, 1, add);
       const ay = this.optDatos?.ayuda?.[it.ayuda];
       if (ay && f >= 53) this.armarAyuda(ay, add);
+    }
+  }
+  piezasKeyConfig() {
+    const VERDE = [ 100, 160, 135 ], APAG = [ 70, 100, 90 ], G = [ 128, 128, 128 ], K = this.opc.kc;
+    const r = (n, x0, y0, x1, y1, c, m) => ({
+      n: n,
+      x: 160 + x0,
+      y: 112 + y0,
+      w: x1 - x0,
+      h: y1 - y0,
+      c: c,
+      m: m
+    });
+    const tipo = [ [ r("key_action", 88, -20, 120, -12), r("key_buki", -121, -17, -77, -10), r("key_hohuku", -120, 0, -92, 8) ], [ r("key_action", -120, 0, -88, 8), r("key_buki", -121, -17, -77, -10), r("key_hohuku", 92, -20, 120, -12) ], [ r("key_action", -121, -20, -89, -12), r("key_buki", 80, -17, 124, -10), r("key_hohuku", -120, 0, -92, 8) ] ][K.tipo] || [];
+    return {
+      fondo: [ r("key_back_l", -160, -111, 0, 111, G, OPACO), r("key_back_r", 0, -111, 160, 111, G, OPACO) ],
+      simbolo: r("key_symbol", -24, -44, 32, 13, G, OPACO),
+      resto: [ r("key_pad", -51, -63, 49, 66, G, ADD), r("key_option", -148, -105, 64, -93, VERDE, OPACO), r("key_button", -148, -70, -60, -57, VERDE, ADD), r("key_sykan", -148, 38, -36, 51, VERDE, ADD), r("key_normal", -18, 39, 22, 49, K.inv ? APAG : VERDE, ADD), r("key_reverse", 40, 42, 84, 48, K.inv ? VERDE : APAG, ADD), r("op_exit", 90, 74, 146, 86, VERDE, ADD), r("key_a", -35, -69, -11, -59, K.tipo === 0 ? VERDE : APAG, ADD), r("key_b", 14, -69, 38, -59, K.tipo === 1 ? VERDE : APAG, ADD), r("key_c", 63, -69, 87, -59, K.tipo === 2 ? VERDE : APAG, ADD), ...tipo.map(q => ({
+        ...q,
+        c: VERDE,
+        m: ADD
+      })), r("key_syukan", 49, -41, 137, -31, VERDE, ADD) ],
+      filas: [ r("key_button", -148, -70, -60, -57), r("key_sykan", -148, 38, -36, 51), r("op_exit", 90, 74, 146, 86) ]
+    };
+  }
+  armarKeyConfig(add) {
+    const P = this.piezasKeyConfig(), T = n => this.texO(n), pon = q => {
+      const t = T(q.n);
+      if (t) add(pieza(t, q.x, q.y, q.w, q.h, q.c, q.m));
+    };
+    P.fondo.forEach(pon);
+    pon(P.simbolo);
+    const f = P.filas[this.opc.kc.fila];
+    if (f) this.piezasCursor(f.x, f.y, f.w, f.h, 255, 1, add);
+    P.resto.forEach(pon);
+  }
+  cuadroKeyConfig(tiene) {
+    const K = this.opc.kc, son = s => this.op.sonar?.(s);
+    if (tiene("x") || K.fila === 2 && (tiene("o") || tiene("start"))) return this.salirKeyConfig();
+    if (tiene("arriba") && K.fila > 0) {
+      K.fila--;
+      son(31);
+      return;
+    }
+    if (tiene("abajo") && K.fila < 2) {
+      K.fila++;
+      son(31);
+      return;
+    }
+    const d = tiene("der") ? 1 : tiene("izq") ? -1 : 0;
+    if (!d) return;
+    if (K.fila === 0) {
+      const n = Math.max(0, Math.min(2, K.tipo + d));
+      if (n !== K.tipo) {
+        K.tipo = n;
+        son(127);
+      }
+    } else if (K.fila === 1) {
+      const n = d > 0 ? 1 : 0;
+      if (n !== K.inv) {
+        K.inv = n;
+        son(127);
+      }
+    }
+  }
+  salirKeyConfig() {
+    const S = this.opc;
+    S.kc.abierto = false;
+    S.fila = Math.max(0, this.filasOpcion().findIndex(q => q.id === "teclas"));
+    this.op.sonar?.(33);
+  }
+  clicKeyConfig(x, y) {
+    const K = this.opc.kc, P = this.piezasKeyConfig(), en = (q, m = 4) => x >= q.x - m && x < q.x + q.w + m && y >= q.y - m && y < q.y + q.h + m;
+    const v = P.resto.find(q => /^key_[abc]$/.test(q.n) && en(q));
+    if (v) {
+      const n = "abc".indexOf(v.n.slice(-1));
+      K.fila = 0;
+      if (n !== K.tipo) {
+        K.tipo = n;
+        this.op.sonar?.(127);
+      }
+      return;
+    }
+    const vista = P.resto.find(q => (q.n === "key_normal" || q.n === "key_reverse") && en(q));
+    if (vista) {
+      const n = vista.n === "key_reverse" ? 1 : 0;
+      K.fila = 1;
+      if (n !== K.inv) {
+        K.inv = n;
+        this.op.sonar?.(127);
+      }
+      return;
+    }
+    const k = P.filas.findIndex(q => en(q));
+    if (k === 2) return this.salirKeyConfig();
+    if (k >= 0 && k !== K.fila) {
+      K.fila = k;
+      this.op.sonar?.(31);
     }
   }
   abrirMovie(sel = 0) {

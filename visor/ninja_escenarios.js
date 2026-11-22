@@ -99,12 +99,47 @@ export function modeloDemo(url) {
   return t && typeof url === "string" && ES_SNAKE.test(url) ? t.modelo : url;
 }
 
-export function ayudaNinja(botonQuestDe = () => null, tactil = false) {
-  if (tactil) return "NINJA: GOLPE (○) guardia, al soltar tajo · ESPADA (□) estocada / tajo en carrera · AGACHAR (✕) quieto agacharse, corriendo voltereta · DESCARGA (R1, mantener) · CAMUFLAJE (L1) · RAYO (R2) el arma del brazo · ÍTEMS (L2) tarjetas y raciones";
-  return "NINJA: ○ (G) guardia, al soltar tajo · □ (J) estocada / tajo en carrera · ✕ (C) quieto agacharse, corriendo voltereta · R1 (2) descarga eléctrica · L1 (1) camuflaje · R2 (X) el rayo del brazo · L2 (Z) ítems · las armas de Snake no se usan";
+export const MASCARA_NINJA_VR = PAD.L1 | PAD.R1 | PAD.L2 | PAD.R2;
+
+export function textoNinjaAccion(id, esc = true) {
+  const t = {
+    cruz: "voltereta (también quieto)",
+    circulo: "guardia (mantener); al soltar, tajo" + (esc ? " · también acciona ascensores y escaleras (extra)" : ""),
+    cuadrado: "quieto: estocada · corriendo: tajo en carrera",
+    triangulo: "primera persona (mantener; no ataca)",
+    l1: "camuflaje óptico (prende / apaga) · en primera persona, asomarse",
+    r1: "descarga eléctrica (mantener) · en primera persona, asomarse",
+    l2: esc ? "ítems de Snake: tarjetas, raciones (extra)" : "nada (menú deshabilitado)",
+    r2: esc ? "el rayo del brazo (extra)" : "nada (menú deshabilitado)",
+    select: esc ? "códec (extra)" : "nada",
+    caminar: "caminar (extra: el Ninja siempre corre)"
+  }[id];
+  return t ? "Con el Ninja: " + t : "";
 }
 
-export function ayudaNinjaQuest(botonQuestDe = () => null) {
+export function textoNinjaQuest(id, esc = true) {
+  const t = {
+    cuadrado: "estocada / tajo en carrera",
+    circulo: "guardia; al soltar, tajo",
+    cruz: "voltereta",
+    triangulo: esc ? "agacharse / cuerpo a tierra (extra)" : "nada",
+    L2: esc ? "ítems (extra)" : "nada",
+    R2: esc ? "el rayo del brazo (extra)" : "nada",
+    R1: "descarga eléctrica (mantener)",
+    L1: "camuflaje óptico",
+    select: esc ? "códec (extra)" : "nada"
+  }[id];
+  return t ? "Con el Ninja: " + t : "";
+}
+
+export function ayudaNinja(botonQuestDe = () => null, tactil = false, esc = true) {
+  if (tactil) return "NINJA: GOLPE (○) guardia, al soltar tajo · ESPADA (□) estocada / tajo en carrera · VOLTERETA (✕) · DESCARGA (R1, mantener) · CAMUFLAJE (L1) · VISTA (△) primera persona" + (esc ? " · extras: AGACHAR (agacharse y cuerpo a tierra, para los ductos) · RAYO (R2) el arma del brazo · ÍTEMS (L2) tarjetas y raciones" : "");
+  return "NINJA: ○ (G) guardia, al soltar tajo · □ (J) quieto estocada, corriendo tajo en carrera · ✕ (C) voltereta · R1 (2) descarga eléctrica (mantener) · L1 (1) camuflaje · △ (E) primera persona (ahí L1/R1 asoman)" + (esc ? " · extras: Q o L3 agacharse / cuerpo a tierra · R2 (X) el rayo del brazo · L2 (Z) ítems · Shift caminar · las armas de Snake no se usan" : " · L2 y R2 no hacen nada (como en el disco)");
+}
+
+export function ayudaNinjaQuest(botonQuestDe = () => null, esc = true) {
   const b = (a, d) => String(botonQuestDe(a) || d).replace(/\.$/, "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
-  return [ "NINJA:", `${b("circulo", "A")}: GUARDIA, AL SOLTAR TAJO`, `${b("cuadrado", "GATILLO DER")}: ESTOCADA / TAJO`, `${b("cruz", "B")}: AGACHARSE; CORRIENDO, VOLTERETA`, `${b("R1", "CLIC PALANCA DER")}: DESCARGA (MANTENER)`, "GATILLO LIBRE (DE FABRICA EL IZQ): CAMUFLAJE", `${b("R2", "APRETON DER")}: EL RAYO DEL BRAZO` ];
+  const l = [ "NINJA:", `${b("circulo", "A")}: GUARDIA, AL SOLTAR TAJO`, `${b("cuadrado", "GATILLO DER")}: ESTOCADA / TAJO`, `${b("cruz", "B")}: VOLTERETA`, `${b("R1", "CLIC PALANCA DER")}: DESCARGA (MANTENER)`, "GATILLO LIBRE (DE FABRICA EL IZQ): CAMUFLAJE" ];
+  if (esc) l.push(`${b("triangulo", "X")}: AGACHARSE (EXTRA; EN PANTALLA, UN TOQUE)`, `${b("R2", "APRETON DER")}: EL RAYO DEL BRAZO (EXTRA)`);
+  return l;
 }

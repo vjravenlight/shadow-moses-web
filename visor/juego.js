@@ -2082,7 +2082,7 @@ export class Juego {
           q.z += Math.cos(g.rot * ANG) * .6;
           if (!this.ctx.vuelo() && Math.abs(p.x - q.x) < .5 && Math.abs(p.z - q.z) < .5 && Math.abs(p.y - q.y) < 1) {
             const r = g.rot * ANG, f = new THREE.Vector3(Math.sin(r) * 100 + Math.cos(r) * 5, 0, Math.cos(r) * 100 - Math.sin(r) * 5);
-            if (this.dañoSnake(32, 2, f)) sonido("golpe");
+            if (this.dañoSnake(32, 2, f)) sonido(37, g.o.position);
           }
         }
         if (g.tAcc > 17) {
@@ -2703,7 +2703,7 @@ export class Juego {
       this.cambiar(g, "cae", modo === 4 ? A.CAE_RAPIDO : g.poseMsj ? A.POSE_I2 : A.CAE, {
         loop: false
       });
-      sonido(muerto ? "v_muere" : "v_piña", g.o.position);
+      sonido(muerto ? "v_muere" : "v_tirado", g.o.position);
       if (muerto) g.gritoMuerte = true;
       return;
     }
@@ -2890,7 +2890,7 @@ export class Juego {
       this.golpeObjeto?.(yo, C.frente, modo);
       if (g) {
         this.dañar(g, faint, modo);
-        sonido(se, g.o.position);
+        sonido(g.__jefe ? se : 52, g.o.position);
         this.sangre(g.o.position.clone().setY(g.o.position.y + 1.3), 3);
       }
       if (g && modo === 4 && (this.reglasVR?.tiro || g.empuje14) && g.accion === "cae") g.empujeVR = C.frente.clone().setY(0).normalize().multiplyScalar(.1);
@@ -3041,6 +3041,11 @@ export class Juego {
     const S = this.sn;
     return !(this.muerto || this.ctx.vuelo?.() || S.inv > 0 || S.reac && S.reac.tipo !== "piso");
   }
+  quejido(aMode = 1, sinReaccion = false) {
+    if (this._quejidoCuadro === this.frame) return;
+    this._quejidoCuadro = this.frame;
+    sonido(sinReaccion ? aMode === 1 || aMode === 3 ? 24 : 25 : LEVE.has(aMode) ? 24 : 25);
+  }
   "dañoSnake"(daño, aMode = 1, fuerza = null, punto = null) {
     const S = this.sn, inv = this.ctx.inventario;
     if (!this.dañable()) return false;
@@ -3049,7 +3054,7 @@ export class Juego {
     this.vida -= d / (inv?.vidaMax || 256);
     this.ctx.daño?.();
     const leve = LEVE.has(aMode);
-    sonido(leve ? 24 : 25);
+    this.quejido(aMode, ducto.activo || leve && !!inv?.o?.primeraPersona?.());
     this.vibrar(leve ? VIB.leve : VIB.derribo);
     const p = this.ctx.rig.position.clone();
     p.y += [ 1.2, .6, .2 ][this.postura()] || 1.2;

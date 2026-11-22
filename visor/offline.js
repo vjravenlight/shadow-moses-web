@@ -690,6 +690,7 @@ async function probarNivel(id) {
 }
 
 async function antesDeCargar(id) {
+  if (id && window.mgsPartes && !await window.mgsPartes.antesDeCargar(id)) return false;
   if (!id || !puedeOffline() || !controlado) return true;
   try {
     if (await caches.match(abs(`assets/niveles/${id}/nivel.json`), {

@@ -19,6 +19,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## What's new
 
+- **v2.12:** UNUSED adds the codec calls, voices and music the game never uses, to listen to them; the original KEY CONFIG from the VR disc; RECORD CUTSCENES also in the headset; the playable Ninja with the original controls and sounds; the Integral sound effects; the STAFF kanji; the phone data file whole or in parts (the game asks for disc 2 when needed); the game on iPhone (Safari, Add to Home Screen) and an unsigned iPhone app ([how to sign it](ios/FIRMAR_E_INSTALAR.md)); Snake's groans and guard hits like the original, and fixes.
 - **v2.11:** all 300 VR disc missions (NINJA played as the Ninja, MYSTERY and PHOTOGRAPH), its title, MOVIE and OPTION; NEW GAME asks ORIGINAL or INTEGRAL, with the Integral scripts, the Alternate Round and STAFF; text and voices in English, Spanish, German, Italian and Japanese, chosen separately; the BRIEFING; cutscene gallery, music, original/enhanced comparison, 8K photos, developer room and EVERYTHING UNLOCKED; in the headset, two-handed weapons and cutscenes through Snake's eyes; optical camouflage like the original and many fixes.
 - **v2.10:** level claymores no longer exist twice and their damage follows the original; the camera, gas mask, goggles and PSG1 scope use their drawings from the game; chaff jams the radar and the O2 bar shows; Options adds BRIGHTNESS, CONTRAST, COLOR and POLYGONS; new SPECIAL menu with the photo album, ghost photos and PREVIOUS OPERATIONS, and the tuxedo game. With the Integral disc, also Very Easy with the MP5 and Meryl from the tuxedo round.
 - **v2.9:** in first person, the cardboard box is seen from inside, through the hole from the original game, on PC and in the headset. It opens with its animation and has a soft edge. Around it is dark cardboard instead of the original black.
@@ -41,7 +42,7 @@ You play it with **your own discs** (USA version): the installer converts them o
 
 ## `TX-01` OPERATION: INSTALL
 
-1. **Download the Release** (`MGSweb_v2.11.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
+1. **Download the Release** (`MGSweb_v2.12.zip`, in [Releases](../../releases/latest)) and unzip it anywhere.
 2. **Double-click `INSTALAR.cmd`.**
 3. **Choose your discs**: the `.cue` (or `.bin`) of disc 1 and disc 2. They are converted on your PC and the game opens
    in your browser (`http://127.0.0.1:8123`). It takes 5 to 8 minutes; if it stops, open `INSTALAR.cmd` again and
@@ -79,7 +80,8 @@ It also works from the headset browser, though it has not been tested on a real 
 
 ### Phone app (Android)
 
-1. Install the game on the PC and double-click `ARMAR_ARCHIVO_CELULAR.cmd`: it makes `MGSweb_datos.mgs`, about 1 GB.
+1. Install the game on the PC and double-click `ARMAR_ARCHIVO_CELULAR.cmd`: it makes `MGSweb_datos.mgs`, about 1 GB, or
+   **in parts** (`MGS_disco1.mgs` is enough to start; the game asks for disc 2 and the rest when needed).
 2. Download `ShadowMoses_celular.apk` from [Releases](../../releases/latest) and install it. Android will ask for permission
    to install apps from outside the store.
 3. Copy `MGSweb_datos.mgs` to the phone, open the app and choose it. After that it needs neither the PC nor the internet: the
@@ -88,6 +90,13 @@ It also works from the headset browser, though it has not been tested on a real 
 The app has no game files. The `.mgs` file is your own data: please do not upload or share it. To export a save or a photo, the
 app asks where to store it. It has no VR. It was tested on a virtual phone with Android 14, not on a real one yet: if you try it,
 please tell us in an issue which phone you used and how it went.
+
+### iPhone
+
+- **Safari:** go to https://mgs.ravenlight.net/full, tap **Share > Add to Home Screen** and load your `.mgs` files from that icon. No VR.
+- **Unsigned app:** `ShadowMoses_iphone_sin_firmar.ipa`, in [Releases](../../releases/latest). Each player signs it with AltStore,
+  SideStore or Sideloadly: [ios/FIRMAR_E_INSTALAR.md](ios/FIRMAR_E_INSTALAR.md). With a free Apple account it expires after 7 days
+  and there is a 3-app limit; with the paid one (USD 99 per year), it doesn't. Not yet tested on a real iPhone.
 
 ## `TX-04` CODEC: COMMON PROBLEMS
 

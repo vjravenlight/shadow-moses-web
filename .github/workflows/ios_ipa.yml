@@ -1,0 +1,54 @@
+# GitHub Actions: arma la app de iPhone SIN FIRMAR en una máquina macOS (ios/armar_ipa.sh) y la suma al Release como
+# ShadowMoses_iphone_sin_firmar.ipa. tools/armar_publico.mjs lo copia a .github/workflows/ios_ipa.yml del repo público
+# (OK de Charles, 22/11/2026).
+# - Solo, al publicar un Release (por ejemplo, al sacar la v2.12 de borrador).
+# - A mano: Actions > "iPhone .ipa (sin firmar)" > Run workflow. Con "tag" (por ejemplo v2.12) la suma a ese Release;
+#   sin tag, queda sólo como artefacto del workflow para bajarla de la página de la corrida.
+# No usa ninguna clave ni secreto: sólo el GITHUB_TOKEN de la corrida. El .ipa sale sin firmar y lo firma cada jugador
+# (ios/FIRMAR_E_INSTALAR.md).
+# FeniXVOID · Project Ravenlight
+name: iPhone .ipa (sin firmar)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release al que se suma la .ipa (por ejemplo v2.12). Vacío: sólo artefacto.'
+        required: false
+        default: ''
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  ipa:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag || github.ref }}
+
+      - name: XcodeGen
+        run: brew install xcodegen
+
+      - name: Armar el .ipa
+        run: |
+          sh ios/armar_ipa.sh
+          mv ios/build/ShadowMoses_iphone.ipa ios/build/ShadowMoses_iphone_sin_firmar.ipa
+
+      - name: Guardar como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: ShadowMoses_iphone_sin_firmar
+          path: ios/build/ShadowMoses_iphone_sin_firmar.ipa
+          if-no-files-found: error
+
+      - name: Sumar al Release
+        if: github.event_name == 'release' || inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: gh release upload "$TAG" ios/build/ShadowMoses_iphone_sin_firmar.ipa --clobber --repo "$GITHUB_REPOSITORY"

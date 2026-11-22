@@ -85,7 +85,7 @@ import { primerGolpeCamara } from "./rayos_camara.js";
 
 import { NinjaJugable } from "./ninja_jugable.js";
 
-import { personajeNinja, trajeNinja, nombrePersonaje, rotarPersonaje, modeloDemo, MODELO_NINJA, MASCARA_NINJA, PAD_NINJA, ayudaNinja, ayudaNinjaQuest } from "./ninja_escenarios.js";
+import { personajeNinja, trajeNinja, nombrePersonaje, rotarPersonaje, modeloDemo, MODELO_NINJA, MASCARA_NINJA, MASCARA_NINJA_VR, PAD_NINJA, ayudaNinja, ayudaNinjaQuest } from "./ninja_escenarios.js";
 
 import { Codec } from "./codec.js";
 
@@ -1249,7 +1249,7 @@ let conCuerpo = pref("cuerpo", true), conSombras = pref("sombras", true);
 
 let cuerpo = null, brillos = [];
 
-let ninjaJ = null, ninjaCarga = null;
+let ninjaJ = null, ninjaCarga = null, trianguloVR = 0;
 
 const botonesVRNinja = {
   circulo: false,
@@ -1775,13 +1775,24 @@ const grabador = new Grabador({
   lienzo: R.domElement,
   sonido: audioMGS,
   demo: demo,
-  movie: movie
+  movie: movie,
+  enXR: () => R.xr.isPresenting,
+  paneles: () => paneles,
+  pantallaCine: () => !vrCineInmersivo,
+  get xrAncho() {
+    return calidadCasco.nivel === 2 ? 560 : 800;
+  },
+  get xrFps() {
+    return calidadCasco.nivel === 2 ? 20 : 30;
+  }
 });
 
 let grabarCine = false;
 
+const videosXR = [];
+
 function empezarGrabacion() {
-  return grabarCine && !R.xr.isPresenting && grabador.empezar();
+  return grabarCine && grabador.empezar();
 }
 
 async function guardarGrabacion(nombre) {
@@ -1789,9 +1800,26 @@ async function guardarGrabacion(nombre) {
   if (!b) return;
   const f = new Date, dd = n => String(n).padStart(2, "0");
   const archivo = `mgs_cinematica_${nombre}_${f.getFullYear()}${dd(f.getMonth() + 1)}${dd(f.getDate())}_${dd(f.getHours())}${dd(f.getMinutes())}${dd(f.getSeconds())}.${grabador.extension}`;
+  if (R.xr.isPresenting) {
+    videosXR.push({
+      b: b,
+      archivo: archivo
+    });
+    debug.log("grabador", `casco: ${archivo} ${(b.size / 1e6).toFixed(1)} MB ${JSON.stringify(grabador.ultimoXR || {})}`);
+    return;
+  }
   descargar(b, archivo);
   aviso(`Video guardado: ${archivo} (${(b.size / 1e6).toFixed(1)} MB)`);
 }
+
+function bajarVideosXR() {
+  const l = videosXR.splice(0);
+  if (!l.length) return;
+  l.forEach((v, i) => setTimeout(() => descargar(v.b, v.archivo), 600 * i));
+  aviso(`${l.length} video(s) grabado(s) en el casco: se bajan ahora`, 4e3);
+}
+
+R.xr.addEventListener("sessionend", () => bajarVideosXR());
 
 function ponerGrabarCine(si = !grabarCine) {
   grabarCine = !!si && grabador.soportado;
@@ -4646,7 +4674,7 @@ async function cargarNivel(nv, entrada = null) {
       alEquipar: (id, previo, a) => cambiarModeloArma(a)
     });
   }
-  audioMGS.cargarEscenario(nv.id);
+  audioMGS.cargarEscenario(integral.claveSonido(nv.id, audioMGS));
   juego.activo = $("#modo-sigilo").checked;
   sensores?.destruir();
   sensores = new Sensores({
@@ -5048,7 +5076,8 @@ function actualizarCuerpoYSombras(dt) {
         forzado: esc ? null : snakeScript.motion?.clip || null,
         visible: (tercera && !ojosJ || R.xr.isPresenting && vrCuerpoVisible) && !(esc && armas && inventario.enCaja),
         prestado: esc && ninjaPrestado() ? cuerpo.obj : null,
-        sombra: esc && !(armas && inventario.enCaja)
+        sombra: esc && !(armas && inventario.enCaja),
+        primera: camaraJuegoActiva() && !!camJuego?.primeraPersona
       });
     }
   }
@@ -5056,7 +5085,7 @@ function actualizarCuerpoYSombras(dt) {
     const esc = ninjaActivo() && ninjaJ.escenarios;
     if (inventario) {
       inventario.sinArmas = esc;
-      inventario.mascaraPad = esc ? MASCARA_NINJA : 0;
+      inventario.mascaraPad = esc ? MASCARA_NINJA : ninjaActivo() ? MASCARA_NINJA_VR : 0;
     }
   }
   ajustarCuerpoVR(dt);
@@ -5349,7 +5378,7 @@ function ayuda() {
     tactil: TACTIL,
     catalogo: modo === "catalogo",
     escenarios: modo === "escenarios"
-  }) + (modo === "escenarios" && personajeNinja() ? String.fromCharCode(10) + ayudaNinja(ctl.botonQuestDe, TACTIL) : "");
+  }) + (modo === "escenarios" && personajeNinja() || ninjaActivo() ? String.fromCharCode(10) + ayudaNinja(ctl.botonQuestDe, TACTIL, ninjaActivo() ? !!ninjaJ.escenarios : true) : "");
 }
 
 ctl.alCambiar(() => ayuda());
@@ -5444,6 +5473,7 @@ addEventListener("keydown", e => {
   if (e.code === "KeyF") alternarVuelo();
   if (e.code === "Space" && enSuelo && !vuelo && saltoPermitido()) vy = velSalto();
   if (e.code === "KeyC") alternarAgachado();
+  if (e.code === "KeyQ" && !e.repeat && !vuelo && ninjaActivo() && ninjaJ.escenarios) alternarAgachado(true);
   if (e.code === "KeyG" && juego) golpearPared();
   if (e.code === "KeyR" && juego) (armas ?? juego).recargar();
   if (e.code === "KeyV") cambiarVista();
@@ -5548,7 +5578,7 @@ function mandoCuadro(dt) {
   }
   const bt = i => !!g.buttons[i]?.pressed, ax = g.axes || [];
   let estado = 0;
-  for (const i of [ ctl.B.CRUZ, ctl.B.CIRCULO, ctl.B.CUADRADO, ctl.B.TRIANGULO, ctl.B.START, ctl.B.SELECT ]) if (bt(i)) estado |= 1 << i;
+  for (const i of [ ctl.B.CRUZ, ctl.B.CIRCULO, ctl.B.CUADRADO, ctl.B.TRIANGULO, ctl.B.START, ctl.B.SELECT, ctl.B.L3 ]) if (bt(i)) estado |= 1 << i;
   const antes = mandoAnt;
   mandoAnt = estado;
   const baja = i => estado & 1 << i && !(antes & 1 << i), sube = i => !(estado & 1 << i) && antes & 1 << i;
@@ -5562,6 +5592,7 @@ function mandoCuadro(dt) {
   }
   if (baja(ctl.B.SELECT) && juego && modo === "escenarios") codec.abrir();
   if (baja(ctl.B.CRUZ)) alternarAgachado();
+  if (baja(ctl.B.L3) && ninjaActivo() && ninjaJ.escenarios) alternarAgachado(true);
   if (baja(ctl.B.CIRCULO) && juego) golpearPared();
   if (baja(ctl.B.CUADRADO) && juego && modo === "escenarios" && !misionesVR.bloqueaControl) dispararDesdeCamara();
   if (sube(ctl.B.CUADRADO) && armas && modo === "escenarios") {
@@ -5598,8 +5629,12 @@ function mandoCuadro(dt) {
   const r = ctl.palanca(ax[2], ax[3], .15);
   if (r.m > 0 && !padDemo.activo && !asomarse.bandera) {
     yaw -= r.x * r.m * 2.6 * dt;
-    pitch = Math.max(-1.5, Math.min(1.5, pitch - r.y * r.m * 1.9 * dt));
+    pitch = Math.max(-1.5, Math.min(1.5, pitch - signoVistaPP() * r.y * r.m * 1.9 * dt));
   }
+}
+
+function signoVistaPP() {
+  return ctl.vistaInvertida() && vista === "primera" ? -1 : 1;
 }
 
 function soltarMando() {
@@ -5684,7 +5719,7 @@ document.addEventListener("pointerlockchange", () => {
   const tomado = document.pointerLockElement === R.domElement;
   $("#mira").style.display = tomado ? "block" : "none";
   if (modo !== "escenarios" || !juego || misionesVR.activo || camLibre.activa) return;
-  if (!tomado && (interfaz.bloqueada || enDemo || demo.ocupada || codec.abierto || titulo.visible || pantallaGameOver.activo)) return;
+  if (!tomado && (interfaz.bloqueada || enDemo || demo.ocupada || codec.abierto || titulo.visible || pantallaGameOver.activo || muerteSnake)) return;
   if (tomado) cerrarMenu(); else {
     $("#panel").classList.remove("oculto");
     $("#mostrar").hidden = true;
@@ -5699,7 +5734,7 @@ addEventListener("mousemove", e => {
   if (document.pointerLockElement !== R.domElement || inventario.abierto || padDemo.activo) return;
   if (asomarse.bandera) return;
   yaw -= e.movementX * .0022;
-  pitch = Math.max(-1.5, Math.min(1.5, pitch - e.movementY * .0022));
+  pitch = Math.max(-1.5, Math.min(1.5, pitch - signoVistaPP() * e.movementY * .0022));
 });
 
 function golpe(o, d, far, lista = colisiones) {
@@ -6049,7 +6084,7 @@ function mover(dt) {
     const enPrimera = !R.xr.isPresenting && (vista === "primera" || fpJ) && !ducto.activo && !!juego && modo === "escenarios" && !vuelo;
     const ojoY = (fpJ ? cabezaSnake() : null) ?? rig.position.y + (reptando ? .35 : agachado ? .75 : ALTURA_OJOS);
     const a = asomarse.update(dt, {
-      activo: enPrimera,
+      activo: enPrimera && (fpJ || !ninjaActivo()),
       ojo: new THREE.Vector3(rig.position.x, ojoY, rig.position.z),
       rumbo: fpJ ? rumbo : yaw,
       pared: (o, d, lejos) => golpe(o, d, lejos, colParedes)?.distance ?? null
@@ -6064,7 +6099,8 @@ function mover(dt) {
     s = 0;
     dirYaw = rumbo;
     const enDucto = camJuego.enDucto;
-    mirarJ += ((enDucto ? 0 : f > 0 ? -320 : f < 0 ? 400 : 0) - mirarJ) * Math.min(1, dt * 30 / 4);
+    const fv = ctl.vistaInvertida() ? -f : f;
+    mirarJ += ((enDucto ? 0 : fv > 0 ? -320 : fv < 0 ? 400 : 0) - mirarJ) * Math.min(1, dt * 30 / 4);
     if (!enDucto) f = 0;
   } else mirarJ = 0;
   const mag = Math.hypot(f, s);
@@ -6361,11 +6397,12 @@ function sePostura() {
   if (juego && modo === "escenarios") audioMGS.se(juego.sn?.enAgua ? 183 : 8);
 }
 
-function alternarAgachado() {
-  if (ninjaActivo() && (!ninjaJ.escenarios || ninjaJ.mueve && !agachado && !reptando && !ducto.activo && !pared && !snakeScript.motion)) {
+function alternarAgachado(extra = false) {
+  if (ninjaActivo() && !extra && (!ninjaJ.escenarios || !(agachado || reptando || ducto.activo || snakeScript.motion))) {
     ninjaJ.boton("cruz", true);
     return;
   }
+  if (extra && !(ninjaActivo() && ninjaJ.escenarios)) return;
   if (!agachado) {
     agachado = true;
     reptando = false;
@@ -6918,6 +6955,7 @@ const tactil = TACTIL ? new Tactil({
   postura: () => reptando ? 2 : agachado ? 1 : 0,
   golpe: () => golpearPared(),
   agachar: () => alternarAgachado(),
+  agacharNinja: () => alternarAgachado(true),
   disparar: () => dispararDesdeCamara(),
   soltar: () => {
     if (armas && modo === "escenarios") {
@@ -8653,6 +8691,14 @@ paneles.on("boton", (b, abajo) => {
     if (abajo) dispararVR(); else soltarVR();
     return;
   }
+  if (b === "triangulo" && ninjaActivo() && ninjaJ.escenarios) {
+    if (vrModo() !== "pantalla") {
+      if (abajo) alternarAgachado(true);
+      return;
+    }
+    if (abajo) trianguloVR = performance.now(); else if (trianguloVR && performance.now() - trianguloVR < 300) alternarAgachado(true);
+    if (!abajo) trianguloVR = 0;
+  }
   if (b === "triangulo") {
     teclas.KeyE = abajo && vrModo() === "pantalla";
     return;
@@ -8711,7 +8757,7 @@ paneles.on("boton", (b, abajo) => {
         paneles.submenu([ ...CONTROLES_QUEST().map(t => ({
           texto: t,
           cierra: false
-        })), ...personajeNinja() ? ayudaNinjaQuest(ctl.botonQuestDe).map(t => ({
+        })), ...personajeNinja() || ninjaActivo() ? ayudaNinjaQuest(ctl.botonQuestDe, ninjaActivo() ? !!ninjaJ.escenarios : true).map(t => ({
           texto: t,
           cierra: false
         })) : [], volverControles ]);
@@ -9026,9 +9072,10 @@ const galeria = new Galeria({
   jugar: it => verDeGaleria(it),
   enVR: () => R.xr.isPresenting,
   reabrirVR: () => abrirListaVR(galeria),
-  grabar: !TACTIL && grabador.soportado ? {
+  grabar: (!TACTIL || CASCO) && grabador.soportado ? {
     get: () => grabarCine,
-    poner: () => ponerGrabarCine()
+    poner: () => ponerGrabarCine(),
+    pendientes: () => videosXR.length
   } : null
 });
 

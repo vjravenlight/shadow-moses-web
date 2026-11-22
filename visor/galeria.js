@@ -366,6 +366,14 @@ export class Galeria {
       accion: () => idioma.rotar("voz", 1),
       cierra: false
     } ];
+    if (this.op.grabar) out.push({
+      texto: () => {
+        const n = this.op.grabar.pendientes?.() || 0;
+        return "GRABAR VIDEO: " + (this.op.grabar.get() ? "SI" : "NO") + (n ? ` (${n} PARA BAJAR AL SALIR)` : "");
+      },
+      accion: () => this.op.grabar.poner(),
+      cierra: false
+    });
     this.items.forEach((it, i) => out.push({
       texto: () => sinTildes(`${it.n} ${it.tipo === "video" ? "VIDEO " : ""}${lugarDe(it.st)} ${this.linea(it) ? "- " + this.linea(it) : ""}`).toUpperCase().slice(0, 60),
       accion: () => {

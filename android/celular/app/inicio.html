@@ -1,5 +1,6 @@
 <!doctype html>
-<!-- Primera pantalla de la app: pide el archivo con los datos del juego. FeniXVOID · Project Ravenlight -->
+<!-- Primera pantalla de la app: pide el archivo con los datos del juego (2.12: el entero o las partes, varios a la vez).
+     FeniXVOID · Project Ravenlight -->
 <html lang="es">
 <head>
 <meta charset="utf-8">
@@ -40,17 +41,18 @@
   <ol>
     <li>En tu PC, instalá el juego con tus discos y hacé doble clic en <code>ARMAR_ARCHIVO_CELULAR.cmd</code>.
       <br><span class="en">On your PC, install the game with your discs and double-click <code>ARMAR_ARCHIVO_CELULAR.cmd</code>.</span></li>
-    <li>Pasá <code>MGSweb_datos.mgs</code> a este celular. Ocupa cerca de 1 GB.
-      <br><span class="en">Copy <code>MGSweb_datos.mgs</code> to this phone. It takes about 1 GB.</span></li>
-    <li>Tocá el botón y elegí ese archivo.
-      <br><span class="en">Tap the button and choose that file.</span></li>
+    <li>Pasá a este celular <code>MGSweb_datos.mgs</code> (ENTERO, cerca de 1 GB) o las partes: <code>MGS_disco1.mgs</code> y, si querés, el disco 2 y lo opcional. El disco 2 lo podés pasar después: el juego lo pide al llegar.
+      <br><span class="en">Copy to this phone <code>MGSweb_datos.mgs</code> (WHOLE, about 1 GB) or the parts: <code>MGS_disco1.mgs</code> plus, if you want, disc 2 and the optional ones. Disc 2 can come later: the game asks for it when you get there.</span></li>
+    <li>Tocá el botón y elegí esos archivos (podés elegir varios a la vez).
+      <br><span class="en">Tap the button and choose those files (you can pick several at once).</span></li>
   </ol>
-  <button id="elegir" type="button">ELEGIR ARCHIVO / CHOOSE FILE</button>
+  <button id="elegir" type="button">ELEGIR ARCHIVOS / CHOOSE FILES</button>
   <p class="aviso">Esta app no trae ningún archivo del juego y no se conecta a internet. Proyecto de fans, sin fines de lucro. Metal Gear Solid es marca de Konami; sin relación con Konami. FeniXVOID · Project Ravenlight</p>
 </main>
 <script>
   const ERRORES = {
-    formato: 'Ese no es el archivo correcto: tiene que ser MGSweb_datos.mgs. / That is not the right file: it must be MGSweb_datos.mgs.',
+    formato: 'Ese no es el archivo correcto: tiene que ser MGSweb_datos.mgs o MGS_disco1.mgs (y las otras partes). / That is not the right file: it must be MGSweb_datos.mgs or MGS_disco1.mgs (and the other parts).',
+    disco1: 'Falta MGS_disco1.mgs: sin ese no arranca. Elegilo junto con los demás. / MGS_disco1.mgs is missing: the game cannot start without it. Choose it along with the others.',
     abrir: 'No se pudo abrir. Copialo a la memoria del celular (por ejemplo, Descargas), no en la nube. / Could not open it. Copy it to the phone storage (for example, Downloads), not the cloud.',
     mover: 'No encuentro el archivo: quizás se movió o se borró. Elegilo de nuevo. / File not found: it may have been moved or deleted. Choose it again.',
   };
